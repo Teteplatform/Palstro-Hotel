@@ -1,11 +1,14 @@
 import { useEffect } from 'react';
 import { usePropertyContext } from '../hooks/usePropertyContext';
+import { useEditMode } from '../hooks/useEditMode';
 import { useRoomTypes } from '../hooks/useRoomTypes';
+import { usePropertyMedia } from '../hooks/usePropertyMedia';
 import {
   brandingString,
   brandingStringArray,
   brandingRecord,
 } from '../lib/branding';
+import { mediaUrl, platformPlaceholder } from '../lib/mediaUrl';
 import { applyBranding } from '../lib/theme';
 import { formatPropertyAddress } from '../lib/address';
 import { SiteHeader, type NavItem } from '../components/SiteHeader';
@@ -31,11 +34,24 @@ const BOOK_HREF = '#contact';
  */
 export function LandingPage() {
   const { property, settings, loading, error } = usePropertyContext();
+  // In the Site editor, optional sections must mount even when their content is
+  // empty, so their empty-region placeholders can render (Editable owns that).
+  // A guest has `isEditing` false, so each `|| isEditing` below collapses to the
+  // original presence test and the public page is unchanged.
+  const { isEditing } = useEditMode();
   const {
     roomTypes,
     loading: roomsLoading,
     error: roomsError,
   } = useRoomTypes(property?.id ?? null, property?.tenant_id ?? null);
+  // Branding stores media_asset ids (009); resolve them to URLs at render time.
+  // The map loads under the 010 public policy. While it loads, ids resolve to
+  // null and the render layer falls back to the platform placeholder (009), so
+  // the page is never blank or broken.
+  const { map: mediaMap } = usePropertyMedia(
+    property?.id ?? null,
+    property?.tenant_id ?? null,
+  );
 
   // Apply the property's branding to the CSS custom properties so a real visitor
   // sees this property's theme, not the platform default (build 3, §4). Missing
@@ -58,13 +74,44 @@ export function LandingPage() {
   const b = settings.branding;
   const hotelName = property.name;
 
-  const logoUrl = brandingString(b, 'logo_url');
   const tagline = brandingString(b, 'tagline');
-  const heroImages = brandingStringArray(b, 'hero_images');
   const aboutText = brandingString(b, 'about_text');
-  const aboutImage = brandingString(b, 'about_image');
   const amenities = brandingStringArray(b, 'amenities');
-  const galleryImages = brandingStringArray(b, 'gallery_images');
+
+  // --- Image ids -> URLs, each at the variant the surface needs ---------------
+  // The variant choice is the single biggest lever on egress cost, so it is
+  // commented at every call site: a future change that quietly swaps a thumb for
+  // a full would not otherwise announce itself.
+
+  // Logo -> thumb: it renders at ~36px tall in the header; a larger variant is
+  // pure waste on every page load.
+  const logoUrl = mediaUrl(mediaMap, brandingString(b, 'logo_url'), 'thumb');
+
+  // Hero -> full: a full-bleed background is the one place the 1920px variant is
+  // justified. With none set, fall back to the platform placeholder so the hero
+  // is a real image, not a flat colour (fallback in the render path, not data).
+  const heroIds = brandingStringArray(b, 'hero_images');
+  const resolvedHero = heroIds
+    .map((id) => mediaUrl(mediaMap, id, 'full'))
+    .filter((u): u is string => u !== null);
+  const heroImages = resolvedHero.length > 0 ? resolvedHero : [platformPlaceholder];
+
+  // About -> card: it sits in a half-width column, so card (800px) is ample and
+  // full would be oversized.
+  const aboutImage = mediaUrl(mediaMap, brandingString(b, 'about_image'), 'card');
+
+  // Gallery -> thumb for the grid, full for the lightbox on open: the grid shows
+  // small squares (thumb), and only the image a guest actually opens pays for the
+  // full variant.
+  const galleryImages = brandingStringArray(b, 'gallery_images')
+    .map((id) => ({
+      thumb: mediaUrl(mediaMap, id, 'thumb'),
+      full: mediaUrl(mediaMap, id, 'full'),
+    }))
+    .filter(
+      (img): img is { thumb: string; full: string } =>
+        img.thumb !== null && img.full !== null,
+    );
   // Address and contact come from the properties columns (003), not branding —
   // they are also what invoices, receipts and confirmations read. Only the
   // presentational bits (directions, social links) stay in branding.
@@ -108,9 +155,9 @@ export function LandingPage() {
           scrollCueHref={`#${firstBelowHero}`}
         />
 
-        {aboutText ? (
+        {aboutText || isEditing ? (
           <AboutSection
-            text={aboutText}
+            text={aboutText ?? ''}
             image={aboutImage}
             hotelName={hotelName}
           />
@@ -121,13 +168,14 @@ export function LandingPage() {
           currency={property.currency}
           loading={roomsLoading}
           error={roomsError}
+          mediaMap={mediaMap}
         />
 
-        {amenities.length > 0 ? (
+        {amenities.length > 0 || isEditing ? (
           <AmenitiesSection amenities={amenities} />
         ) : null}
 
-        {galleryImages.length > 0 ? (
+        {galleryImages.length > 0 || isEditing ? (
           <GallerySection images={galleryImages} hotelName={hotelName} />
         ) : null}
 

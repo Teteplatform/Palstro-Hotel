@@ -12,6 +12,9 @@ import {
 import type { SettingsField, SettingsValue, SettingsValues } from '../../../lib/settings/schema';
 import { FONT_PAIRINGS } from '../../../lib/settings/fonts';
 import { contrastRatio, isValidHex, AA_LARGE, AA_NORMAL } from '../../../lib/color';
+import { ImageField } from './ImageField';
+import { ImageListField } from './ImageListField';
+import type { SettingsMediaContext } from './mediaFieldContext';
 
 // The ONE place a field type maps to a control (build 3, §3). The SettingsForm
 // renders <FieldControl> and never branches on type itself — all per-type
@@ -30,6 +33,11 @@ export interface FieldControlProps {
   // The property's currency code, for currency fields (no naira hardcode).
   currency: string;
   disabled?: boolean;
+  // Media plumbing for the image / imageList renderers (build 4). Passed to EVERY
+  // FieldControl uniformly; the non-image renderers ignore it, so SettingsForm
+  // keeps its no-field-specific-branching rule. Absent only if a tab with image
+  // fields is somehow rendered without it — the renderers guard for that.
+  mediaContext?: SettingsMediaContext;
 }
 
 const FONT_OPTIONS = FONT_PAIRINGS.map((p) => ({ value: p.id, label: p.label }));
@@ -42,6 +50,7 @@ export function FieldControl({
   values,
   currency,
   disabled,
+  mediaContext,
 }: FieldControlProps): ReactNode {
   const base = {
     label: field.label,
@@ -144,11 +153,21 @@ export function FieldControl({
       );
 
     case 'image':
+      // Persists immediately (upload replaces, remove deletes) — see ImageField.
+      // Without media plumbing there is nothing to upload against, so fall back to
+      // the informative placeholder rather than a broken control.
+      return mediaContext ? (
+        <ImageField field={field} ctx={mediaContext} disabled={disabled} />
+      ) : (
+        <ImagePlaceholder label={field.label} help={field.help} />
+      );
+
     case 'imageList':
-      // Deferred to build 4 (the storage build wires ImageUpload here). Rendered
-      // as a disabled placeholder so the tab shows its finished shape without a
-      // half-built uploader (§3).
-      return <ImagePlaceholder label={field.label} help={field.help} />;
+      return mediaContext ? (
+        <ImageListField field={field} ctx={mediaContext} disabled={disabled} />
+      ) : (
+        <ImagePlaceholder label={field.label} help={field.help} />
+      );
   }
 }
 
@@ -222,7 +241,7 @@ function ImagePlaceholder({ label, help }: { label: string; help?: string }) {
     <div>
       <span className="mb-1 block text-sm font-medium text-charcoal">{label}</span>
       <div className="flex items-center justify-center rounded-lg border border-dashed border-sand-border bg-white/40 px-4 py-6 text-center text-xs text-charcoal-muted">
-        Image editing arrives in the next build.
+        Image editing is unavailable here right now.
       </div>
       {help ? <p className="mt-1 text-xs text-charcoal-muted">{help}</p> : null}
     </div>

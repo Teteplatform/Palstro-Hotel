@@ -32,14 +32,26 @@ the right order.
 
 ---
 
-## 2. Engineering non-negotiables (19)
+## 2. Engineering non-negotiables (20)
 
 Every one of these came from a real bug on a prior product. They are binding.
 
-### 1. Every list query paginates
-No unbounded reads. Use a `fetchAllPaged` pattern from day one. Never a bare
-`.in()` on an unbounded list; never a multi-row `SELECT` without `.range()` for
-anything that can grow.
+### 1. Every list read is bounded correctly — two cases, split below
+A bounded query with no way to reach the rest is **worse** than an unbounded one:
+an unbounded query at least breaks loudly at the row cap, while a hard
+`.limit(100)` with no pager quietly lies — older rows are silently unreachable,
+nothing errors or warns, and the screen looks correct. This shipped on the sister
+product, Palstro ERP: sales, purchases, journal and contacts each capped at
+50–200 rows with no pagination at all, and older records simply vanished off the
+end. So a hard `.limit()` on a user-facing list is a **defect, not a performance
+optimisation** — the failure was never "we forgot to paginate", it was "we capped
+and moved on". The two cases below are enforced separately because they fail
+differently.
+
+**Rule 1a — internal fetches (unchanged).** Any query whose result the code
+consumes in full uses the `fetchAllPaged` helper. No unbounded reads; never a
+bare `.in()` on an unbounded list; never a multi-row `SELECT` without `.range()`
+for anything that can grow.
 *Why: unbounded queries silently truncate at Supabase's row cap and quietly
 return wrong data.*
 ```ts
@@ -58,6 +70,21 @@ async function fetchAllPaged<T>(
   return rows;
 }
 ```
+
+**Rule 1b — user-facing list surfaces.** A screen showing rows to a person is
+never capped without controls to reach the rest. Every such surface provides:
+
+- **Server-side pagination** via `.range()` with an exact `count` — never a
+  client-side slice of a capped fetch.
+- An **always-visible page-of-N display**, so the user can see there are more
+  pages.
+- **Jump to first and last**, and **direct entry of a page number**.
+- A **page size selector**.
+- **Filters applied server-side**, so paging through a filtered set is correct
+  rather than paging then filtering.
+
+*Why: a bounded list with no pager makes older records silently unreachable — the
+screen looks correct while lying about what exists (the Palstro ERP bug above).*
 
 ### 2. Every write RPC accepts and uses `p_idempotency_key`
 Booking creation, folio charges, payment recording — everything. No exceptions.
@@ -251,6 +278,26 @@ a single user's own tenants. Neither replaces the other.*
 query.eq('tenant_id', activeTenantId);
 ```
 
+### 20. Aggregates and exports span the filter, not the page
+Two things sit beside a list (rule 1b) and are routinely got wrong. Both must be
+computed across the **whole filtered set**, never the visible page:
+
+- **Totals and summary figures** are computed server-side across every row
+  matching the current filter, never summed from the visible page. A user who
+  filters by date range and reads a total expects the total for that range; a
+  page-derived total is a wrong number presented with confidence, which is worse
+  than no number.
+- **Export** returns every row matching the current filter, across all pages.
+  Filters apply; pagination does not. Someone who filters and clicks Export wants
+  their filtered set, not the twenty rows they happen to be looking at.
+
+*Why: a figure or export silently scoped to the current page misreports the data
+the user actually asked for.*
+
+Cross-references rule 16: as a dashboard number carries a tooltip of what it
+includes and excludes, a list total needs the same — and the tooltip must state
+that it covers the **whole filtered set, not the page**.
+
 ---
 
 ## 3. Multi-tenancy model
@@ -432,6 +479,15 @@ a *hard* delete; setting `deleted_at` on a room type leaves its rooms pointing a
 a still-present but deleted parent. Every query that joins `rooms` to
 `room_types` (or any child to a soft-deleted parent) must filter the parent's
 `deleted_at` itself, NULL-safe per rule 5 (`deleted_at is null`).
+
+**Pagination is a shared component, built once before the first list screen.**
+No list surface (rule 1b) ships until a single reusable `Pagination` component
+exists, and every list then uses it. Building it per screen guarantees four
+different behaviours and four separate places to fix the next bug — the same
+reason the settings framework was built before any settings tab. `change_log` is
+where this bites hardest: it grows **without bound by design**, so its viewer
+cannot ship with a cap and is the clearest reason to have the component ready
+first.
 
 ---
 

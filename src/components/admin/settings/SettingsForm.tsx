@@ -13,6 +13,8 @@ import {
 import { validateTab } from '../../../lib/settings/validate';
 import { applyBranding, clearThemeOverrides } from '../../../lib/theme';
 import { FieldControl } from './FieldControl';
+import type { SettingsMediaContext } from './mediaFieldContext';
+import type { MediaAssetMap } from '../../../lib/mediaUrl';
 import type {
   Property,
   PropertySettings,
@@ -38,6 +40,11 @@ interface SettingsFormProps {
   onSaved: (patch: Partial<SettingsRows>) => void;
   // Reports dirty state up so the page can warn before a tab switch.
   onDirtyChange: (dirty: boolean) => void;
+  // The property's live media (id -> asset), loaded once by the page, for the
+  // image renderers to resolve stored ids to URLs. reloadMedia re-pulls it after
+  // an upload/delete.
+  mediaAssets: MediaAssetMap;
+  reloadMedia: () => Promise<void>;
 }
 
 // The custom SQLSTATEs migration 008 raises.
@@ -51,9 +58,28 @@ export function SettingsForm({
   propertyId,
   onSaved,
   onDirtyChange,
+  mediaAssets,
+  reloadMedia,
 }: SettingsFormProps) {
   const toast = useToast();
   const { markDirty, markClean } = useDirtyForm();
+
+  // Media context for the image renderers. Rebuilt whenever the baseline settings
+  // row or the loaded assets change, so branding and the concurrency token it
+  // hands each commit are always the freshest — a text Save and an image commit
+  // thread the same updated_at through each other correctly.
+  const mediaContext = useMemo<SettingsMediaContext>(
+    () => ({
+      tenantId,
+      propertyId,
+      branding: rows.settings.branding,
+      settingsUpdatedAt: rows.settings.updated_at,
+      assets: mediaAssets,
+      onBrandingCommitted: (row) => onSaved({ settings: row }),
+      reloadAssets: reloadMedia,
+    }),
+    [tenantId, propertyId, rows.settings, mediaAssets, onSaved, reloadMedia],
+  );
 
   // Field values, seeded once from the loaded rows. Deliberately NOT re-seeded
   // when `rows` later changes (after a save) — that would discard the admin's
@@ -224,6 +250,7 @@ export function SettingsForm({
               values={values}
               currency={rows.property.currency}
               disabled={saving}
+              mediaContext={mediaContext}
             />
           ))}
         </div>

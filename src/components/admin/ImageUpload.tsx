@@ -20,6 +20,17 @@ interface ImageUploadProps {
   // Called after each image's variants + rows are written, so the parent can
   // refresh its gallery. Receives the three inserted rows.
   onUploaded?: (assets: MediaAsset[]) => void;
+  // Called ONCE after a batch finishes, with the trio of rows for each image that
+  // uploaded successfully. The settings image fields use this to commit all new
+  // ids to branding in a single write rather than one per image (build 4).
+  onBatchUploaded?: (images: MediaAsset[][]) => void;
+  // When false, only one file may be queued at a time — for a single-image field
+  // (logo, about) where an upload REPLACES rather than adds. Defaults to true.
+  multiple?: boolean;
+  // Cap on how many files this instance may queue (the field's remaining slots:
+  // e.g. 10 hero, 30 gallery, minus what is already stored). Selecting beyond it
+  // is blocked with a message rather than silently dropped. Undefined = no cap.
+  maxFiles?: number;
 }
 
 type Stage = 'processing' | 'ready' | 'uploading' | 'done' | 'error';
@@ -65,6 +76,9 @@ export function ImageUpload({
   propertyId,
   category,
   onUploaded,
+  onBatchUploaded,
+  multiple = true,
+  maxFiles,
 }: ImageUploadProps) {
   const [items, setItems] = useState<Item[]>([]);
   const [dragging, setDragging] = useState(false);
@@ -169,9 +183,30 @@ export function ImageUpload({
     (fileList: FileList | null) => {
       if (!fileList) return;
       setBlockMessage(null);
-      Array.from(fileList).forEach((f) => void addFile(f));
+      const files = Array.from(fileList);
+
+      // How many more may be queued: the single-select cap (1) or the field's
+      // remaining slots, minus what is already queued (errored items don't count).
+      const queued = items.filter((i) => i.stage !== 'error').length;
+      const hardCap = multiple ? (maxFiles ?? Infinity) : 1;
+      const room = Math.max(0, hardCap - queued);
+
+      if (room <= 0) {
+        setBlockMessage(
+          multiple
+            ? `You can add up to ${maxFiles} image${maxFiles === 1 ? '' : 's'} here. Remove one first to add another.`
+            : 'Only one image can be uploaded here. Remove the queued one first.',
+        );
+        return;
+      }
+      if (files.length > room) {
+        setBlockMessage(
+          `Only ${room} more image${room === 1 ? '' : 's'} can be added here; the rest were skipped.`,
+        );
+      }
+      files.slice(0, room).forEach((f) => void addFile(f));
     },
-    [addFile],
+    [addFile, items, multiple, maxFiles],
   );
 
   const removeItem = useCallback((id: string) => {
@@ -210,6 +245,9 @@ export function ImageUpload({
 
     setBlockMessage(null);
     setUploading(true);
+    // Rows for each image that uploaded cleanly, reported once at the end so the
+    // parent commits all new ids in a single branding write (build 4).
+    const succeeded: MediaAsset[][] = [];
     try {
       for (const item of ready) {
         setItems((cur) =>
@@ -229,6 +267,7 @@ export function ImageUpload({
               i.id === item.id ? { ...i, stage: 'done' } : i,
             ),
           );
+          succeeded.push(assets);
           onUploaded?.(assets);
         } catch (e) {
           setItems((cur) =>
@@ -240,6 +279,7 @@ export function ImageUpload({
           );
         }
       }
+      if (succeeded.length > 0) onBatchUploaded?.(succeeded);
     } finally {
       setUploading(false);
       // Reflect the new usage after the batch (some may have failed; the RPC is
@@ -254,6 +294,7 @@ export function ImageUpload({
     propertyId,
     category,
     onUploaded,
+    onBatchUploaded,
     refreshQuota,
   ]);
 
@@ -331,7 +372,7 @@ export function ImageUpload({
           ref={inputRef}
           type="file"
           accept="image/jpeg,image/png,image/webp"
-          multiple
+          multiple={multiple}
           className="sr-only"
           onChange={(e) => {
             handleFiles(e.target.files);

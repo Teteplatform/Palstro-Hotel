@@ -18,6 +18,7 @@ import {
   PurchasesIcon,
   SuppliersIcon,
   StockCountsIcon,
+  SiteIcon,
 } from '../ui/icons';
 
 // The admin's navigation, defined once as data. Settling the FULL information
@@ -242,7 +243,18 @@ export const ADMIN_NAV: AdminNavItem[] = [
     status: 'coming_soon',
   },
 
-  // --- Configuration: the one screen that exists today -----------------------
+  // --- Configuration: the screens that exist today ---------------------------
+  // Site editor is the visual, click-to-edit face of the settings engine (3.txt);
+  // Settings is the full form (including the values with no visual counterpart —
+  // VAT, timezone, night audit, booking). Both are the SAME 'settings' module.
+  {
+    label: 'Site editor',
+    icon: SiteIcon,
+    segment: 'site',
+    module: 'settings',
+    group: 'configuration',
+    status: 'ready',
+  },
   {
     label: 'Settings',
     icon: SettingsIcon,

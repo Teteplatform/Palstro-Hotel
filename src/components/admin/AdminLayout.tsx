@@ -3,6 +3,7 @@ import { NavLink, Outlet } from 'react-router-dom';
 import { useActiveProperty } from '../../hooks/useActiveProperty';
 import { useTenantContext } from '../../hooks/useTenantContext';
 import { useEnabledModules } from '../../hooks/useEnabledModules';
+import { usePropertyLogo } from '../../hooks/usePropertyLogo';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { ADMIN_NAV, ADMIN_NAV_GROUPS, type AdminNavItem } from './adminNav';
 import { PropertySwitcher } from './PropertySwitcher';
@@ -25,6 +26,13 @@ export function AdminLayout() {
     useActiveProperty();
   const { memberships, tenantName } = useTenantContext();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // The active property's logo (thumb) for the sidebar brand. Called before the
+  // early returns to keep hook order stable; null ids (property still resolving)
+  // resolve to no logo, so the brand falls back to the name text.
+  const logoUrl = usePropertyLogo(
+    property?.id ?? null,
+    property?.tenant_id ?? null,
+  );
 
   // Still resolving which properties this user may access.
   if (loading) {
@@ -78,7 +86,11 @@ export function AdminLayout() {
     <div className="min-h-screen bg-cream">
       {/* Desktop sidebar: fixed so the main column scrolls independently. */}
       <aside className="hidden lg:fixed lg:inset-y-0 lg:left-0 lg:flex lg:w-64 lg:flex-col lg:border-r lg:border-sand-border lg:bg-sand/40">
-        <SidebarBrand tenantName={owningTenantName} />
+        <SidebarBrand
+          logoUrl={logoUrl}
+          name={property.name}
+          domain={property.domain}
+        />
         <NavList slug={property.slug} />
       </aside>
 
@@ -131,7 +143,9 @@ export function AdminLayout() {
       {drawerOpen ? (
         <MobileDrawer
           slug={property.slug}
-          tenantName={owningTenantName}
+          logoUrl={logoUrl}
+          name={property.name}
+          domain={property.domain}
           onClose={() => setDrawerOpen(false)}
         />
       ) : null}
@@ -139,13 +153,67 @@ export function AdminLayout() {
   );
 }
 
-function SidebarBrand({ tenantName }: { tenantName: string }) {
+function SidebarBrand({
+  logoUrl,
+  name,
+  domain,
+}: {
+  logoUrl: string | null;
+  name: string;
+  domain: string | null;
+}) {
   return (
     <div className="flex h-16 items-center border-b border-sand-border px-5">
-      <span className="truncate text-base font-bold tracking-tight text-charcoal">
-        {tenantName}
-      </span>
+      <BrandLink logoUrl={logoUrl} name={name} domain={domain} />
     </div>
+  );
+}
+
+// The active property's brand, linking to the LIVE GUEST SITE. Opens in a new tab
+// on purpose: an admin clicking it wants to peek at their public site, not leave
+// the admin (and lose any unsaved work) — so it opens a new tab, the label says
+// so explicitly, and rel="noopener noreferrer" severs the new tab from this one.
+// Renders the property logo when set, falling back to the property-name text
+// otherwise, matching the guest header (SiteHeader). The image is decorative
+// (alt="") because the link already carries the accessible label, and that same
+// text fallback means a missing or dangling logo is never a broken image.
+//
+// The guest site is resolved by HOSTNAME, so the href must land on the property's
+// own domain: a relative "/" is only correct when the admin happens to be served
+// from that same domain. In production the admin is on the platform domain while
+// each property has its own (properties.domain), so "/" there would resolve the
+// wrong property or none. Build the absolute https://{domain} when a domain is
+// set, and fall back to "/" only when it is null.
+function BrandLink({
+  logoUrl,
+  name,
+  domain,
+}: {
+  logoUrl: string | null;
+  name: string;
+  domain: string | null;
+}) {
+  const href = domain ? `https://${domain}` : '/';
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label={`${name} — view live site (opens in a new tab)`}
+      className="inline-flex min-w-0 items-center gap-2 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-cream"
+    >
+      {logoUrl ? (
+        <img
+          src={logoUrl}
+          alt=""
+          className="h-16 w-auto max-w-[160px] object-contain"
+        />
+      ) : (
+        <span className="truncate text-base font-bold tracking-tight text-charcoal">
+          {name}
+        </span>
+      )}
+    </a>
   );
 }
 
@@ -194,7 +262,7 @@ function NavList({
           </summary>
           <ul className="mt-1 space-y-1">
             {g.items.map((item) => (
-              <li key={item.module}>
+              <li key={item.segment}>
                 <NavItemLink slug={slug} item={item} onNavigate={onNavigate} />
               </li>
             ))}
@@ -253,11 +321,15 @@ function NavItemLink({
 
 function MobileDrawer({
   slug,
-  tenantName,
+  logoUrl,
+  name,
+  domain,
   onClose,
 }: {
   slug: string;
-  tenantName: string;
+  logoUrl: string | null;
+  name: string;
+  domain: string | null;
   onClose: () => void;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
@@ -282,9 +354,7 @@ function MobileDrawer({
         className="absolute inset-y-0 left-0 flex w-72 max-w-[85%] flex-col bg-cream shadow-xl"
       >
         <div className="flex h-16 items-center justify-between border-b border-sand-border px-5">
-          <span className="truncate text-base font-bold tracking-tight text-charcoal">
-            {tenantName}
-          </span>
+          <BrandLink logoUrl={logoUrl} name={name} domain={domain} />
           <button
             type="button"
             onClick={onClose}

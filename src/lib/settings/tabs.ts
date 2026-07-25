@@ -13,6 +13,14 @@ import { GUEST_SECTIONS } from './sections';
 // sit on it so the field can warn on a failing contrast pairing (§4).
 const brandFields: SettingsField[] = [
   {
+    key: 'logo',
+    label: 'Logo',
+    help: 'Shown in the site header. A transparent PNG reads best over the hero.',
+    type: 'image',
+    mediaCategory: 'logo',
+    storage: { target: 'branding', brandingKey: 'logo_url' },
+  },
+  {
     key: 'primary_color',
     label: 'Primary colour',
     help: 'The main brand colour — buttons, links, active states carry white text on it.',
@@ -120,6 +128,36 @@ const contentFields: SettingsField[] = [
     type: 'textarea',
     rows: 6,
     storage: { target: 'branding', brandingKey: 'about_text' },
+  },
+  {
+    key: 'about_image',
+    label: 'About image',
+    help: 'Sits beside the about text. A warm, welcoming photo works well.',
+    type: 'image',
+    mediaCategory: 'about',
+    storage: { target: 'branding', brandingKey: 'about_image' },
+  },
+  {
+    key: 'hero_images',
+    label: 'Hero images',
+    help: 'The full-screen images at the top of the site. The FIRST is what a visitor sees before the carousel advances, so order matters.',
+    type: 'imageList',
+    mediaCategory: 'hero',
+    // Capped at 5, down from 10 (3.txt §5). A visitor sees two hero images at
+    // most before scrolling past, and each loads the ~200KB `full` variant — ten
+    // is ~2MB of images nobody looks at, a real cost on a mobile connection. Five
+    // is already generous for a slow crossfade.
+    max: 5,
+    storage: { target: 'branding', brandingKey: 'hero_images' },
+  },
+  {
+    key: 'gallery_images',
+    label: 'Gallery',
+    help: 'The photo grid guests browse. Shown as thumbnails; a tap opens the full image.',
+    type: 'imageList',
+    mediaCategory: 'gallery',
+    max: 30,
+    storage: { target: 'branding', brandingKey: 'gallery_images' },
   },
   ...sectionVisibilityFields,
   {

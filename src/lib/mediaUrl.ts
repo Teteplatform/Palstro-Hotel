@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
-import type { SizeVariant } from '../types/media';
+import type { MediaAsset, SizeVariant } from '../types/media';
+import placeholderImage from '../assets/hero.png';
 
 // The single public bucket (005). Named once here so no caller writes it as a
 // literal.
@@ -32,4 +33,60 @@ export function variantPath(bucketPath: string, size: SizeVariant): string {
 // — a card must never load the full variant, and this is how it avoids doing so.
 export function mediaVariantUrl(bucketPath: string, size: SizeVariant): string {
   return mediaPublicUrl(variantPath(bucketPath, size));
+}
+
+// ---------------------------------------------------------------------------
+// id -> URL resolution (build 4)
+// ---------------------------------------------------------------------------
+// Branding stores a media_asset ID, not a URL (009). Rendering resolves that id
+// to the exact variant a surface needs. Because all three variants of one image
+// share every path segment but the size (variantPath), a SINGLE loaded row for
+// the image is enough to derive any size — so the caller loads the property's
+// live media once (buildMediaMap) and passes the map plus the stored id and the
+// size it wants.
+
+export type MediaAssetMap = Map<string, MediaAsset>;
+
+// Index a property's loaded media_assets rows by id. Every variant row is keyed
+// individually, so whichever variant's id branding happens to store resolves.
+export function buildMediaMap(assets: MediaAsset[]): MediaAssetMap {
+  const map: MediaAssetMap = new Map();
+  for (const a of assets) map.set(a.id, a);
+  return map;
+}
+
+// Resolve a stored branding id to the public URL for `size`, or null when the id
+// is unset or points at an asset that is not present (e.g. it was deleted since
+// it was referenced — a dangling reference the caller renders as a placeholder,
+// never a broken image). The size is the SURFACE's need, not what was stored:
+// one id renders as a thumb on a logo and a full on a hero.
+export function mediaUrl(
+  map: MediaAssetMap,
+  id: string | null | undefined,
+  size: SizeVariant,
+): string | null {
+  if (!id) return null;
+  const asset = map.get(id);
+  if (!asset) return null;
+  return mediaVariantUrl(asset.bucket_path, size);
+}
+
+// The bundled platform default placeholder — a neutral warm image shown by the
+// RENDER layer (never the data, per 009) when an image field is empty, so an
+// unconfigured property still looks deliberate. A URL string, so it drops into an
+// <img src> exactly where a resolved media URL would.
+export const platformPlaceholder: string = placeholderImage;
+
+// ---------------------------------------------------------------------------
+// Path families — for orphan grouping (build 4 §4)
+// ---------------------------------------------------------------------------
+// The three variant rows of one image differ ONLY in the size path segment. This
+// collapses a bucket_path to a size-independent FAMILY key, so all variants of an
+// image group together: referencing any one variant's id marks the whole family
+// as referenced, and orphan cleanup lists a family (3 files) as a single image.
+export function bucketPathFamily(bucketPath: string): string {
+  const parts = bucketPath.split('/');
+  if (parts.length < 5) return bucketPath;
+  parts[parts.length - 2] = '*'; // neutralise the size segment
+  return parts.join('/');
 }

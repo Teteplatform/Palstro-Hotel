@@ -18,6 +18,7 @@ import { LandingPage } from './pages/LandingPage';
 import { LoginPage } from './pages/LoginPage';
 import { AdminIndexRedirect } from './pages/admin/AdminIndexRedirect';
 import { SettingsPage } from './pages/admin/SettingsPage';
+import { SiteEditorPage } from './pages/admin/SiteEditorPage';
 import { ModuleNotAvailablePage } from './pages/admin/ModuleNotAvailablePage';
 
 /**
@@ -91,6 +92,17 @@ const router = createBrowserRouter([
                 element: (
                   <ModuleGuard module="settings">
                     <SettingsPage />
+                  </ModuleGuard>
+                ),
+              },
+              // The inline visual editor (3.txt §1): the real LandingPage in the
+              // admin shell with edit mode on. Same 'settings' module as the form
+              // tabs — it is a second face on the settings engine, not a new one.
+              {
+                path: 'site',
+                element: (
+                  <ModuleGuard module="settings">
+                    <SiteEditorPage />
                   </ModuleGuard>
                 ),
               },

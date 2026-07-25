@@ -1,5 +1,18 @@
 import { PhoneIcon, MailIcon, MapPinIcon } from './ui/icons';
 import { socialIcon } from './ui/iconMap';
+import { Editable } from './Editable';
+
+// The contact fields edited as one logical block (3.txt §2): phone, email and the
+// address columns. Social links live in branding and are edited on the form, so
+// they are not part of this region.
+const CONTACT_FIELDS = [
+  'phone',
+  'email',
+  'address_line',
+  'city',
+  'state',
+  'postal_code',
+];
 
 interface ContactFooterProps {
   hotelName: string;
@@ -52,26 +65,35 @@ export function ContactFooter({
           </div>
 
           <div className="space-y-4">
-            {phone ? (
-              <a href={`tel:${phone.replace(/\s+/g, '')}`} className={linkClass}>
-                <PhoneIcon className="h-5 w-5 shrink-0 text-accent" />
-                <span>{phone}</span>
-              </a>
-            ) : null}
+            {/* Phone, email and address are one editable block (the Editable is a
+                pass-through on the guest site; its className keeps the spacing in
+                edit mode, where it becomes a real wrapper element). */}
+            <Editable
+              fields={CONTACT_FIELDS}
+              label="Contact details"
+              className="space-y-4"
+            >
+              {phone ? (
+                <a href={`tel:${phone.replace(/\s+/g, '')}`} className={linkClass}>
+                  <PhoneIcon className="h-5 w-5 shrink-0 text-accent" />
+                  <span>{phone}</span>
+                </a>
+              ) : null}
 
-            {email ? (
-              <a href={`mailto:${email}`} className={linkClass}>
-                <MailIcon className="h-5 w-5 shrink-0 text-accent" />
-                <span className="break-all">{email}</span>
-              </a>
-            ) : null}
+              {email ? (
+                <a href={`mailto:${email}`} className={linkClass}>
+                  <MailIcon className="h-5 w-5 shrink-0 text-accent" />
+                  <span className="break-all">{email}</span>
+                </a>
+              ) : null}
 
-            {address ? (
-              <div className="flex items-start gap-3 text-cream/90">
-                <MapPinIcon className="mt-0.5 h-5 w-5 shrink-0 text-accent" />
-                <span>{address}</span>
-              </div>
-            ) : null}
+              {address ? (
+                <div className="flex items-start gap-3 text-cream/90">
+                  <MapPinIcon className="mt-0.5 h-5 w-5 shrink-0 text-accent" />
+                  <span>{address}</span>
+                </div>
+              ) : null}
+            </Editable>
 
             {socialEntries.length > 0 ? (
               <div className="flex flex-wrap gap-3 pt-2">

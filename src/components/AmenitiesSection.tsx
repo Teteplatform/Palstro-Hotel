@@ -1,4 +1,5 @@
 import { amenityIcon } from './ui/iconMap';
+import { Editable } from './Editable';
 
 interface AmenitiesSectionProps {
   amenities: string[];
@@ -9,6 +10,7 @@ interface AmenitiesSectionProps {
 // from it. Caller renders this only when there is at least one amenity.
 export function AmenitiesSection({ amenities }: AmenitiesSectionProps) {
   return (
+    <Editable fields={['amenities']} label="Amenities">
     <section
       id="amenities"
       aria-labelledby="amenities-heading"
@@ -45,5 +47,6 @@ export function AmenitiesSection({ amenities }: AmenitiesSectionProps) {
         </ul>
       </div>
     </section>
+    </Editable>
   );
 }

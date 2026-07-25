@@ -63,6 +63,18 @@ export const ArrowRightIcon = ({ className }: IconProps) => (
   </Line>
 );
 
+export const ArrowUpIcon = ({ className }: IconProps) => (
+  <Line className={className}>
+    <path d="M6 15l6-6 6 6" />
+  </Line>
+);
+
+export const ArrowDownIcon = ({ className }: IconProps) => (
+  <Line className={className}>
+    <path d="M6 9l6 6 6-6" />
+  </Line>
+);
+
 /* --- Admin navigation ----------------------------------------------------- */
 
 export const SettingsIcon = ({ className }: IconProps) => (
@@ -227,6 +239,32 @@ export const PlusIcon = ({ className }: IconProps) => (
 export const ChevronUpDownIcon = ({ className }: IconProps) => (
   <Line className={className}>
     <path d="M8 9l4-4 4 4M8 15l4 4 4-4" />
+  </Line>
+);
+
+// Pencil — the inline "edit this region" affordance in the visual editor (3.txt).
+export const EditIcon = ({ className }: IconProps) => (
+  <Line className={className}>
+    <path d="M4 20h4L18.5 9.5a2 2 0 0 0-2.83-2.83L5 17.5V20Z" />
+    <path d="M13.5 6.5l4 4" />
+  </Line>
+);
+
+// Palette — the floating "colours & fonts" control in the visual editor (3.txt),
+// which belongs to no single section.
+export const PaletteIcon = ({ className }: IconProps) => (
+  <Line className={className}>
+    <path d="M12 3a9 9 0 1 0 0 18c1.4 0 2-1 2-2 0-.6-.3-1-.6-1.4-.3-.4-.6-.8-.6-1.4 0-1.1.9-2 2-2h1.2A4.8 4.8 0 0 0 21 8.7C20.4 5.4 16.6 3 12 3Z" />
+    <path d="M7.5 12h.01M10 8h.01M14 7.5h.01" />
+  </Line>
+);
+
+// Site editor — a browser window with a cursor, for the visual editor nav item.
+export const SiteIcon = ({ className }: IconProps) => (
+  <Line className={className}>
+    <rect x="3" y="4" width="18" height="16" rx="2" />
+    <path d="M3 8h18M6.5 6h.01M9 6h.01" />
+    <path d="M11 12l3.5 6 1-2.5 2.5-1L11 12Z" />
   </Line>
 );
 

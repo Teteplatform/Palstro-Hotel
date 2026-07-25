@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import { PlatformMark } from '../components/ui/PlatformMark';
 
 // Where to land after a successful sign in when we have no remembered origin.
 const DEFAULT_DESTINATION = '/admin';
@@ -85,6 +86,14 @@ export function LoginPage() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-cream px-6 py-12">
       <div className="w-full max-w-sm">
+        {/* Branding on the sign-in screen. /login is NOT property-scoped — there
+            is no active property here, so there is no property logo to read.
+            Show the Palstro-Hotels PLATFORM mark instead: at this point the user
+            is signing into the platform, not into a specific hotel. Do not wire a
+            property lookup into this route — it has no property (3.txt §2). */}
+        <div className="mb-6 flex justify-center">
+          <PlatformMark />
+        </div>
         <div className="rounded-2xl border border-sand-border bg-white/60 p-8 shadow-sm">
           <h1 className="text-2xl font-bold tracking-tight text-charcoal">
             Sign in

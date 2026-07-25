@@ -1,3 +1,4 @@
+import { Link, useParams } from 'react-router-dom';
 import type { RoomType } from '../types/room';
 import {
   formatCurrency,
@@ -5,7 +6,26 @@ import {
   firstImageUrl,
   parseNumeric,
 } from '../lib/format';
+import { mediaUrl, type MediaAssetMap } from '../lib/mediaUrl';
+import { useEditMode } from '../hooks/useEditMode';
 import { AnchorButton } from './ui/AnchorButton';
+import { ArrowRightIcon } from './ui/icons';
+
+// Resolve a room type's first image to a URL at the `card` variant — a room card
+// is a mid-size tile, so card (800px) is the right size and full would be wasted
+// egress (build 4 §3). room_types.images entries are media ids once the rooms
+// module writes them; a value that is not a known id is treated as a legacy URL
+// and passed through, so nothing breaks in the interim.
+function resolveRoomImage(
+  images: unknown,
+  mediaMap: MediaAssetMap,
+): string | null {
+  const first = firstImageUrl(images);
+  if (!first) return null;
+  const asId = mediaUrl(mediaMap, first, 'card');
+  if (asId) return asId;
+  return first.includes('://') ? first : null;
+}
 
 // Where the room CTA and the header's Book Now both point for now: the contact
 // section, so a guest can enquire by phone (the primary booking path in NG).
@@ -18,6 +38,9 @@ interface RoomsSectionProps {
   currency: string;
   loading: boolean;
   error: Error | null;
+  // For resolving room image ids to URLs (build 4). Room images may be empty
+  // today; this is wired for when the rooms module stores media ids.
+  mediaMap: MediaAssetMap;
 }
 
 /**
@@ -31,6 +54,7 @@ export function RoomsSection({
   currency,
   loading,
   error,
+  mediaMap,
 }: RoomsSectionProps) {
   return (
     <section
@@ -51,6 +75,12 @@ export function RoomsSection({
           </h2>
         </header>
 
+        {/* Rooms are NOT editable inline: room types are their own module (build
+            5) with their own screen. Rather than dress the cards up as editable,
+            the editor shows a clear link out to that screen. Only rendered inside
+            the Site editor (isEditing), so the guest site is untouched. */}
+        <EditRoomTypesLink />
+
         {error ? (
           <RoomsError message={error.message} />
         ) : loading ? (
@@ -64,12 +94,41 @@ export function RoomsSection({
         ) : (
           <RoomsGrid>
             {roomTypes.map((room) => (
-              <RoomCard key={room.id} room={room} currency={currency} />
+              <RoomCard
+                key={room.id}
+                room={room}
+                currency={currency}
+                mediaMap={mediaMap}
+              />
             ))}
           </RoomsGrid>
         )}
       </div>
     </section>
+  );
+}
+
+// The "manage room types elsewhere" affordance shown only in the Site editor.
+// Points at the rooms screen for the active property (build 5 will flesh it out);
+// reads the slug from the route, which is only present under /admin/:propertySlug.
+function EditRoomTypesLink() {
+  const { isEditing } = useEditMode();
+  const { propertySlug } = useParams();
+  if (!isEditing || !propertySlug) return null;
+
+  return (
+    <div className="mb-8 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-dashed border-primary/40 bg-primary/5 px-4 py-3">
+      <p className="text-sm text-charcoal">
+        Rooms are managed on their own screen, not edited here.
+      </p>
+      <Link
+        to={`/admin/${propertySlug}/rooms`}
+        className="inline-flex items-center gap-1.5 rounded-lg text-sm font-semibold text-primary hover:text-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
+      >
+        Edit room types
+        <ArrowRightIcon className="h-4 w-4" />
+      </Link>
+    </div>
   );
 }
 
@@ -81,8 +140,17 @@ function RoomsGrid({ children }: { children: React.ReactNode }) {
   );
 }
 
-function RoomCard({ room, currency }: { room: RoomType; currency: string }) {
-  const image = firstImageUrl(room.images);
+function RoomCard({
+  room,
+  currency,
+  mediaMap,
+}: {
+  room: RoomType;
+  currency: string;
+  mediaMap: MediaAssetMap;
+}) {
+  // Room card image at the `card` variant (build 4 §3), id or legacy URL.
+  const image = resolveRoomImage(room.images, mediaMap);
   // size_sqm arrives as a numeric string ("25.00"); parse it so the display
   // reads "25 m²", not "25.00 m²", and so the guard tests a real number.
   const sizeSqm = parseNumeric(room.size_sqm);

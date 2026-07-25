@@ -1,9 +1,12 @@
 import { useCallback, useRef } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useActiveProperty } from '../../hooks/useActiveProperty';
 import { useSettingsData } from '../../hooks/useSettingsData';
+import { usePropertyMedia } from '../../hooks/usePropertyMedia';
 import { SETTINGS_TABS } from '../../lib/settings/tabs';
 import { SettingsForm } from '../../components/admin/settings/SettingsForm';
+import { OrphanCleanup } from '../../components/admin/settings/OrphanCleanup';
+import { SiteIcon } from '../../components/ui/icons';
 import type { SettingsRows } from '../../lib/settings/values';
 
 // The settings screen (build 3, §5) — replaces the build-1 placeholder. Tabs
@@ -26,6 +29,7 @@ export function SettingsPage() {
       key={property.id}
       propertyId={property.id}
       tenantId={property.tenant_id}
+      slug={property.slug}
       searchParams={searchParams}
       setSearchParams={setSearchParams}
     />
@@ -35,11 +39,13 @@ export function SettingsPage() {
 function SettingsScreen({
   propertyId,
   tenantId,
+  slug,
   searchParams,
   setSearchParams,
 }: {
   propertyId: string;
   tenantId: string;
+  slug: string;
   searchParams: URLSearchParams;
   setSearchParams: ReturnType<typeof useSearchParams>[1];
 }) {
@@ -47,6 +53,10 @@ function SettingsScreen({
     propertyId,
     tenantId,
   );
+  // The property's live media, loaded once for the whole screen: the image
+  // renderers resolve ids through it, and the orphan panel scans it. reload() is
+  // called after any upload/delete so both stay current.
+  const media = usePropertyMedia(propertyId, tenantId);
 
   // Resolve the active tab from the URL, falling back to the first for an
   // absent/unknown value.
@@ -89,13 +99,24 @@ function SettingsScreen({
 
   return (
     <div className="mx-auto max-w-3xl">
-      <header className="mb-6">
-        <h1 className="text-2xl font-bold tracking-tight text-charcoal">
-          Settings
-        </h1>
-        <p className="mt-1 text-sm text-charcoal-muted">
-          Configure how this property looks and operates.
-        </p>
+      <header className="mb-6 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-charcoal">
+            Settings
+          </h1>
+          <p className="mt-1 text-sm text-charcoal-muted">
+            Configure how this property looks and operates.
+          </p>
+        </div>
+        {/* Two-way link to the visual editor (§1): the owner who would rather
+            click the site than scan a form is one hop away. */}
+        <Link
+          to={`/admin/${slug}/site`}
+          className="inline-flex items-center gap-2 rounded-lg border border-sand-border bg-white/70 px-3 py-2 text-sm font-semibold text-charcoal transition-colors hover:bg-sand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-cream"
+        >
+          <SiteIcon className="h-4 w-4" />
+          Edit visually
+        </Link>
       </header>
 
       {/* Tab strip — horizontally scrollable on narrow screens. */}
@@ -130,16 +151,31 @@ function SettingsScreen({
       ) : error ? (
         <ErrorState message={error.message} onRetry={reload} />
       ) : rows ? (
-        <SettingsForm
-          // Remount on tab change so each tab gets fresh, isolated form state.
-          key={activeTab.id}
-          tab={activeTab}
-          rows={rows}
-          tenantId={tenantId}
-          propertyId={propertyId}
-          onSaved={onSaved}
-          onDirtyChange={onDirtyChange}
-        />
+        <>
+          <SettingsForm
+            // Remount on tab change so each tab gets fresh, isolated form state.
+            key={activeTab.id}
+            tab={activeTab}
+            rows={rows}
+            tenantId={tenantId}
+            propertyId={propertyId}
+            onSaved={onSaved}
+            onDirtyChange={onDirtyChange}
+            mediaAssets={media.map}
+            reloadMedia={media.reload}
+          />
+
+          {/* Orphan cleanup is property-wide, not per-tab: it lists media no
+              branding key or room type still references. Fed the live branding
+              (so it reflects image edits made above) and the shared media list. */}
+          <OrphanCleanup
+            propertyId={propertyId}
+            tenantId={tenantId}
+            branding={rows.settings.branding}
+            assets={media.assets}
+            reloadMedia={media.reload}
+          />
+        </>
       ) : null}
     </div>
   );

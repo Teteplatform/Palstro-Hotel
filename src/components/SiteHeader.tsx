@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AnchorButton } from './ui/AnchorButton';
+import { Editable } from './Editable';
 import { MenuIcon, CloseIcon } from './ui/icons';
 
 export interface NavItem {
@@ -47,22 +48,42 @@ export function SiteHeader({
       }`}
     >
       <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-4 sm:px-8">
-        <a
-          href="#top"
-          className="flex items-center gap-2 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
-        >
-          {logoUrl ? (
-            <img src={logoUrl} alt={hotelName} className="h-9 w-auto" />
-          ) : (
-            <span
-              className={`text-lg font-bold tracking-tight ${
-                solid ? 'text-charcoal' : 'text-white'
-              }`}
-            >
-              {hotelName}
-            </span>
-          )}
-        </a>
+        {/* Clicking the logo returns home — the convention every visitor
+            expects; its absence reads as broken. Links to "/" (the site root),
+            and the fallback name is wrapped too, so there is always a home
+            target whether or not a logo is set. The link carries the accessible
+            label (built from the property name, never the word "logo"), so the
+            image is decorative (alt="") and screen readers announce the link
+            once, not twice. */}
+        {/* Editable region: the logo (branding.logo_url). On the guest site the
+            Editable is a transparent pass-through, so this is exactly the same
+            <a> as before. `noEmptyPlaceholder`: when no logo is set the header
+            already shows the hotel name as a clickable fallback (below), so this
+            region is never a dead empty slot — replacing that name with a "Add
+            logo" box would remove real content from the header. */}
+        <Editable fields={['logo']} label="Logo" noEmptyPlaceholder>
+          <a
+            href="/"
+            aria-label={`${hotelName} — home`}
+            className="flex items-center gap-2 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
+          >
+            {logoUrl ? (
+              <img
+                src={logoUrl}
+                alt=""
+                className="h-16 w-auto max-w-[200px] object-contain"
+              />
+            ) : (
+              <span
+                className={`text-lg font-bold tracking-tight ${
+                  solid ? 'text-charcoal' : 'text-white'
+                }`}
+              >
+                {hotelName}
+              </span>
+            )}
+          </a>
+        </Editable>
 
         <nav className="hidden items-center gap-8 md:flex" aria-label="Primary">
           {navItems.map((it) => (

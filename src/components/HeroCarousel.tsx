@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { AnchorButton } from './ui/AnchorButton';
+import { Editable } from './Editable';
+import { useEditMode } from '../hooks/useEditMode';
 import { ChevronDownIcon } from './ui/icons';
 
 interface HeroCarouselProps {
@@ -26,6 +28,10 @@ export function HeroCarousel({
 }: HeroCarouselProps) {
   const count = images.length;
   const [index, setIndex] = useState(0);
+  // In edit mode the tagline region must mount even when empty, so its "Add
+  // tagline" placeholder can appear (a guest with `isEditing` false keeps the
+  // original behaviour: no tagline, nothing rendered).
+  const { isEditing } = useEditMode();
 
   useEffect(() => {
     if (count <= 1) return;
@@ -41,6 +47,11 @@ export function HeroCarousel({
   }, [count]);
 
   return (
+    // The whole hero is the editable region for the hero images; the hotel name
+    // and tagline are separate INNER regions (below) so the owner can click the
+    // text itself. On the guest site every Editable is a pass-through, so the
+    // markup is unchanged.
+    <Editable fields={['hero_images']} label="Hero images" noEmptyPlaceholder>
     <section
       id="top"
       className="relative flex h-[100svh] min-h-[560px] items-center justify-center overflow-hidden bg-primary"
@@ -53,21 +64,34 @@ export function HeroCarousel({
             i === index ? 'opacity-100' : 'opacity-0'
           }`}
         >
-          {/* Decorative background: alt empty, the <h1> carries the name. */}
-          <img src={src} alt="" className="h-full w-full object-cover" />
+          {/* Decorative background: alt empty, the <h1> carries the name. Only
+              the FIRST hero loads eagerly (it is what a visitor sees before the
+              carousel advances); the rest are lazy, so a five-image hero does not
+              pay for four `full` variants nobody may scroll to (3.txt §5). */}
+          <img
+            src={src}
+            alt=""
+            loading={i === 0 ? 'eager' : 'lazy'}
+            fetchPriority={i === 0 ? 'high' : 'auto'}
+            className="h-full w-full object-cover"
+          />
         </div>
       ))}
 
       <div className="absolute inset-0 bg-charcoal/50" aria-hidden="true" />
 
       <div className="relative mx-auto max-w-3xl px-5 text-center text-white">
-        <h1 className="text-4xl font-bold leading-tight tracking-tight sm:text-5xl lg:text-6xl">
-          {hotelName}
-        </h1>
-        {tagline ? (
-          <p className="mx-auto mt-5 max-w-xl text-lg text-white/90 sm:text-xl">
-            {tagline}
-          </p>
+        <Editable fields={['name']} label="Hotel name">
+          <h1 className="text-4xl font-bold leading-tight tracking-tight sm:text-5xl lg:text-6xl">
+            {hotelName}
+          </h1>
+        </Editable>
+        {tagline || isEditing ? (
+          <Editable fields={['tagline']} label="Tagline">
+            <p className="mx-auto mt-5 max-w-xl text-lg text-white/90 sm:text-xl">
+              {tagline}
+            </p>
+          </Editable>
         ) : null}
         <div className="mt-8 flex justify-center">
           <AnchorButton href={bookHref} className="px-7 py-3 text-base">
@@ -101,5 +125,6 @@ export function HeroCarousel({
         <ChevronDownIcon className="h-6 w-6" />
       </a>
     </section>
+    </Editable>
   );
 }

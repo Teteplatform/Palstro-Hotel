@@ -8,6 +8,7 @@
 // is validated without tracing the save code — so both live on the field.
 
 import type { SelectOption } from '../../components/ui/form';
+import type { MediaCategory } from '../../types/media';
 
 // ---------------------------------------------------------------------------
 // Field value types
@@ -145,7 +146,25 @@ export type SettingsField =
   | (BaseField & { type: 'color'; contrast?: ColorContrast })
   | (BaseField & { type: 'font' })
   | (BaseField & { type: 'stringList'; placeholder?: string })
-  | (BaseField & { type: 'image' | 'imageList' });
+  | (BaseField & {
+      type: 'image' | 'imageList';
+      // Which media_assets category uploads from this field are filed under, so
+      // the bucket path and the row's category are correct (no literal in the
+      // component — rule 17). logo/about are single 'image' fields; hero/gallery
+      // are 'imageList'.
+      mediaCategory: MediaCategory;
+      // The most images an imageList may hold, declared in the schema rather than
+      // hardcoded in the renderer (build 4 §1): 5 for hero (3.txt §5), 30 for
+      // gallery. Ignored for a single 'image' field.
+      max?: number;
+    });
+
+// The image-bearing field member (image + imageList share one union member, so
+// this is the single type both the ImageField and ImageListField renderers take).
+export type ImageSettingsField = Extract<
+  SettingsField,
+  { type: 'image' | 'imageList' }
+>;
 
 // A tab is a titled group of fields. `module` is unused today (Settings is
 // always enabled) but reserved so a future tab can be gated like a nav module.

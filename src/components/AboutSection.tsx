@@ -1,3 +1,5 @@
+import { Editable } from './Editable';
+
 interface AboutSectionProps {
   text: string;
   image: string | null;
@@ -9,6 +11,7 @@ interface AboutSectionProps {
 // on it); with no image it centers as a single readable column.
 export function AboutSection({ text, image, hotelName }: AboutSectionProps) {
   return (
+    <Editable fields={['about_text', 'about_image']} label="About">
     <section
       id="about"
       aria-labelledby="about-heading"
@@ -42,5 +45,6 @@ export function AboutSection({ text, image, hotelName }: AboutSectionProps) {
         ) : null}
       </div>
     </section>
+    </Editable>
   );
 }

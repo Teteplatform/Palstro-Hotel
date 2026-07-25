@@ -1,0 +1,67 @@
+-- ============================================================================
+-- 009_branding_media_ids.sql
+-- Palstro-Hotels: branding image fields move from URL strings to media_asset ids.
+--
+-- ----------------------------------------------------------------------------
+-- THE SHAPE CHANGE
+-- ----------------------------------------------------------------------------
+-- Build 3 seeded property_settings.branding with bare image URLs (logo_url,
+-- about_image, hero_images[], gallery_images[]). Build 4 replaces those with
+-- media_asset IDS: each real upload now produces a media_assets row per variant
+-- plus a bucket object, and branding stores the id of the canonical variant, NOT
+-- a URL. The guest site (and the settings preview) resolve an id -> a URL at
+-- render time through mediaUrl(), asking for the size the surface needs.
+--
+-- WHY an id and not a URL — worth stating because it is the whole point:
+--   * a URL cannot be resized  — an id resolves to whichever variant a surface
+--     needs (a room card asks 'card', a hero 'full'), so a card never ships a
+--     1920px hero,
+--   * a URL cannot be counted against the storage quota — an id is a media_assets
+--     row with a byte_size the quota trigger sums,
+--   * a URL cannot be cleaned up when the field changes — an id lets orphan
+--     cleanup find the files a replaced/removed image left behind.
+--
+-- The affected branding keys (everything an image field on the settings surface
+-- writes). Kept in one list so the clear below and any future reader agree:
+--   logo_url       (image)      -> Brand tab
+--   about_image    (image)      -> Content tab
+--   hero_images    (imageList)  -> Content tab
+--   gallery_images (imageList)  -> Content tab
+--
+-- ----------------------------------------------------------------------------
+-- HANDLING THE EXISTING SEEDED ROWS
+-- ----------------------------------------------------------------------------
+-- The seeded values were Unsplash URLs. They were ALWAYS placeholders — stand-in
+-- imagery so the guest site had something to render during the build — and they
+-- have no corresponding media_assets rows or bucket objects. There is nothing to
+-- migrate: an Unsplash URL cannot become a media_asset id because the bytes were
+-- never ours. Attempting to "convert" them would only invent broken ids.
+--
+-- So we CLEAR the image keys instead. Heledon's real photographs will be uploaded
+-- through the admin settings surface, which writes proper ids from that point on.
+-- Rather than leave the guest site imageless in the meantime, the RENDER LAYER
+-- (not the data) falls back to the platform default placeholder for an empty
+-- field — see src/lib/mediaUrl.ts (platformPlaceholder) and the guest components —
+-- so an unconfigured property still looks deliberate rather than broken. That
+-- fallback deliberately lives in the render path, never here: seeding a fake
+-- "default" id into the data would be a lie the quota and orphan cleanup would
+-- then trip over.
+--
+-- Idempotent: `- key` on an absent key is a no-op, so re-running is safe. Only
+-- rows that actually carry one of the keys are touched (the WHERE ?| guard), so
+-- this does not needlessly bump updated_at on branding that never had images.
+-- NOTE: this UPDATE fires the 006 log_field_changes() trigger, which records the
+-- cleared keys in change_log — the placeholder removal is itself audited.
+-- ============================================================================
+
+update property_settings
+   set branding = branding
+                    - 'logo_url'
+                    - 'about_image'
+                    - 'hero_images'
+                    - 'gallery_images'
+ where branding ?| array['logo_url', 'about_image', 'hero_images', 'gallery_images'];
+
+-- ============================================================================
+-- End of 009_branding_media_ids.sql
+-- ============================================================================

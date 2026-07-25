@@ -8,7 +8,7 @@ import {
 import { resolveProperty } from '../lib/resolveProperty';
 import type { Property, PropertySettings, Tenant } from '../types/tenant';
 
-interface PropertyContextValue {
+export interface PropertyContextValue {
   property: Property | null;
   settings: PropertySettings | null;
   tenant: Tenant | null;
@@ -61,6 +61,25 @@ export function PropertyContextProvider({
     <PropertyContext.Provider
       value={{ property, settings, tenant, loading, error }}
     >
+      {children}
+    </PropertyContext.Provider>
+  );
+}
+
+// Inject an explicit context value instead of resolving by hostname. The admin
+// Site editor (3.txt) uses this to render the REAL LandingPage for the active
+// property (resolved by slug, not host) with a live draft overlaid, so the same
+// guest components preview edits — no forked "editable landing page". The guest
+// site keeps using PropertyContextProvider above; both feed the identical hook.
+export function PropertyContextValueProvider({
+  value,
+  children,
+}: {
+  value: PropertyContextValue;
+  children: ReactNode;
+}) {
+  return (
+    <PropertyContext.Provider value={value}>
       {children}
     </PropertyContext.Provider>
   );
