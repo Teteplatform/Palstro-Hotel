@@ -30,6 +30,7 @@ function tidy(n: number): number {
 // at, before any type conversion. `undefined` for an absent branding key.
 function readRaw(field: SettingsField, rows: SettingsRows): unknown {
   const s = field.storage;
+  if (!s) return undefined; // presentational field (coordinateMap) — no source
   switch (s.target) {
     case 'properties':
       return (rows.property as unknown as Record<string, unknown>)[s.column];
@@ -105,7 +106,12 @@ export function changedFieldKeys(
   rows: SettingsRows,
 ): string[] {
   return tab.fields
-    .filter((f) => f.type !== 'image' && f.type !== 'imageList')
+    .filter(
+      (f) =>
+        f.type !== 'image' &&
+        f.type !== 'imageList' &&
+        f.type !== 'coordinateMap', // presentational — never a changed value
+    )
     .filter((f) => !valuesEqual(values[f.key], fieldBaselineValue(f, rows)))
     .map((f) => f.key);
 }
@@ -152,8 +158,9 @@ export function buildPatches(
 
   for (const field of tab.fields) {
     if (!changed.has(field.key)) continue;
-    const serialized = serializeField(field, values[field.key]);
     const s = field.storage;
+    if (!s) continue; // presentational field — nothing to persist
+    const serialized = serializeField(field, values[field.key]);
 
     switch (s.target) {
       case 'branding':
@@ -182,7 +189,7 @@ export function brandingPreviewFrom(
 ): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const field of tab.fields) {
-    if (field.storage.target !== 'branding') continue;
+    if (field.storage?.target !== 'branding') continue;
     if (field.type === 'color' || field.type === 'font') {
       out[field.storage.brandingKey] = values[field.key];
     }

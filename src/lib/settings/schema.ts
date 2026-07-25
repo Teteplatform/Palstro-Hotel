@@ -60,7 +60,11 @@ export type FieldType =
   | 'font'
   | 'stringList'
   | 'image'
-  | 'imageList';
+  | 'imageList'
+  // A presentational field with NO storage of its own: it renders a live map
+  // preview from two sibling coordinate fields (3.txt §3). It never reads or
+  // writes a value, so its `storage` is absent (see BaseField.storage).
+  | 'coordinateMap';
 
 // ---------------------------------------------------------------------------
 // Validation — HOW a value is checked, declared alongside the field
@@ -111,7 +115,11 @@ interface BaseField {
   label: string;
   help?: string;
   required?: boolean;
-  storage: FieldStorage;
+  // WHERE the value lands. Optional because a purely presentational field (e.g.
+  // a `coordinateMap` preview) has no value of its own — it reads sibling fields
+  // and writes nothing. Every value-bearing field MUST set it; the value plumbing
+  // (readRaw/buildPatches/isFieldEmpty) treats an absent storage as "no value".
+  storage?: FieldStorage;
   validation?: FieldValidation;
   // The value a field starts from when NOTHING is stored yet (an absent branding
   // key, most often). Section-visibility toggles default true (a section shows
@@ -129,7 +137,9 @@ export type SettingsField =
       type: 'number';
       min?: number;
       max?: number;
-      step?: number;
+      // 'any' lets the input accept arbitrary decimals (coordinates need 7 dp);
+      // a numeric step restricts the native spinner and HTML validity.
+      step?: number | 'any';
       placeholder?: string;
       // For a column stored as a fraction but edited as a percentage (VAT is
       // 0.075 in the DB, 7.5 in the field): value_in_db = value_in_field * scale.
@@ -146,6 +156,16 @@ export type SettingsField =
   | (BaseField & { type: 'color'; contrast?: ColorContrast })
   | (BaseField & { type: 'font' })
   | (BaseField & { type: 'stringList'; placeholder?: string })
+  | (BaseField & {
+      // Presentational, storage-less: a live OpenStreetMap pin preview driven by
+      // two sibling number fields, named here by key so the control reads their
+      // live values (3.txt §3). A wrong coordinate is invisible in the raw numbers
+      // but obvious the instant the pin lands in the sea — which is the whole point
+      // of previewing it beside the inputs.
+      type: 'coordinateMap';
+      latKey: string;
+      lngKey: string;
+    })
   | (BaseField & {
       type: 'image' | 'imageList';
       // Which media_assets category uploads from this field are filed under, so
@@ -189,6 +209,7 @@ export function emptyValueFor(field: SettingsField): SettingsValue {
     case 'imageList':
       return [];
     case 'image':
+    case 'coordinateMap': // presentational, never holds a value
       return null;
     default:
       // text, textarea, select, color, font

@@ -179,7 +179,7 @@ export function LandingPage() {
           <GallerySection images={galleryImages} hotelName={hotelName} />
         ) : null}
 
-        {address ? (
+        {address || isEditing ? (
           <LocationSection
             hotelName={hotelName}
             address={address}

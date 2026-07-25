@@ -159,6 +159,19 @@ const contentFields: SettingsField[] = [
     max: 30,
     storage: { target: 'branding', brandingKey: 'gallery_images' },
   },
+  {
+    // Add/remove chips (3.txt §2): not every hotel has every amenity, so the
+    // owner curates the list themselves. Stored as a plain string array in
+    // branding.amenities; the guest AmenitiesSection reads the same key and
+    // infers a decorative icon per label. The AmenitiesSection editable region
+    // opens exactly this field.
+    key: 'amenities',
+    label: 'Amenities',
+    help: 'What the property offers — pool, free Wi-Fi, restaurant. Guests see these as an icon grid.',
+    type: 'stringList',
+    storage: { target: 'branding', brandingKey: 'amenities' },
+    placeholder: 'e.g. Free Wi-Fi',
+  },
   ...sectionVisibilityFields,
   {
     key: 'section_order',
@@ -226,6 +239,42 @@ const contactFields: SettingsField[] = [
     label: 'Postal code',
     type: 'text',
     storage: { target: 'properties', column: 'postal_code' },
+  },
+  {
+    // numeric(10,7) properties column (003), written via update_property_details
+    // (migration 011 adds lat/lng handling + range checks). Ranges are in
+    // `validation` (not min/max) so OUR message shows on both the settings tab and
+    // the visual editor panel, rather than a native browser bubble. step 'any'
+    // lets the input accept the 7-dp precision the column stores.
+    key: 'latitude',
+    label: 'Latitude',
+    help: 'Between −90 and 90. Use the map preview below to confirm the pin lands on the property.',
+    type: 'number',
+    step: 'any',
+    storage: { target: 'properties', column: 'latitude' },
+    placeholder: 'e.g. 4.4213',
+    validation: { min: -90, max: 90 },
+  },
+  {
+    key: 'longitude',
+    label: 'Longitude',
+    help: 'Between −180 and 180.',
+    type: 'number',
+    step: 'any',
+    storage: { target: 'properties', column: 'longitude' },
+    placeholder: 'e.g. 7.1699',
+    validation: { min: -180, max: 180 },
+  },
+  {
+    // The live pin preview (3.txt §3): presentational, no storage of its own — it
+    // reads the two coordinate fields above and updates as they are typed, so a
+    // wrong coordinate shows as a pin in the sea before it is ever saved.
+    key: 'location_map',
+    label: 'Map preview',
+    help: 'Updates as you type the coordinates. If the pin is in the wrong place, the numbers are wrong.',
+    type: 'coordinateMap',
+    latKey: 'latitude',
+    lngKey: 'longitude',
   },
   {
     key: 'directions',

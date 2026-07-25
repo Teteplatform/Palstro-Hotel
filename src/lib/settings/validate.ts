@@ -93,6 +93,7 @@ export function validateTab(
   const errors: Record<string, string> = {};
   for (const field of fields) {
     if (field.type === 'image' || field.type === 'imageList') continue; // deferred
+    if (field.type === 'coordinateMap') continue; // presentational — no value
     const err = validateField(field, values[field.key], values);
     if (err) errors[field.key] = err;
   }

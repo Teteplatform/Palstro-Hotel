@@ -1,13 +1,28 @@
 import { MapPinIcon, ArrowRightIcon } from './ui/icons';
 import { parseNumeric } from '../lib/format';
+import { osmEmbedSrc, osmDirectionsHref } from '../lib/osm';
+import { Editable } from './Editable';
 
 interface LocationSectionProps {
   hotelName: string;
   address: string | null;
   directions: string | null;
-  latitude: string | null;
-  longitude: string | null;
+  latitude: string | number | null;
+  longitude: string | number | null;
 }
+
+// The schema keys the Location editable region edits (3.txt §3): the postal
+// address parts plus the two coordinate fields and their live map preview. Every
+// key resolves in the settings schema (see tabs.ts contactFields).
+const LOCATION_FIELD_KEYS = [
+  'address_line',
+  'city',
+  'state',
+  'postal_code',
+  'latitude',
+  'longitude',
+  'location_map',
+];
 
 // Address (from the properties columns, 003) and, when present, directions (from
 // branding, presentational), beside a real OpenStreetMap embed when the property
@@ -22,24 +37,19 @@ export function LocationSection({
   latitude,
   longitude,
 }: LocationSectionProps) {
-  // Coordinates arrive as PostgREST numeric strings; parse both. Either missing
-  // or unparseable -> no map, show the placeholder. No hardcoded fallback
-  // location (rule 17).
+  // Coordinates arrive as PostgREST numeric strings on the guest site, or as live
+  // JS numbers when the site editor overlays an in-progress edit; parseNumeric
+  // handles both. Either missing/unparseable/out-of-range -> no map, show the
+  // placeholder. The bbox maths and range guards live in the shared osm helper so
+  // the editor's live pin preview and this map can never disagree.
   const lat = parseNumeric(latitude);
   const lng = parseNumeric(longitude);
-  const hasMap = lat !== null && lng !== null;
-
-  // A ~0.01° box (~1km) around the point frames the marker without over-zooming.
-  const mapSrc = hasMap
-    ? `https://www.openstreetmap.org/export/embed.html?bbox=${lng - 0.005},${lat - 0.005},${lng + 0.005},${lat + 0.005}&layer=mapnik&marker=${lat},${lng}`
-    : undefined;
-
-  // Google Maps gives the turn-by-turn directions the embed cannot.
-  const directionsHref = hasMap
-    ? `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`
-    : undefined;
+  const mapSrc = osmEmbedSrc(lat, lng);
+  const directionsHref = osmDirectionsHref(lat, lng);
+  const hasMap = mapSrc !== null;
 
   return (
+    <Editable fields={LOCATION_FIELD_KEYS} label="Location">
     <section
       id="location"
       aria-labelledby="location-heading"
@@ -91,13 +101,13 @@ export function LocationSection({
               <div className="overflow-hidden rounded-2xl">
                 <iframe
                   title={`Map showing the location of ${hotelName}`}
-                  src={mapSrc}
+                  src={mapSrc ?? undefined}
                   loading="lazy"
                   className="block h-[300px] w-full border-0 lg:h-[400px]"
                 />
               </div>
               <a
-                href={directionsHref}
+                href={directionsHref ?? undefined}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="mt-3 inline-flex items-center gap-1.5 rounded text-sm font-semibold text-primary hover:text-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
@@ -124,5 +134,6 @@ export function LocationSection({
         </div>
       </div>
     </section>
+    </Editable>
   );
 }

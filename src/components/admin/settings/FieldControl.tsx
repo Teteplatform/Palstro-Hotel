@@ -12,6 +12,7 @@ import {
 import type { SettingsField, SettingsValue, SettingsValues } from '../../../lib/settings/schema';
 import { FONT_PAIRINGS } from '../../../lib/settings/fonts';
 import { contrastRatio, isValidHex, AA_LARGE, AA_NORMAL } from '../../../lib/color';
+import { osmEmbedSrc } from '../../../lib/osm';
 import { ImageField } from './ImageField';
 import { ImageListField } from './ImageListField';
 import type { SettingsMediaContext } from './mediaFieldContext';
@@ -152,6 +153,11 @@ export function FieldControl({
         />
       );
 
+    case 'coordinateMap':
+      // Presentational — reads its two sibling coordinate fields' live values and
+      // renders the pin. No onChange: it never edits a value of its own.
+      return <CoordinateMapField field={field} values={values} />;
+
     case 'image':
       // Persists immediately (upload replaces, remove deletes) — see ImageField.
       // Without media plumbing there is nothing to upload against, so fall back to
@@ -234,6 +240,54 @@ function contrastWarning(
   if (ratio >= threshold) return null;
 
   return `Low contrast (${ratio.toFixed(1)}:1) with ${c.description}. Aim for at least ${threshold}:1 so it stays readable.`;
+}
+
+// Live OpenStreetMap pin preview for the coordinate fields (3.txt §3). It reads
+// the two sibling number fields by key from the tab's live `values`, so the pin
+// moves the moment either coordinate changes — the whole reason it sits beside the
+// inputs: a plausible-but-wrong coordinate is invisible in the digits and obvious
+// the instant the pin lands in the sea. Same keyless OSM embed as the guest site
+// (shared osm helper), so preview and published map cannot diverge.
+function CoordinateMapField({
+  field,
+  values,
+}: {
+  field: Extract<SettingsField, { type: 'coordinateMap' }>;
+  values: SettingsValues;
+}) {
+  const rawLat = values[field.latKey];
+  const rawLng = values[field.lngKey];
+  const lat = typeof rawLat === 'number' ? rawLat : null;
+  const lng = typeof rawLng === 'number' ? rawLng : null;
+  const src = osmEmbedSrc(lat, lng);
+  const bothEmpty = lat === null && lng === null;
+
+  return (
+    <div>
+      <span className="mb-1 block text-sm font-medium text-charcoal">
+        {field.label}
+      </span>
+      {src ? (
+        <div className="overflow-hidden rounded-xl border border-sand-border">
+          <iframe
+            title="Location pin preview"
+            src={src}
+            loading="lazy"
+            className="block h-56 w-full border-0"
+          />
+        </div>
+      ) : (
+        <div className="flex h-56 items-center justify-center rounded-xl border border-dashed border-sand-border bg-sand/40 px-4 text-center text-xs text-charcoal-muted">
+          {bothEmpty
+            ? 'Enter a latitude and longitude above to preview the map pin.'
+            : 'Enter valid coordinates to preview the pin — latitude −90 to 90, longitude −180 to 180.'}
+        </div>
+      )}
+      {field.help ? (
+        <p className="mt-1 text-xs text-charcoal-muted">{field.help}</p>
+      ) : null}
+    </div>
+  );
 }
 
 function ImagePlaceholder({ label, help }: { label: string; help?: string }) {

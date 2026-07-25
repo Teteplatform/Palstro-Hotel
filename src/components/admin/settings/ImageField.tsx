@@ -28,7 +28,10 @@ export function ImageField({ field, ctx, disabled }: ImageFieldProps) {
   const toast = useToast();
   const [busy, setBusy] = useState(false);
 
-  const brandingKey = field.storage.target === 'branding' ? field.storage.brandingKey : field.key;
+  const brandingKey =
+    field.storage && field.storage.target === 'branding'
+      ? field.storage.brandingKey
+      : field.key;
   const currentId = brandingString(ctx.branding, brandingKey);
   // Display uses the `card` variant, NEVER `full`: a settings thumbnail pulling a
   // 1920px file is wasted egress on every page load (build 4 §1).

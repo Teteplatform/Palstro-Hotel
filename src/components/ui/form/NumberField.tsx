@@ -10,7 +10,8 @@ interface NumberFieldProps extends BaseFieldProps {
   placeholder?: string;
   min?: number;
   max?: number;
-  step?: number;
+  // 'any' allows arbitrary decimals (coordinates); a number restricts the spinner.
+  step?: number | 'any';
 }
 
 export function NumberField({

@@ -41,7 +41,10 @@ export function ImageListField({ field, ctx, disabled }: ImageListFieldProps) {
   const [busy, setBusy] = useState(false);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
 
-  const brandingKey = field.storage.target === 'branding' ? field.storage.brandingKey : field.key;
+  const brandingKey =
+    field.storage && field.storage.target === 'branding'
+      ? field.storage.brandingKey
+      : field.key;
   const ids = brandingStringArray(ctx.branding, brandingKey);
   const max = field.max ?? Infinity;
   const remaining = Math.max(0, max - ids.length);

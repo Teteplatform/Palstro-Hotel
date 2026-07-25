@@ -38,6 +38,7 @@ function isFieldEmpty(
   branding: PropertyBranding,
 ): boolean {
   const s = field.storage;
+  if (!s) return true; // presentational field (no value) never blocks the placeholder
   if (s.target === 'branding') {
     if (field.type === 'imageList' || field.type === 'stringList') {
       return brandingStringArray(branding, s.brandingKey).length === 0;
