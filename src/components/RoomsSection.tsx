@@ -212,6 +212,13 @@ function RoomCard({
         </dl>
 
         <div className="mt-6 flex items-center justify-between gap-3 border-t border-sand-border pt-4">
+          {/* The public "from" price is ALWAYS the RACK RATE (base_rate), never a
+              weekend, seasonal, or company-negotiated rate (012 / build 5b). Dated
+              and negotiated pricing is OPERATIONAL — resolve_room_rate and
+              seasonal_rates have no public RLS policy precisely so they cannot
+              reach the open web. Showing anything but base_rate here would leak
+              that operational pricing to anonymous visitors. The admin rate
+              preview (authenticated staff) is where resolved/dated rates are seen. */}
           <div className="flex items-baseline gap-1.5">
             <span className="text-xl font-bold text-charcoal">
               {formatCurrency(room.base_rate, currency)}

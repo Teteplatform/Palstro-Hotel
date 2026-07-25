@@ -103,14 +103,21 @@ export const ADMIN_NAV: AdminNavItem[] = [
     status: 'coming_soon',
   },
   // Rooms here is the PHYSICAL room status board — which unit is occupied,
-  // clean, or out of service. Room *types* (the bookable "Deluxe Double"
-  // category and its base_rate) are configuration and live under Settings. 002
-  // separates the two tables on purpose; the nav must not blur them, or staff
-  // will hunt for the housekeeping board under Settings.
+  // clean, or out of service (the housekeeping build). Room *types* (the
+  // bookable "Deluxe Double" category and its rates) are configuration and live
+  // under Configuration → Room types (build 5a). 002 separates the two tables on
+  // purpose; the nav must not blur them, or staff will hunt for the housekeeping
+  // board under Configuration.
+  //
+  // SEGMENT NOTE: build 5a claimed '/rooms' for the room-types screen (its brief
+  // requires that exact path, and the site editor's "edit room types" link points
+  // there). This not-yet-built physical board therefore uses 'room-board' so the
+  // two never collide on a URL or a nav key; it stays coming_soon (a disabled
+  // span, not a link), so nothing routes to 'room-board' until the board is built.
   {
     label: 'Rooms',
     icon: RoomsIcon,
-    segment: 'rooms',
+    segment: 'room-board',
     module: 'rooms',
     group: 'daily',
     status: 'coming_soon',
@@ -244,6 +251,19 @@ export const ADMIN_NAV: AdminNavItem[] = [
   },
 
   // --- Configuration: the screens that exist today ---------------------------
+  // Room types (build 5a): the bookable categories the guest site advertises and
+  // their rate structure (rack / weekend / seasonal). Configuration, admin-gated,
+  // so it rides the 'settings' module for now (it has no module flag of its own);
+  // it lands on /admin/:slug/rooms, which the site editor's "edit room types"
+  // link points at. Distinct from the daily physical Rooms board above.
+  {
+    label: 'Room types',
+    icon: RoomsIcon,
+    segment: 'rooms',
+    module: 'settings',
+    group: 'configuration',
+    status: 'ready',
+  },
   // Site editor is the visual, click-to-edit face of the settings engine (3.txt);
   // Settings is the full form (including the values with no visual counterpart —
   // VAT, timezone, night audit, booking). Both are the SAME 'settings' module.

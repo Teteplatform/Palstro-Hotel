@@ -19,6 +19,7 @@ import { LoginPage } from './pages/LoginPage';
 import { AdminIndexRedirect } from './pages/admin/AdminIndexRedirect';
 import { SettingsPage } from './pages/admin/SettingsPage';
 import { SiteEditorPage } from './pages/admin/SiteEditorPage';
+import { RoomTypesPage } from './pages/admin/RoomTypesPage';
 import { ModuleNotAvailablePage } from './pages/admin/ModuleNotAvailablePage';
 
 /**
@@ -103,6 +104,17 @@ const router = createBrowserRouter([
                 element: (
                   <ModuleGuard module="settings">
                     <SiteEditorPage />
+                  </ModuleGuard>
+                ),
+              },
+              // Room types (build 5a): the bookable categories and their rate
+              // structure. Under the 'settings' module for now (see adminNav) —
+              // it is configuration, admin-gated like the settings surfaces.
+              {
+                path: 'rooms',
+                element: (
+                  <ModuleGuard module="settings">
+                    <RoomTypesPage />
                   </ModuleGuard>
                 ),
               },
