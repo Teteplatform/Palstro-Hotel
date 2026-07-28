@@ -46,6 +46,14 @@ export function ActivePropertyProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
+  // Key the fetch on the STABLE user id, not the `user` object. Supabase mints a
+  // fresh Session (and a fresh `user` reference) for the same person on every
+  // window refocus (TOKEN_REFRESHED / SIGNED_IN); depending on the object would
+  // refetch the property list on every focus. See the same note in
+  // useTenantContext — there the needless refetch also flips a `loading` that
+  // ProtectedRoute gates on, unmounting the booking draft.
+  const userId = user?.id ?? null;
+
   useEffect(() => {
     let cancelled = false;
 
@@ -53,7 +61,7 @@ export function ActivePropertyProvider({ children }: { children: ReactNode }) {
     if (authLoading) return;
 
     (async () => {
-      if (!user) {
+      if (!userId) {
         if (cancelled) return;
         setProperties([]);
         setError(null);
@@ -64,7 +72,7 @@ export function ActivePropertyProvider({ children }: { children: ReactNode }) {
       setLoading(true);
       setError(null);
       try {
-        const rows = await fetchAccessibleProperties(user.id);
+        const rows = await fetchAccessibleProperties(userId);
         if (cancelled) return;
         setProperties(rows);
       } catch (e) {
@@ -79,7 +87,7 @@ export function ActivePropertyProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [user, authLoading]);
+  }, [userId, authLoading]);
 
   return (
     <ActivePropertyContext.Provider value={{ properties, loading, error }}>

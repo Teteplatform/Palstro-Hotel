@@ -50,6 +50,17 @@ export function TenantContextProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
+  // Key the fetch effect on the STABLE user id, never the `user` OBJECT. Supabase
+  // re-emits an auth event (TOKEN_REFRESHED / SIGNED_IN) every time the window
+  // regains focus and hands us a brand-new Session — and thus a new `user` object
+  // reference — for the same signed-in person. Depending on the object would
+  // re-run this effect on every refocus, flip `loading` to true, and make
+  // ProtectedRoute swap the whole admin subtree for its spinner, unmounting the
+  // in-memory booking draft (BookingDraftProvider) and wiping a half-filled form.
+  // The id only changes on a real sign-in/out/switch, which is exactly when the
+  // memberships must actually be re-resolved.
+  const userId = user?.id ?? null;
+
   useEffect(() => {
     let cancelled = false;
 
@@ -60,7 +71,7 @@ export function TenantContextProvider({ children }: { children: ReactNode }) {
     // effect) to avoid the cascading-render lint and keep one update path.
     (async () => {
       // No user → nothing to resolve; clear and stop.
-      if (!user) {
+      if (!userId) {
         if (cancelled) return;
         setMemberships([]);
         setError(null);
@@ -100,7 +111,7 @@ export function TenantContextProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [user, authLoading]);
+  }, [userId, authLoading]);
 
   // Active tenant = first membership FOR NOW. A tenant switcher (letting a
   // multi-tenant user pick which of `memberships` is active, and persisting the
