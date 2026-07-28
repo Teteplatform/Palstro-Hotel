@@ -118,6 +118,12 @@ create index if not exists guests_tenant_full_name_idx
 --    SECURITY DEFINER with the actor stamped explicitly, no idempotency key
 --    (non-financial master data — rule 2 guards bookings/charges/payments).
 -- ----------------------------------------------------------------------------
+-- Drop the OLD 016 signature explicitly, by its exact eight-argument type list
+-- (uuid + 7 text). Changing a function's argument list does NOT replace the old
+-- function — Postgres keys a function by its full argument types, so CREATE OR
+-- REPLACE with the new eleven-argument list would create a SECOND create_guest
+-- and leave the stale eight-argument one resolvable. Dropping it here guarantees
+-- the app can only ever resolve to the new structured-name signature.
 drop function if exists create_guest(uuid, text, text, text, text, text, text, text);
 
 create or replace function create_guest(
@@ -176,7 +182,7 @@ begin
 end;
 $$;
 
-comment on function create_guest(uuid, text, text, text, text, text, text, text, date, text) is
+comment on function create_guest(uuid, text, text, text, text, text, text, text, text, date, text) is
   'Registers a guest for a tenant during the booking flow, with STRUCTURED name '
   '(first/last required, middle optional) and optional ID (type/number/expiry). '
   'STAFF-gated (is_tenant_staff) — front desk, not just admins. SECURITY DEFINER, '
@@ -185,9 +191,9 @@ comment on function create_guest(uuid, text, text, text, text, text, text, text,
 
 -- Execution grants mirror 016: never public/anon, only authenticated staff (the
 -- is_tenant_staff gate inside does the real authorisation).
-revoke execute on function create_guest(uuid, text, text, text, text, text, text, text, date, text) from public;
-revoke execute on function create_guest(uuid, text, text, text, text, text, text, text, date, text) from anon;
-grant  execute on function create_guest(uuid, text, text, text, text, text, text, text, date, text) to authenticated;
+revoke execute on function create_guest(uuid, text, text, text, text, text, text, text, text, date, text) from public;
+revoke execute on function create_guest(uuid, text, text, text, text, text, text, text, text, date, text) from anon;
+grant  execute on function create_guest(uuid, text, text, text, text, text, text, text, text, date, text) to authenticated;
 
 -- ============================================================================
 -- End of 018_guests_identity.sql
