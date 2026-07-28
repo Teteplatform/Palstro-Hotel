@@ -9,6 +9,7 @@ import { TenantContextProvider } from './hooks/useTenantContext';
 import { PropertyContextProvider } from './hooks/usePropertyContext';
 import { ActivePropertyProvider } from './hooks/useActiveProperty';
 import { EnabledModulesProvider } from './hooks/useEnabledModules';
+import { BookingDraftProvider } from './hooks/useBookingDraft';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ToastProvider } from './components/ui/Toast';
@@ -20,6 +21,8 @@ import { AdminIndexRedirect } from './pages/admin/AdminIndexRedirect';
 import { SettingsPage } from './pages/admin/SettingsPage';
 import { SiteEditorPage } from './pages/admin/SiteEditorPage';
 import { RoomTypesPage } from './pages/admin/RoomTypesPage';
+import { CompaniesPage } from './pages/admin/CompaniesPage';
+import { BookingsPage } from './pages/admin/BookingsPage';
 import { ModuleNotAvailablePage } from './pages/admin/ModuleNotAvailablePage';
 
 /**
@@ -64,7 +67,13 @@ const router = createBrowserRouter([
               without refetching. Inside ProtectedRoute, so it never queries for
               a signed-out user. */}
           <EnabledModulesProvider>
-            <Outlet />
+            {/* Holds the in-memory create-booking draft ABOVE the route Outlet,
+                so a half-filled booking survives navigating between admin screens
+                (it is not unmounted on a route change, only the screen under it
+                is). Session-scoped, no browser storage — see useBookingDraft. */}
+            <BookingDraftProvider>
+              <Outlet />
+            </BookingDraftProvider>
           </EnabledModulesProvider>
         </ActivePropertyProvider>
       </ProtectedRoute>
@@ -115,6 +124,27 @@ const router = createBrowserRouter([
                 element: (
                   <ModuleGuard module="settings">
                     <RoomTypesPage />
+                  </ModuleGuard>
+                ),
+              },
+              // Companies (build 6b): corporate accounts + negotiated rates.
+              // Configuration, so under the 'settings' module like Room types.
+              {
+                path: 'companies',
+                element: (
+                  <ModuleGuard module="settings">
+                    <CompaniesPage />
+                  </ModuleGuard>
+                ),
+              },
+              // Bookings (build 6b): the staff-facing booking screen. Its own
+              // 'bookings' module — a tenant that has not bought it sees the
+              // "not available" page (RLS still guards the data regardless).
+              {
+                path: 'bookings',
+                element: (
+                  <ModuleGuard module="bookings">
+                    <BookingsPage />
                   </ModuleGuard>
                 ),
               },

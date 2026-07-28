@@ -2,6 +2,7 @@
 // form, and later module imports fields from here so the set stays consistent.
 export { FieldShell, controlClasses, type BaseFieldProps } from './FieldShell';
 export { TextField } from './TextField';
+export { DateField } from './DateField';
 export { TextArea } from './TextArea';
 export { NumberField } from './NumberField';
 export { CurrencyField } from './CurrencyField';

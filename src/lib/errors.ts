@@ -14,6 +14,32 @@ interface PostgrestLikeError {
   code?: string;
   message?: string;
   details?: string;
+  hint?: string;
+}
+
+// Full diagnostic text for a failure, for surfaces that must show the REAL error
+// rather than a friendly substitution (a "couldn't load" panel — rule 11). Unlike
+// humanizeError, it does NOT map codes to soft copy: it assembles every field a
+// Supabase/PostgREST error carries (message, details, hint, code), so the actual
+// cause is visible. Critically it reads the fields off the ORIGINAL error object;
+// wrapping such an object in `new Error(String(e))` yields "[object Object]"
+// because a PostgREST error is a plain object, not an Error — so callers must
+// pass the raw error through, never a stringified copy.
+export function describeError(e: unknown): string {
+  if (e === null || e === undefined) return 'Something went wrong. Please try again.';
+  if (typeof e === 'string') return e;
+
+  const err = e as PostgrestLikeError;
+  const parts: string[] = [];
+  if (err.message) parts.push(err.message);
+  if (err.details) parts.push(err.details);
+  if (err.hint) parts.push(`Hint: ${err.hint}`);
+  if (err.code) parts.push(`(code ${err.code})`);
+  if (parts.length > 0) return parts.join(' — ');
+
+  // A genuine Error with only a message, or anything else.
+  if (e instanceof Error && e.message) return e.message;
+  return 'Something went wrong. Please try again.';
 }
 
 export function humanizeError(e: unknown): string {

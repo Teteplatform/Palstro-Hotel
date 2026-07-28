@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { fetchAllPaged } from './fetchAllPaged';
 import { parseNumeric } from './format';
 import type { RoomType, SeasonalRate } from '../types/room';
 
@@ -51,6 +52,31 @@ export async function fetchRoomTypesPage(
 
   if (error) throw error;
   return { rows: (data ?? []) as RoomType[], count: count ?? 0 };
+}
+
+// Every live room type for a property — used where the WHOLE set is consumed at
+// once (the booking create flow lists all bookable types and their availability,
+// and the company-rates editor shows one row per type), not a paged surface. Uses
+// fetchAllPaged (rule 1a) so it is never a silently-truncated read. Returns ALL
+// live types regardless of is_published: publication is a guest-site concern;
+// staff can book (and negotiate rates for) any live type. Ordered by
+// display_order so both consumers read in the owner's chosen order.
+export async function fetchAllRoomTypes(
+  propertyId: string,
+  tenantId: string,
+): Promise<RoomType[]> {
+  return fetchAllPaged<RoomType>((from, to) =>
+    supabase
+      .from('room_types')
+      .select('*')
+      .eq('tenant_id', tenantId) // rule 19
+      .eq('property_id', propertyId) // rule 19
+      .is('deleted_at', null) // rule 5
+      .order('display_order', { ascending: true })
+      .order('name', { ascending: true })
+      .order('created_at', { ascending: true })
+      .range(from, to),
+  );
 }
 
 // Columns an admin may create/patch on a room type. Money fields are numbers here

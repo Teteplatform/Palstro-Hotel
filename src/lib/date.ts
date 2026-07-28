@@ -13,3 +13,48 @@ export function todayIso(): string {
   const d = String(now.getDate()).padStart(2, '0');
   return `${y}-${m}-${d}`;
 }
+
+// Add `days` to a 'YYYY-MM-DD' string, returning a 'YYYY-MM-DD' string. Parsed
+// as a plain calendar date (noon UTC) so DST / timezone offsets can never shift
+// the day — booking dates are calendar days, not instants. Used to default a
+// check-out to the night after check-in.
+export function addDaysIso(iso: string, days: number): string {
+  const [y, m, d] = iso.split('-').map(Number);
+  if (!y || !m || !d) return iso;
+  const dt = new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
+  dt.setUTCDate(dt.getUTCDate() + days);
+  const yy = dt.getUTCFullYear();
+  const mm = String(dt.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(dt.getUTCDate()).padStart(2, '0');
+  return `${yy}-${mm}-${dd}`;
+}
+
+// Whole nights in the half-open range [checkIn, checkOut) — the same interval
+// convention count_available / booking_nights use (015 RULE 1). Returns 0 when
+// dates are missing or out of order (the caller shows a hint rather than a wrong
+// count). A one-night stay (check_in 5th, check_out 6th) is 1 night.
+export function nightsBetween(checkIn: string, checkOut: string): number {
+  if (!checkIn || !checkOut) return 0;
+  const [ay, am, ad] = checkIn.split('-').map(Number);
+  const [by, bm, bd] = checkOut.split('-').map(Number);
+  if (!ay || !am || !ad || !by || !bm || !bd) return 0;
+  const a = Date.UTC(ay, am - 1, ad);
+  const b = Date.UTC(by, bm - 1, bd);
+  const nights = Math.round((b - a) / 86_400_000);
+  return nights > 0 ? nights : 0;
+}
+
+// Display a 'YYYY-MM-DD' calendar date in a readable, locale-aware form (e.g.
+// "5 Jan 2026"). Parsed at noon UTC so it never renders the day before near a
+// timezone boundary. Returns the raw input if unparseable (never throws).
+export function formatDisplayDate(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const [y, m, d] = iso.split('-').map(Number);
+  if (!y || !m || !d) return iso ?? '';
+  const dt = new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
+  return new Intl.DateTimeFormat(undefined, {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  }).format(dt);
+}

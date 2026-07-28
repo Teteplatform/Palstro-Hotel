@@ -178,6 +178,17 @@ export const StoreIcon = ({ className }: IconProps) => (
   </Line>
 );
 
+// Companies — a corporate office building (distinct from the Store storefront and
+// the Guests people). Used for the corporate-accounts screen (build 6b).
+export const CompaniesIcon = ({ className }: IconProps) => (
+  <Line className={className}>
+    <path d="M4 21V6a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v15" />
+    <path d="M15 21V10h4a1 1 0 0 1 1 1v10" />
+    <path d="M3 21h18" />
+    <path d="M7.5 9h3M7.5 13h3M7.5 17h3" />
+  </Line>
+);
+
 // Requisitions — a clipboard form (request, then approve).
 export const RequisitionsIcon = ({ className }: IconProps) => (
   <Line className={className}>

@@ -1,4 +1,4 @@
-import { useEffect, type RefObject } from 'react';
+import { useEffect, useRef, type RefObject } from 'react';
 
 // Traps keyboard focus inside a container while it is active, and calls onEscape
 // when Escape is pressed. Used by the mobile nav drawer (3.txt §2 accessibility:
@@ -23,6 +23,21 @@ export function useFocusTrap(
   active: boolean,
   onEscape: () => void,
 ) {
+  // Hold the latest onEscape in a ref so the effect below does NOT depend on its
+  // identity. onEscape is almost always an inline arrow at the call site (every
+  // dialog passes its onClose here), so it is a new function on every render of
+  // the caller. If it were in the effect's dep array, the effect would tear down
+  // and re-run on every one of those renders — and each run calls first?.focus(),
+  // yanking focus to the first focusable element (the Close button). That is
+  // exactly the "focus jumps to close after one keystroke" bug: the create-booking
+  // form re-renders on each keystroke, handing this hook a fresh onClose each time.
+  // Reading through a ref keeps Escape wired to the current handler while letting
+  // the effect run only when activation (or the container) actually changes.
+  const onEscapeRef = useRef(onEscape);
+  useEffect(() => {
+    onEscapeRef.current = onEscape;
+  }, [onEscape]);
+
   useEffect(() => {
     if (!active) return;
     const container = containerRef.current;
@@ -42,7 +57,7 @@ export function useFocusTrap(
     function onKeyDown(e: KeyboardEvent) {
       if (e.key === 'Escape') {
         e.preventDefault();
-        onEscape();
+        onEscapeRef.current();
         return;
       }
       if (e.key !== 'Tab') return;
@@ -72,5 +87,7 @@ export function useFocusTrap(
       // Restore focus to the trigger on close.
       previouslyFocused?.focus?.();
     };
-  }, [active, containerRef, onEscape]);
+    // onEscape is intentionally omitted — it is read through onEscapeRef so a new
+    // handler identity never re-runs (and re-focuses) the trap. See the ref above.
+  }, [active, containerRef]);
 }

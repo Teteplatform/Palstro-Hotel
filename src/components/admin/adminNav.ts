@@ -19,6 +19,7 @@ import {
   SuppliersIcon,
   StockCountsIcon,
   SiteIcon,
+  CompaniesIcon,
 } from '../ui/icons';
 
 // The admin's navigation, defined once as data. Settling the FULL information
@@ -94,13 +95,15 @@ export const ADMIN_NAV: AdminNavItem[] = [
     group: 'daily',
     status: 'coming_soon',
   },
+  // Bookings (build 6b): the staff-facing screen to create and manage bookings.
+  // Now READY — it replaces the placeholder and routes to /admin/:slug/bookings.
   {
     label: 'Bookings',
     icon: BookingsIcon,
     segment: 'bookings',
     module: 'bookings',
     group: 'daily',
-    status: 'coming_soon',
+    status: 'ready',
   },
   // Rooms here is the PHYSICAL room status board — which unit is occupied,
   // clean, or out of service (the housekeeping build). Room *types* (the
@@ -260,6 +263,18 @@ export const ADMIN_NAV: AdminNavItem[] = [
     label: 'Room types',
     icon: RoomsIcon,
     segment: 'rooms',
+    module: 'settings',
+    group: 'configuration',
+    status: 'ready',
+  },
+  // Companies (build 6b): corporate accounts and their negotiated rates.
+  // Configuration, admin-gated — it rides the 'settings' module (like Room
+  // types), since a company's rate is commercially sensitive reference data, not
+  // a daily operation. Lands on /admin/:slug/companies.
+  {
+    label: 'Companies',
+    icon: CompaniesIcon,
+    segment: 'companies',
     module: 'settings',
     group: 'configuration',
     status: 'ready',
