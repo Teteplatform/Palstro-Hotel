@@ -1,13 +1,14 @@
-import { formatCurrency } from '../../../lib/format';
-import { bookingStatusLabel, bookingStatusTone } from '../../../lib/bookingLabels';
-import { BOOKING_STATUSES } from '../../../lib/bookingLabels';
+import { formatCurrency, MISSING_VALUE } from '../../../lib/format';
 import type { BookingSummary } from '../../../lib/bookings';
 
-// The status summary above the list (build 6b §3, rules 20 + 16). It reports the
-// total count and value, and a per-status breakdown, computed across the WHOLE
-// filtered set — never the visible page. The value is the sum of each booking's
-// LOCKED nightly rates (not a recompute). The rule-16 note states exactly what it
-// covers and how it was calculated, and that it spans the filter, not the page.
+// The summary above the list (brief 1.txt §2, rules 20 + 16), now a COMPACT INLINE
+// row rather than the old stacked card. Three figures, all across the WHOLE
+// filtered set — never the visible page:
+//   - Bookings: total count in the filter,
+//   - In-house now: count of status = checked_in,
+//   - Total value: sum of every booking's LOCKED nightly rates (not a recompute).
+// The rule-16 note states exactly what it covers and that it spans the filter, not
+// the page.
 
 interface BookingStatusSummaryProps {
   summary: BookingSummary | null;
@@ -17,77 +18,62 @@ interface BookingStatusSummaryProps {
 
 const CALC_NOTE =
   'Covers the whole filtered set, across all pages — not just this page. ' +
-  "Each booking's value is the sum of its locked nightly rates.";
+  "Each booking's value is the sum of its locked nightly rates. In-house counts " +
+  'bookings currently checked in.';
 
 export function BookingStatusSummary({
   summary,
   loading,
   currency,
 }: BookingStatusSummaryProps) {
+  // In-house = bookings currently checked in. Reads 0 until guests are checked in
+  // through the booking flow (checked_in is a later lifecycle state than the
+  // 'confirmed' create_booking sets), which is expected, not a bug.
+  const inHouse = summary?.byStatus.checked_in?.count ?? 0;
+
   return (
-    <div className="rounded-2xl border border-sand-border bg-sand/30 p-4">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="text-sm font-semibold text-charcoal">
-          Summary
-          {/* rule 16: how this was calculated. */}
+    <div className="rounded-2xl border border-sand-border bg-sand/30 px-4 py-3">
+      <div className="flex flex-wrap items-center gap-x-8 gap-y-3">
+        <Figure
+          label="Bookings"
+          value={summary ? String(summary.totalCount) : MISSING_VALUE}
+        />
+        <Figure
+          label="In-house now"
+          value={summary ? String(inHouse) : MISSING_VALUE}
+        />
+        <Figure
+          label="Total value"
+          value={summary ? formatCurrency(summary.totalValue, currency) : MISSING_VALUE}
+        />
+
+        <span className="ml-auto flex items-center gap-2 text-xs text-charcoal-muted">
+          {loading ? (
+            <span aria-live="polite">Updating…</span>
+          ) : null}
+          {/* rule 16: how this was calculated, and that it spans the filter. */}
           <span
-            className="ml-1.5 cursor-help text-charcoal-muted"
+            className="cursor-help"
             tabIndex={0}
             role="note"
             aria-label={CALC_NOTE}
             title={CALC_NOTE}
           >
-            ⓘ
+            ⓘ How this is calculated
           </span>
-        </h2>
-        {loading ? (
-          <span className="text-xs text-charcoal-muted" aria-live="polite">
-            Updating…
-          </span>
-        ) : null}
+        </span>
       </div>
+    </div>
+  );
+}
 
-      {summary ? (
-        <>
-          <div className="mt-3 flex flex-wrap items-end gap-x-8 gap-y-2">
-            <div>
-              <p className="text-xs text-charcoal-muted">Bookings</p>
-              <p className="text-2xl font-bold text-charcoal">
-                {summary.totalCount}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-charcoal-muted">Total value</p>
-              <p className="text-2xl font-bold text-charcoal">
-                {formatCurrency(summary.totalValue, currency)}
-              </p>
-            </div>
-          </div>
-
-          {summary.totalCount > 0 ? (
-            <ul className="mt-4 flex flex-wrap gap-2">
-              {BOOKING_STATUSES.filter((s) => summary.byStatus[s]).map((s) => {
-                const bucket = summary.byStatus[s]!;
-                return (
-                  <li
-                    key={s}
-                    className={`rounded-full px-3 py-1 text-xs font-semibold ${bookingStatusTone(s)}`}
-                  >
-                    {bookingStatusLabel(s)}: {bucket.count} ·{' '}
-                    {formatCurrency(bucket.total, currency)}
-                  </li>
-                );
-              })}
-            </ul>
-          ) : null}
-
-          <p className="mt-3 text-xs text-charcoal-muted">{CALC_NOTE}</p>
-        </>
-      ) : (
-        <p className="mt-2 text-sm text-charcoal-muted">
-          Summary unavailable for the current filter.
-        </p>
-      )}
+function Figure({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-baseline gap-2">
+      <span className="text-xs font-medium uppercase tracking-wide text-charcoal-muted">
+        {label}
+      </span>
+      <span className="text-lg font-bold text-charcoal">{value}</span>
     </div>
   );
 }

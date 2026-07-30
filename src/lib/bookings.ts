@@ -39,6 +39,10 @@ export interface BookingFilters {
   arrivalTo: string;
   // Guest name substring (case-insensitive), matched via an inner join on guests.
   guestName: string;
+  // Booking-number substring (case-insensitive), matched on bookings.booking_number.
+  bookingNumber: string;
+  // Exact room type id, or '' for any.
+  roomTypeId: string;
   // Exact company id, or '' for any (walk-ins included).
   companyId: string;
 }
@@ -48,6 +52,8 @@ export const EMPTY_BOOKING_FILTERS: BookingFilters = {
   arrivalFrom: '',
   arrivalTo: '',
   guestName: '',
+  bookingNumber: '',
+  roomTypeId: '',
   companyId: '',
 };
 
@@ -69,10 +75,15 @@ function applyBookingFilters(query: any, tenantId: string, propertyId: string, f
   if (filters.status) q = q.eq('status', filters.status);
   if (filters.arrivalFrom) q = q.gte('check_in', filters.arrivalFrom);
   if (filters.arrivalTo) q = q.lte('check_in', filters.arrivalTo);
+  if (filters.roomTypeId) q = q.eq('room_type_id', filters.roomTypeId);
   if (filters.companyId) q = q.eq('company_id', filters.companyId);
 
   const name = filters.guestName.trim().replace(/[,()*]/g, ' ').trim();
   if (name.length > 0) q = q.ilike('guest.full_name', `%${name}%`);
+
+  // Booking-number substring, same PostgREST-metacharacter scrub as the name.
+  const number = filters.bookingNumber.trim().replace(/[,()*]/g, ' ').trim();
+  if (number.length > 0) q = q.ilike('booking_number', `%${number}%`);
 
   return q;
 }

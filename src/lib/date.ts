@@ -14,6 +14,28 @@ export function todayIso(): string {
   return `${y}-${m}-${d}`;
 }
 
+// Today's date as a 'YYYY-MM-DD' string in a SPECIFIC IANA timezone — the
+// PROPERTY's, not the browser's. This is the value an <input type="date"> min
+// attribute needs so past check-in dates are unselectable, and it must match the
+// RPC's guard, which computes "today" in properties.timezone (migration 020): a
+// receptionist in another timezone, or a booking taken just after local midnight,
+// must still see the PROPERTY's today. en-CA formats a Date as 'YYYY-MM-DD'. Falls
+// back to the browser-local todayIso() when the zone is blank/invalid — never
+// throws (an unknown IANA zone makes Intl throw a RangeError).
+export function todayIsoInZone(timeZone: string | null | undefined): string {
+  if (!timeZone) return todayIso();
+  try {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date());
+  } catch {
+    return todayIso();
+  }
+}
+
 // Add `days` to a 'YYYY-MM-DD' string, returning a 'YYYY-MM-DD' string. Parsed
 // as a plain calendar date (noon UTC) so DST / timezone offsets can never shift
 // the day — booking dates are calendar days, not instants. Used to default a

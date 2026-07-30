@@ -4,63 +4,71 @@ import { PlusIcon } from '../../ui/icons';
 import { useBookings } from '../../../hooks/useBookings';
 import { useBookingDraft } from '../../../hooks/useBookingDraft';
 import { describeError } from '../../../lib/errors';
-import { formatCurrency, formatOccupancy, MISSING_VALUE } from '../../../lib/format';
-import { formatDisplayDate, nightsBetween } from '../../../lib/date';
-import { bookingTotal } from '../../../lib/bookings';
 import { fetchAllCompanies } from '../../../lib/companies';
-import {
-  bookingStatusLabel,
-  bookingStatusTone,
-  formatNights,
-} from '../../../lib/bookingLabels';
+import { fetchAllRoomTypes } from '../../../lib/roomTypes';
 import type { Company } from '../../../types/company';
-import type { BookingListRow } from '../../../types/booking';
-import { BookingFilters } from './BookingFilters';
+import type { RoomType } from '../../../types/room';
+import { BookingsTable } from './BookingsTable';
 import { BookingStatusSummary } from './BookingStatusSummary';
 import { CreateBookingDialog } from './CreateBookingDialog';
 import { BookingDetailPanel } from './BookingDetailPanel';
 
-// The bookings screen (build 6b §3). Replaces the "coming soon" placeholder:
-//   - a filtered, server-paginated list, newest arrival first (rule 1b),
-//   - a status summary across the WHOLE filtered set (rule 20) with a how-it-was-
-//     calculated note (rule 16),
-//   - a create flow (CreateBookingDialog) that goes through create_booking only,
-//   - a manage view (BookingDetailPanel) for the per-night breakdown, cancel and
-//     status transitions.
+// The bookings screen (build 6b §3; table redesign per brief 1.txt §2). A dense,
+// server-paginated DATA TABLE (BookingsTable) whose column headers carry the
+// filtering inline — the standalone filter panel is gone. Above it sits a compact
+// inline summary across the WHOLE filtered set (rule 20) with a how-it-was-
+// calculated note (rule 16); below it the shared Pagination control (rule 1b).
+// Create goes through create_booking only (CreateBookingDialog); a row click opens
+// the unchanged BookingDetailPanel.
 //
 // Reads scoped to the active property + tenant in the data layer (rule 19).
 
 interface BookingsScreenProps {
   propertyId: string;
   tenantId: string;
+  // The property's IANA timezone — passed to the create dialog so the check-in
+  // date input's min is the PROPERTY's today (matches the RPC guard, migration 020).
+  timezone: string;
   currency: string;
 }
 
 export function BookingsScreen({
   propertyId,
   tenantId,
+  timezone,
   currency,
 }: BookingsScreenProps) {
   const list = useBookings(tenantId, propertyId);
 
-  // Companies for the filter dropdown (all live, incl. dormant, so a filter can
-  // still reach past accounts). Bounded fetch (rule 1a).
+  // Companies + room types for the header-filter dropdowns. Both bounded fetches
+  // (rule 1a). Companies: all live incl. dormant, so a filter can still reach past
+  // accounts. Room types: every live type (fetchAllRoomTypes).
   const [companies, setCompanies] = useState<Company[]>([]);
+  const [roomTypes, setRoomTypes] = useState<RoomType[]>([]);
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const rows = await fetchAllCompanies(tenantId, false);
-        if (!cancelled) setCompanies(rows);
+        const [comps, types] = await Promise.all([
+          fetchAllCompanies(tenantId, false),
+          fetchAllRoomTypes(propertyId, tenantId),
+        ]);
+        if (cancelled) return;
+        setCompanies(comps);
+        setRoomTypes(types);
       } catch {
-        // A companies failure only affects the filter dropdown; the list still works.
-        if (!cancelled) setCompanies([]);
+        // A lookup failure only affects the header filter dropdowns; the list still
+        // works, so degrade to empty option lists rather than blanking the screen.
+        if (!cancelled) {
+          setCompanies([]);
+          setRoomTypes([]);
+        }
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [tenantId]);
+  }, [tenantId, propertyId]);
 
   // The create-booking form lives in the session-scoped draft (above the routes),
   // so it survives navigating to another admin screen and back — scoped to THIS
@@ -70,7 +78,7 @@ export function BookingsScreen({
   const [manageId, setManageId] = useState<string | null>(null);
 
   return (
-    <div className="mx-auto max-w-4xl">
+    <div className="mx-auto max-w-6xl">
       <header className="mb-6 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-charcoal">
@@ -91,42 +99,34 @@ export function BookingsScreen({
         </button>
       </header>
 
-      <div className="mb-5 space-y-4">
-        <BookingStatusSummary
-          summary={list.summary}
-          loading={list.summaryLoading}
-          currency={currency}
-        />
-        <BookingFilters
-          filters={list.filters}
-          companies={companies}
-          onChange={list.setFilters}
-          disabled={list.loading}
-        />
-      </div>
-
       {list.error ? (
         <ErrorState
           message={describeError(list.error)}
           onRetry={() => void list.reload()}
         />
-      ) : list.loading && list.rows.length === 0 ? (
-        <LoadingState />
-      ) : list.rows.length === 0 ? (
-        <EmptyState />
       ) : (
         <>
-          <ul className="space-y-2">
-            {list.rows.map((row) => (
-              <li key={row.id}>
-                <BookingRow
-                  row={row}
-                  currency={currency}
-                  onOpen={() => setManageId(row.id)}
-                />
-              </li>
-            ))}
-          </ul>
+          <div className="mb-4">
+            <BookingStatusSummary
+              summary={list.summary}
+              loading={list.summaryLoading}
+              currency={currency}
+            />
+          </div>
+
+          {/* The table is ALWAYS mounted (never swapped out for a loading/empty
+              card), so its header filters stay visible and keep focus across
+              reloads; loading/empty states render inside the table body. */}
+          <BookingsTable
+            rows={list.rows}
+            filters={list.filters}
+            onFiltersChange={list.setFilters}
+            companies={companies}
+            roomTypes={roomTypes}
+            currency={currency}
+            loading={list.loading}
+            onOpenRow={setManageId}
+          />
 
           <div className="mt-6">
             <Pagination
@@ -146,6 +146,7 @@ export function BookingsScreen({
         <CreateBookingDialog
           tenantId={tenantId}
           propertyId={propertyId}
+          timezone={timezone}
           currency={currency}
           draft={draft}
           update={update}
@@ -170,84 +171,6 @@ export function BookingsScreen({
           onChanged={() => void list.reload()}
         />
       ) : null}
-    </div>
-  );
-}
-
-function BookingRow({
-  row,
-  currency,
-  onOpen,
-}: {
-  row: BookingListRow;
-  currency: string;
-  onOpen: () => void;
-}) {
-  const nights = nightsBetween(row.check_in, row.check_out);
-  const total = bookingTotal(row.booking_nights);
-
-  return (
-    <button
-      type="button"
-      onClick={onOpen}
-      className="flex w-full flex-col gap-3 rounded-xl border border-sand-border bg-white/60 p-4 text-left transition-colors hover:bg-sand/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-cream sm:flex-row sm:items-center sm:justify-between"
-    >
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="font-semibold text-charcoal">
-            {row.guest?.full_name ?? MISSING_VALUE}
-          </span>
-          <span
-            className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${bookingStatusTone(row.status)}`}
-          >
-            {bookingStatusLabel(row.status)}
-          </span>
-          {row.company ? (
-            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
-              {row.company.name}
-            </span>
-          ) : null}
-        </div>
-        <p className="mt-1 text-xs text-charcoal-muted">
-          {row.booking_number} · {row.room_type?.name ?? MISSING_VALUE} ·{' '}
-          {formatOccupancy(row.adults, row.children)}
-        </p>
-        <p className="mt-0.5 text-xs text-charcoal-muted">
-          {formatDisplayDate(row.check_in)} → {formatDisplayDate(row.check_out)} ·{' '}
-          {formatNights(nights)}
-        </p>
-      </div>
-      <div className="shrink-0 text-right">
-        <p className="text-xs text-charcoal-muted">Total</p>
-        <p className="text-base font-bold text-charcoal">
-          {formatCurrency(total, currency)}
-        </p>
-      </div>
-    </button>
-  );
-}
-
-function LoadingState() {
-  return (
-    <div
-      className="flex items-center justify-center rounded-2xl border border-sand-border bg-white/60 py-16"
-      aria-busy="true"
-      aria-live="polite"
-    >
-      <span className="sr-only">Loading bookings…</span>
-      <span className="h-7 w-7 animate-spin rounded-full border-2 border-sand-border border-t-primary" />
-    </div>
-  );
-}
-
-function EmptyState() {
-  return (
-    <div className="rounded-2xl border border-dashed border-sand-border bg-white/40 px-6 py-12 text-center">
-      <p className="text-base font-semibold text-charcoal">No bookings found</p>
-      <p className="mx-auto mt-1 max-w-md text-sm text-charcoal-muted">
-        No reservations match the current filter. Clear the filter, or create a
-        new booking.
-      </p>
     </div>
   );
 }

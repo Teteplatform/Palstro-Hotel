@@ -14,6 +14,7 @@ export function BookingsPage() {
       key={property.id}
       propertyId={property.id}
       tenantId={property.tenant_id}
+      timezone={property.timezone}
       currency={property.currency}
     />
   );

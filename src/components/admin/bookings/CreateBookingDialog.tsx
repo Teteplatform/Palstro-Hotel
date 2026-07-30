@@ -5,7 +5,12 @@ import { CloseIcon } from '../../ui/icons';
 import { useFocusTrap } from '../../../hooks/useFocusTrap';
 import { humanizeError, describeError } from '../../../lib/errors';
 import { formatCurrency, MISSING_VALUE } from '../../../lib/format';
-import { addDaysIso, nightsBetween, formatDisplayDate } from '../../../lib/date';
+import {
+  addDaysIso,
+  nightsBetween,
+  formatDisplayDate,
+  todayIsoInZone,
+} from '../../../lib/date';
 import { fetchAllRoomTypes } from '../../../lib/roomTypes';
 import { fetchAllCompanies } from '../../../lib/companies';
 import {
@@ -38,6 +43,11 @@ import { GuestPicker } from './GuestPicker';
 interface CreateBookingDialogProps {
   tenantId: string;
   propertyId: string;
+  // The property's IANA timezone. Used to compute "today" for the check-in date
+  // input's min, so past dates are not even selectable — the same property-local
+  // "today" the create_booking RPC guards against (migration 020). The RPC is the
+  // real law; this is the convenience layer.
+  timezone: string;
   currency: string;
   // The session-scoped draft (held above the routes, survives navigation) and its
   // updater. The whole form is CONTROLLED by this draft — there is NO local state
@@ -59,6 +69,7 @@ function newIdempotencyKey(): string {
 export function CreateBookingDialog({
   tenantId,
   propertyId,
+  timezone,
   currency,
   draft,
   update,
@@ -68,6 +79,10 @@ export function CreateBookingDialog({
   const toast = useToast();
   const panelRef = useRef<HTMLDivElement>(null);
   useFocusTrap(panelRef, true, onClose);
+
+  // The earliest selectable check-in: the PROPERTY's today (not the browser's).
+  // Matches the RPC guard (020); check_in == today is allowed (same-day walk-ins).
+  const minCheckIn = todayIsoInZone(timezone);
 
   // --- FORM STATE: read from / written to the draft (session-scoped, no storage).
   const {
@@ -309,6 +324,7 @@ export function CreateBookingDialog({
                 <input
                   type="date"
                   value={checkIn}
+                  min={minCheckIn}
                   onChange={(e) => handleCheckInChange(e.target.value)}
                   className="rounded-lg border border-sand-border bg-white/70 px-3 py-2 text-sm text-charcoal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-cream"
                 />
