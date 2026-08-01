@@ -10,6 +10,7 @@ import { PropertySwitcher } from './PropertySwitcher';
 import { UserMenu } from './UserMenu';
 import { ChevronDownIcon, CloseIcon, MenuIcon } from '../ui/icons';
 import { MISSING_VALUE } from '../../lib/format';
+import { ADMIN_ROLES } from '../../types/auth';
 
 // The admin shell (3.txt §2): persistent sidebar on desktop, slide-over drawer
 // on mobile, a header carrying the tenant name / property switcher / user menu,
@@ -74,13 +75,17 @@ export function AdminLayout() {
     );
   }
 
-  // Show the tenant that OWNS the active property (a multi-tenant user's active
-  // property may not belong to their first membership). Fall back to the tenant
-  // context's name, then the shared dash.
+  // The membership for the tenant that OWNS the active property — a multi-tenant
+  // user's active property may not belong to their first membership, so neither
+  // the tenant name nor the role may be taken from the tenant context's "active"
+  // tenant. The approval PIN especially is keyed on (tenant_id, user_id), so
+  // addressing the wrong tenant would set a PIN nobody can use.
+  const owningMembership =
+    memberships.find((m) => m.tenant_id === property.tenant_id) ?? null;
   const owningTenantName =
-    memberships.find((m) => m.tenant_id === property.tenant_id)?.tenant?.name ??
-    tenantName ??
-    MISSING_VALUE;
+    owningMembership?.tenant?.name ?? tenantName ?? MISSING_VALUE;
+  const canHoldManagerPin =
+    owningMembership !== null && ADMIN_ROLES.includes(owningMembership.role);
 
   return (
     <div className="min-h-screen bg-cream">
@@ -131,7 +136,10 @@ export function AdminLayout() {
             </div>
           ) : null}
 
-          <UserMenu />
+          <UserMenu
+            tenantId={property.tenant_id}
+            canHoldManagerPin={canHoldManagerPin}
+          />
         </header>
 
         <main className="px-4 py-6 sm:px-6 lg:px-8">

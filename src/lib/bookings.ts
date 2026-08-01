@@ -57,16 +57,39 @@ export const EMPTY_BOOKING_FILTERS: BookingFilters = {
   companyId: '',
 };
 
-// Apply the shared filters to a bookings query. The caller's select MUST alias
-// the guests embed as `guest` with an inner join (guest:guests!inner(...)) so the
-// guest-name filter narrows the PARENT rows, not just the embed. property_id +
-// tenant_id (rule 19) and the deleted_at NULL-safe guard (rule 5) are applied
-// here too, so no caller can forget them.
+// Apply the shared filters to a query. ONE implementation, two relations: the
+// `bookings` table (where the guest name is reached through an inner-joined embed)
+// and the `booking_balances` view (022), which projects guest_name as a plain
+// column precisely so the same filter set can be applied to it.
+//
+// The column MAP is the only difference between the two, and it exists so the
+// filtering itself cannot diverge. Two hand-written filter functions would agree
+// on the day they were written and drift the first time a filter changed — and
+// the symptom would be a Balance column and an outstanding total describing a
+// different set of bookings than the list, with nothing erroring.
+//
+// property_id + tenant_id (rule 19) and the deleted_at NULL-safe guard (rule 5)
+// are applied here too, so no caller can forget them.
 //
 // Typed loosely (any) because supabase-js's builder generics do not compose
 // across a shared helper; every filter below is a plain, safe method call.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function applyBookingFilters(query: any, tenantId: string, propertyId: string, filters: BookingFilters) {
+interface FilterColumns {
+  // 'guest.full_name' on bookings (requires guest:guests!inner in the select);
+  // 'guest_name' on booking_balances.
+  guestName: string;
+}
+
+const BOOKINGS_COLUMNS: FilterColumns = { guestName: 'guest.full_name' };
+const BALANCE_VIEW_COLUMNS: FilterColumns = { guestName: 'guest_name' };
+
+function applyFilters(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  query: any,
+  tenantId: string,
+  propertyId: string,
+  filters: BookingFilters,
+  columns: FilterColumns,
+) {
   let q = query
     .eq('tenant_id', tenantId) // rule 19
     .eq('property_id', propertyId) // rule 19
@@ -79,13 +102,26 @@ function applyBookingFilters(query: any, tenantId: string, propertyId: string, f
   if (filters.companyId) q = q.eq('company_id', filters.companyId);
 
   const name = filters.guestName.trim().replace(/[,()*]/g, ' ').trim();
-  if (name.length > 0) q = q.ilike('guest.full_name', `%${name}%`);
+  if (name.length > 0) q = q.ilike(columns.guestName, `%${name}%`);
 
   // Booking-number substring, same PostgREST-metacharacter scrub as the name.
   const number = filters.bookingNumber.trim().replace(/[,()*]/g, ' ').trim();
   if (number.length > 0) q = q.ilike('booking_number', `%${number}%`);
 
   return q;
+}
+
+// The bookings-table flavour (the guests embed must be inner-joined by the caller
+// so a guest-name filter narrows PARENT rows, not just the embed).
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function applyBookingFilters(query: any, tenantId: string, propertyId: string, filters: BookingFilters) {
+  return applyFilters(query, tenantId, propertyId, filters, BOOKINGS_COLUMNS);
+}
+
+// The booking_balances flavour — same filters, same meaning, view columns.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function applyBalanceFilters(query: any, tenantId: string, propertyId: string, filters: BookingFilters) {
+  return applyFilters(query, tenantId, propertyId, filters, BALANCE_VIEW_COLUMNS);
 }
 
 // The embed used everywhere the list/summary needs guest for filtering + display.
@@ -130,7 +166,57 @@ export async function fetchBookingsPage(
   // PostgREST types to-one embeds (guest/room_type/company) as arrays it can't
   // prove singular; at runtime they are single objects. Cast to the row shape,
   // as useTenantContext does for its tenant embed.
-  return { rows: (data ?? []) as unknown as BookingListRow[], count: count ?? 0 };
+  const rows = (data ?? []) as unknown as BookingListRow[];
+
+  return {
+    rows: await attachBalances(rows, tenantId, propertyId),
+    count: count ?? 0,
+  };
+}
+
+// Attach each visible row's LIVE folio balance in ONE extra query (build 6c part
+// 2 §7).
+//
+// HOW THIS AVOIDS N+1, EXPLICITLY: the naive version calls folio_balance(folio_id)
+// once per visible row — 25 round trips for one page, 100 at the largest page
+// size, every time a filter changes. Instead migration 022 ships the
+// `booking_balances` VIEW (bookings ⋈ folios ⋈ lateral folio_totals), and this
+// function reads it once for exactly the ids on the page.
+//
+// The `.in()` here is bounded BY CONSTRUCTION and is not the unbounded `.in()`
+// rule 1a forbids: its argument is the id list of a single server-paginated page,
+// so it is at most `pageSize` long (100 at the largest option the shared
+// Pagination control offers). It cannot grow with the table.
+//
+// Nothing is cached (rule 6): the view computes folio_totals per row on every
+// read, so the column is always the live balance — the honest price of not
+// keeping a balance column that would drift and could not be repaired.
+async function attachBalances(
+  rows: BookingListRow[],
+  tenantId: string,
+  propertyId: string,
+): Promise<BookingListRow[]> {
+  if (rows.length === 0) return rows;
+
+  const { data, error } = await supabase
+    .from('booking_balances')
+    .select('booking_id, balance')
+    .eq('tenant_id', tenantId) // rule 19
+    .eq('property_id', propertyId) // rule 19
+    .in(
+      'booking_id',
+      rows.map((r) => r.id),
+    );
+
+  if (error) throw error;
+
+  const balances = new Map<string, string>();
+  for (const row of (data ?? []) as { booking_id: string; balance: string }[]) {
+    balances.set(row.booking_id, row.balance);
+  }
+  // A missing entry stays null (not 0): the list shows a dash rather than
+  // asserting "nothing owed" about a booking whose folio it could not read.
+  return rows.map((r) => ({ ...r, balance: balances.get(r.id) ?? null }));
 }
 
 // ---------------------------------------------------------------------------
@@ -149,12 +235,26 @@ export interface BookingSummary {
   byStatus: Partial<Record<BookingStatus, BookingStatusBucket>>;
   totalCount: number;
   totalValue: number;
+  // OUTSTANDING across the whole filtered set (rule 20) — the sum of every
+  // POSITIVE folio balance, i.e. what the hotel is owed by the bookings currently
+  // in view. Kept separate from refundsDue rather than netted: a hotel owed
+  // ₦300,000 that also owes ₦300,000 back is not "settled", and a single net
+  // figure would report exactly that. Two figures, two questions, both answerable.
+  outstandingTotal: number;
+  // The mirror: the sum of every NEGATIVE balance, as a positive number — money
+  // the hotel owes guests (over-payments and unconsumed deposits).
+  refundsDueTotal: number;
 }
 
 // A trimmed row used only for aggregation: status + the locked night rates.
 interface SummaryRow {
   status: BookingStatus;
   booking_nights: { rate: string }[];
+}
+
+// A trimmed booking_balances row for the outstanding aggregate.
+interface BalanceSummaryRow {
+  balance: string;
 }
 
 // Compute the status summary across the WHOLE filtered set (rule 20), NOT the
@@ -169,15 +269,40 @@ export async function fetchBookingSummary(
   propertyId: string,
   filters: BookingFilters,
 ): Promise<BookingSummary> {
-  const rows = await fetchAllPaged<SummaryRow>((from, to) => {
-    const base = supabase
-      .from('bookings')
-      // Only what the aggregate needs. guests inner-joined for the name filter.
-      .select('status, guest:guests!inner(full_name), booking_nights(rate)');
-    return applyBookingFilters(base, tenantId, propertyId, filters)
-      .order('id', { ascending: true }) // unique → stable range pagination
-      .range(from, to);
-  });
+  // Two aggregate reads over the SAME filter, in parallel: the booking values
+  // (locked night rates) and the folio balances (booking_balances, 022). They are
+  // separate queries because they answer separate questions — what these stays are
+  // WORTH versus what is still OWED on them — and blending them into one number
+  // would produce a figure nobody could reconcile to anything.
+  const [rows, balanceRows] = await Promise.all([
+    fetchAllPaged<SummaryRow>((from, to) => {
+      const base = supabase
+        .from('bookings')
+        // Only what the aggregate needs. guests inner-joined for the name filter.
+        .select('status, guest:guests!inner(full_name), booking_nights(rate)');
+      return applyBookingFilters(base, tenantId, propertyId, filters)
+        .order('id', { ascending: true }) // unique → stable range pagination
+        .range(from, to);
+    }),
+    // The outstanding aggregate spans the WHOLE filtered set, not the page (rule
+    // 20), and applies the SAME filters through the same implementation — so the
+    // total and the page's Balance column provably describe the same bookings.
+    fetchAllPaged<BalanceSummaryRow>((from, to) => {
+      const base = supabase.from('booking_balances').select('balance');
+      return applyBalanceFilters(base, tenantId, propertyId, filters)
+        .order('booking_id', { ascending: true }) // unique → stable pagination
+        .range(from, to);
+    }),
+  ]);
+
+  let outstandingTotal = 0;
+  let refundsDueTotal = 0;
+  for (const row of balanceRows) {
+    // numeric -> STRING (§6); parse before comparing or adding.
+    const balance = parseNumeric(row.balance) ?? 0;
+    if (balance > 0) outstandingTotal += balance;
+    else if (balance < 0) refundsDueTotal += -balance;
+  }
 
   const byStatus: Partial<Record<BookingStatus, BookingStatusBucket>> = {};
   let totalCount = 0;
@@ -196,7 +321,7 @@ export async function fetchBookingSummary(
     totalValue += value;
   }
 
-  return { byStatus, totalCount, totalValue };
+  return { byStatus, totalCount, totalValue, outstandingTotal, refundsDueTotal };
 }
 
 // Sum a booking's locked night rates (its total, never a recompute — brief §3).

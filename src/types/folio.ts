@@ -178,6 +178,21 @@ export interface FolioChargeTaxLine {
   amount: string;
 }
 
+// A charge as the folio PANEL reads it: the row plus the category it was posted
+// against, so the bill can print "Food & Beverage — Dinner, 2 × ₦12,500".
+//
+// The category embed is deliberately NOT filtered by deleted_at, matching
+// folio_charge_tax (021 §8.1): a category retired last year must still label the
+// charges posted against it, or last year's bill reprints with a blank line.
+export interface FolioChargeWithCategory extends FolioCharge {
+  category: {
+    code: string;
+    name: string;
+    is_taxable: boolean;
+    service_chargeable: boolean;
+  } | null;
+}
+
 // What folio_totals(folio_id) returns. INVARIANT (rule 9):
 //   net_total     = gross_total - discount_total   (DB-enforced per charge)
 //   charges_total = net_total + tax_total
@@ -191,4 +206,41 @@ export interface FolioTotals {
   charges_total: string;
   payments_total: string;
   balance: string;
+}
+
+// ---------------------------------------------------------------------------
+// The two READ VIEWS (supabase/migrations/022_folio_read_views.sql)
+// ---------------------------------------------------------------------------
+// Nothing here is stored either: both views are thin projections over 021's
+// functions, so the UI never re-implements the engine and never issues N+1 calls.
+
+// One row of folio_charge_taxes: folio_charge_tax(charge) applied per charge by
+// the database. The panel fetches these ONCE per folio and groups them two ways —
+// by charge_id for the per-line breakdown, by code for the folio tax lines — so
+// the printed lines and the printed total come from the same numbers.
+export interface FolioChargeTaxRow {
+  charge_id: string;
+  folio_id: string;
+  tenant_id: string;
+  property_id: string;
+  tax_charge_id: string;
+  code: string;
+  name: string;
+  rate: string;                       // numeric(5,4) -> string; a FRACTION
+  amount: string;                     // numeric(14,2) -> string
+}
+
+// One row of booking_balances: a booking's LIVE folio balance (folio_totals)
+// alongside the booking columns the list filters on, so the bookings table can
+// show a Balance column and an outstanding total across the whole filtered set
+// (rule 20) without one function call per visible row.
+export interface BookingBalanceRow {
+  booking_id: string;
+  tenant_id: string;
+  property_id: string;
+  folio_id: string;
+  folio_status: FolioStatus;
+  charges_total: string;
+  payments_total: string;
+  balance: string;                    // positive = guest owes; negative = refund due
 }

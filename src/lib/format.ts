@@ -57,6 +57,68 @@ export function formatCurrency(
   }
 }
 
+// Format a money amount to the KOBO — two decimal places — in the property's own
+// currency (e.g. NGN -> ₦68,360.00).
+//
+// WHY THIS EXISTS BESIDE formatCurrency: a nightly RATE is advertised in whole
+// units, so formatCurrency drops the fraction digits for a clean price. A FOLIO is
+// a bill, and a bill's printed lines must add up to its printed total. Tax lines
+// are computed as round(net × rate, 2) by the database (021 §8.1), so ₦130,000 at
+// 7.6% is ₦9,880.00 and a 0-dp display would round individual lines away until the
+// column visibly failed to sum — the guest is holding the paper and can add it up.
+// Every figure on a folio, an invoice or a receipt uses THIS formatter.
+//
+// Same contract as formatCurrency otherwise: parses the PostgREST numeric string
+// explicitly, falls back to "CODE 1,234.00" for an unknown currency rather than
+// throwing, and yields the shared MISSING_VALUE dash when there is no value.
+export function formatMoney(
+  amount: number | string | null | undefined,
+  currency: string,
+): string {
+  const value = parseNumeric(amount);
+  if (value === null) return MISSING_VALUE;
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: 'currency',
+      currency,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(value);
+  } catch {
+    return `${currency} ${new Intl.NumberFormat(undefined, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(value)}`;
+  }
+}
+
+// A quantity column (numeric(14,4) — four decimals, because recipe and bar
+// measures are fractional). Trailing zeros are trimmed so a plain "2" does not
+// render as "2.0000", while 0.025 kg survives intact.
+export function formatQuantity(
+  quantity: number | string | null | undefined,
+): string {
+  const value = parseNumeric(quantity);
+  if (value === null) return MISSING_VALUE;
+  return new Intl.NumberFormat(undefined, {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 4,
+  }).format(value);
+}
+
+// A tax rate stored as a FRACTION (numeric(5,4): '0.0750' = 7.5%) shown as a
+// percentage. Trailing zeros trimmed, so 0.0750 reads "7.5%" and 0.0760 "7.6%".
+export function formatRatePercent(
+  rate: number | string | null | undefined,
+): string {
+  const value = parseNumeric(rate);
+  if (value === null) return MISSING_VALUE;
+  return `${new Intl.NumberFormat(undefined, {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  }).format(value * 100)}%`;
+}
+
 // "2 adults · 1 child" — pluralised, children omitted when zero.
 export function formatOccupancy(adults: number, children: number): string {
   const parts = [`${adults} ${adults === 1 ? 'adult' : 'adults'}`];

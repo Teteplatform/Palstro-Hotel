@@ -20,28 +20,44 @@ import {
   rateSourceLabel,
 } from '../../../lib/bookingLabels';
 import type { BookingDetail } from '../../../types/booking';
+import { FolioPanel } from '../folio/FolioPanel';
 
 // The manage view for one booking (build 6b §3): its per-night rate breakdown
 // (why each night cost what it did, via rate_source), and the lifecycle actions —
 // confirm → check-in → check-out, and cancel with a reason. EVERY action goes
-// through an RPC (not a direct update), because each will later touch the folio
-// (6c). Writes are awaited in try/catch and surfaced (rule 11). The folio itself
-// is NOT built here — the total is read from the locked booking_nights.
+// through an RPC (not a direct update). Writes are awaited in try/catch and
+// surfaced (rule 11).
+//
+// TWO TABS (build 6c part 2 §1): STAY — the reservation and what was agreed, its
+// per-night rates read from the LOCKED booking_nights; and FOLIO — the guest's
+// running money account, every figure computed live by the engine. They are
+// deliberately separate views of two different things: the stay total is what was
+// agreed at booking time and never moves; the folio balance is what is owed right
+// now and moves with every charge, discount, payment and void. Showing them as one
+// number would be the exact confusion the folio exists to remove — a booking worth
+// ₦450,000 with ₦100,000 taken as a deposit and two nights posted so far is not
+// "₦450,000 outstanding" in any useful sense.
 
 interface BookingDetailPanelProps {
   bookingId: string;
   tenantId: string;
   propertyId: string;
   currency: string;
+  // The property's IANA timezone — the folio's charge/payment dates default to the
+  // PROPERTY's today, not the browser's (rules 8, 12).
+  timezone: string;
   onClose: () => void;
-  onChanged: () => void; // list should refetch after a status change
+  onChanged: () => void; // list should refetch after a status or folio change
 }
+
+type DetailTab = 'stay' | 'folio';
 
 export function BookingDetailPanel({
   bookingId,
   tenantId,
   propertyId,
   currency,
+  timezone,
   onClose,
   onChanged,
 }: BookingDetailPanelProps) {
@@ -56,6 +72,7 @@ export function BookingDetailPanel({
 
   const [cancelling, setCancelling] = useState(false);
   const [reason, setReason] = useState('');
+  const [tab, setTab] = useState<DetailTab>('stay');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -185,6 +202,46 @@ export function BookingDetailPanel({
                 </div>
               ) : null}
 
+              {/* The two views of this booking. Tabs (not a second dialog) so the
+                  guest's identity above stays on screen while the folio is being
+                  worked, and so there is one focus trap, not two. */}
+              <div
+                role="tablist"
+                aria-label="Booking views"
+                className="flex gap-1 border-b border-sand-border"
+              >
+                <TabButton
+                  active={tab === 'stay'}
+                  onClick={() => setTab('stay')}
+                  controls="booking-tab-stay"
+                >
+                  Stay
+                </TabButton>
+                <TabButton
+                  active={tab === 'folio'}
+                  onClick={() => setTab('folio')}
+                  controls="booking-tab-folio"
+                >
+                  Folio
+                </TabButton>
+              </div>
+
+              {tab === 'folio' ? (
+                <div id="booking-tab-folio" role="tabpanel">
+                  <FolioPanel
+                    bookingId={bookingId}
+                    tenantId={tenantId}
+                    propertyId={propertyId}
+                    currency={currency}
+                    timezone={timezone}
+                    // A folio write moves this booking's balance, so the list's
+                    // Balance column and outstanding total must re-read. Neither
+                    // is cached anywhere (rule 6).
+                    onFolioChanged={onChanged}
+                  />
+                </div>
+              ) : (
+              <div id="booking-tab-stay" role="tabpanel" className="space-y-5">
               {/* Per-night breakdown */}
               <section>
                 <h3 className="mb-2 text-sm font-semibold text-charcoal">
@@ -264,6 +321,8 @@ export function BookingDetailPanel({
                   </div>
                 </div>
               ) : null}
+              </div>
+              )}
             </>
           ) : null}
         </div>
@@ -297,7 +356,12 @@ export function BookingDetailPanel({
             {status === 'confirmed' ? (
               <button
                 type="button"
-                onClick={() => setCancelling(true)}
+                onClick={() => {
+                  // The cancellation sub-form lives on the Stay tab; switch to it
+                  // so the reason field is not opened out of sight.
+                  setTab('stay');
+                  setCancelling(true);
+                }}
                 disabled={busy}
                 className="rounded-full border border-sand-border bg-white/70 px-5 py-2.5 text-sm font-semibold text-charcoal transition-colors hover:bg-sand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-cream disabled:opacity-60"
               >
@@ -316,6 +380,35 @@ export function BookingDetailPanel({
         ) : null}
       </div>
     </div>
+  );
+}
+
+function TabButton({
+  active,
+  onClick,
+  controls,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  controls: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      aria-controls={controls}
+      onClick={onClick}
+      className={`-mb-px rounded-t-lg border-b-2 px-4 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-cream ${
+        active
+          ? 'border-primary text-charcoal'
+          : 'border-transparent text-charcoal-muted hover:text-charcoal'
+      }`}
+    >
+      {children}
+    </button>
   );
 }
 

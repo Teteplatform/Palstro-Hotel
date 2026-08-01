@@ -36,6 +36,37 @@ export function todayIsoInZone(timeZone: string | null | undefined): string {
   }
 }
 
+// The calendar date of a TIMESTAMP as it fell in a specific IANA timezone,
+// 'YYYY-MM-DD'. Used to compare a row's created_at (an instant, stored UTC) with
+// its business date (a calendar day in the PROPERTY's timezone) so the folio can
+// show "posted on" only when the two genuinely differ — rule 8's separate Posted
+// column, shown only when it says something.
+//
+// Doing this in the browser's timezone would be wrong in exactly the case that
+// matters: a charge keyed at 00:30 Lagos time is 23:30 UTC the previous day, so a
+// UTC/browser-local comparison would report a same-day posting as back-dated on
+// every late-night shift. Falls back to the UTC date when the zone is blank or
+// invalid — never throws.
+export function isoDateInZone(
+  timestamp: string | null | undefined,
+  timeZone: string | null | undefined,
+): string {
+  if (!timestamp) return '';
+  const dt = new Date(timestamp);
+  if (Number.isNaN(dt.getTime())) return '';
+  if (!timeZone) return dt.toISOString().slice(0, 10);
+  try {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(dt);
+  } catch {
+    return dt.toISOString().slice(0, 10);
+  }
+}
+
 // Add `days` to a 'YYYY-MM-DD' string, returning a 'YYYY-MM-DD' string. Parsed
 // as a plain calendar date (noon UTC) so DST / timezone offsets can never shift
 // the day — booking dates are calendar days, not instants. Used to default a

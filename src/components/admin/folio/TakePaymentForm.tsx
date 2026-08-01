@@ -1,0 +1,137 @@
+import { useState } from 'react';
+import { CurrencyField, DateField, Select, TextField } from '../../ui/form';
+import { useToast } from '../../ui/Toast';
+import { todayIsoInZone } from '../../../lib/date';
+import { folioErrorMessage, newIdempotencyKey, recordPayment } from '../../../lib/folio';
+import { PAYMENT_METHODS, paymentMethodLabel } from '../../../lib/folioLabels';
+import type { PaymentMethod } from '../../../types/folio';
+import { FolioActionCard } from './FolioActionCard';
+
+// "Take payment / Record deposit" (brief §2).
+//
+// A DEPOSIT AND A PAYMENT ARE THE SAME ACT, so this is one action, not two. The
+// folio is opened by a trigger the moment the booking is created (021 §4.1), so a
+// guest paying ₦100,000 three weeks before arrival is simply a positive payment on
+// an already-open folio: the balance goes negative (the hotel holds their money)
+// and nets off as room nights post at each night audit. There is deliberately no
+// deposit table, no deposit state and no "convert deposit to payment" step — all
+// of which would be extra machinery holding the same fact, and a second place for
+// the money to be recorded differently.
+//
+// RULE 10: THE AMOUNT STARTS EMPTY. Nothing pre-fills the balance due, no "settle
+// in full" shortcut. A pre-filled amount produces false-positive full payments
+// nobody verified — the cashier tabs past a number they never read, and the folio
+// says settled when the guest handed over less.
+
+interface TakePaymentFormProps {
+  folioId: string;
+  currency: string;
+  // The PROPERTY's IANA timezone, so "today" is the hotel's operating day and not
+  // the browser's (rules 8, 12). A payment keyed at 00:30 in Lagos by a manager
+  // whose laptop is on UTC must still land on the right business date.
+  timezone: string;
+  onDone: () => Promise<void> | void;
+  onCancel: () => void;
+}
+
+export function TakePaymentForm({
+  folioId,
+  currency,
+  timezone,
+  onDone,
+  onCancel,
+}: TakePaymentFormProps) {
+  const toast = useToast();
+
+  // Empty. Deliberately (rule 10).
+  const [amount, setAmount] = useState<number | null>(null);
+  const [method, setMethod] = useState<PaymentMethod>('cash');
+  const [reference, setReference] = useState('');
+  const [date, setDate] = useState(todayIsoInZone(timezone));
+  const [submitting, setSubmitting] = useState(false);
+
+  const canSubmit = amount !== null && amount !== 0 && date !== '';
+
+  async function handleSubmit() {
+    if (!canSubmit || submitting) return;
+    setSubmitting(true);
+    try {
+      // A fresh key per submit intent (rules 2/3). A double-click cannot record
+      // the payment twice — the DB's folio_payments_idem_uniq index is the true
+      // guard, and record_payment returns the FIRST row rather than inserting a
+      // second. The disabled button below is the visible half of the same promise.
+      await recordPayment({
+        folioId,
+        amount: amount as number,
+        method,
+        reference: reference.trim() || null,
+        paymentDate: date || null,
+        idempotencyKey: newIdempotencyKey(),
+      });
+      toast.success('Payment recorded.');
+      // Re-read the folio from the database — never patch a balance locally
+      // (rule 6). The new balance comes from folio_totals, not from arithmetic
+      // performed here.
+      await onDone();
+    } catch (e) {
+      // Rule 11: surface the real failure, never swallow it. folioErrorMessage
+      // keeps the RPC's own words (folio closed, unknown method, amount zero).
+      toast.error(folioErrorMessage(e));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <FolioActionCard
+      title="Take payment"
+      description="A deposit taken before check-in is simply a payment on this folio — the same action serves both."
+      submitLabel="Record payment"
+      submittingLabel="Recording…"
+      submitting={submitting}
+      canSubmit={canSubmit}
+      onSubmit={() => void handleSubmit()}
+      onCancel={onCancel}
+    >
+      <div className="grid gap-3 sm:grid-cols-2">
+        <CurrencyField
+          label="Amount"
+          required
+          value={amount}
+          onChange={setAmount}
+          currency={currency}
+          disabled={submitting}
+          // Signed, per 021 §6: a refund is a NEGATIVE payment on the same folio,
+          // which is why there is no direction toggle here to contradict the sign.
+          helpText="Type the amount received. Enter a negative amount to record a refund."
+        />
+        <Select
+          label="Method"
+          required
+          value={method}
+          onChange={(v) => setMethod(v as PaymentMethod)}
+          disabled={submitting}
+          options={PAYMENT_METHODS.map((m) => ({
+            value: m,
+            label: paymentMethodLabel(m),
+          }))}
+        />
+        <TextField
+          label="Reference"
+          value={reference}
+          onChange={setReference}
+          disabled={submitting}
+          placeholder="Optional — teller no., POS slip, transfer ref"
+        />
+        <DateField
+          label="Payment date"
+          required
+          value={date}
+          onChange={setDate}
+          disabled={submitting}
+          helpText="The business date this money belongs to — the operating day the cash-up will look for it on."
+        />
+      </div>
+    </FolioActionCard>
+  );
+}

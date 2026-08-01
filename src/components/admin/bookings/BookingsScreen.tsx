@@ -167,6 +167,9 @@ export function BookingsScreen({
           tenantId={tenantId}
           propertyId={propertyId}
           currency={currency}
+          // The folio tab dates its charges and payments in the PROPERTY's
+          // timezone, the same "today" the RPCs resolve server-side.
+          timezone={timezone}
           onClose={() => setManageId(null)}
           onChanged={() => void list.reload()}
         />

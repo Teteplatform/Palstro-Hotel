@@ -3,19 +3,38 @@ import { useAuth } from '../../hooks/useAuth';
 import { useToast } from '../ui/Toast';
 import {
   ChevronDownIcon,
+  SettingsIcon,
   SignOutIcon,
   UserIcon,
 } from '../ui/icons';
 import { MISSING_VALUE } from '../../lib/format';
+import { ManagerPinDialog } from './ManagerPinDialog';
 
 // The signed-in user's identity and sign-out control in the header (3.txt §2).
-// A small dropdown: the trigger shows who is signed in; the menu holds sign out.
-// Closes on Escape and on outside click.
-export function UserMenu() {
+// A small dropdown: the trigger shows who is signed in; the menu holds the
+// manager's approval-PIN setting and sign out. Closes on Escape and on outside
+// click.
+
+interface UserMenuProps {
+  // The tenant that OWNS the active property — not "the user's first tenant".
+  // A PIN is keyed on (tenant_id, user_id), so a multi-tenant manager holds a
+  // separate PIN per hotel group and the right one must be addressed here.
+  tenantId: string | null;
+  // Whether this user is an owner/manager OF THAT TENANT. Front-desk, kitchen and
+  // housekeeping accounts do not have an approval PIN and are not shown the
+  // setting: a PIN on a front-desk account would let the front desk approve its
+  // own above-threshold discounts, which is the exact hole the threshold exists to
+  // close. set_manager_pin enforces this server-side regardless (021 §7.1) — this
+  // flag only decides whether to OFFER a control the user could not use.
+  canHoldManagerPin: boolean;
+}
+
+export function UserMenu({ tenantId, canHoldManagerPin }: UserMenuProps) {
   const { user, signOut } = useAuth();
   const toast = useToast();
   const [open, setOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const [pinOpen, setPinOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -80,6 +99,20 @@ export function UserMenu() {
               {email}
             </p>
           </div>
+          {canHoldManagerPin && tenantId ? (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setOpen(false);
+                setPinOpen(true);
+              }}
+              className="flex w-full items-center gap-2 border-b border-sand-border px-4 py-3 text-left text-sm font-medium text-charcoal transition-colors hover:bg-sand focus-visible:bg-sand focus-visible:outline-none"
+            >
+              <SettingsIcon className="h-4 w-4 text-charcoal-muted" />
+              Manager PIN
+            </button>
+          ) : null}
           <button
             type="button"
             role="menuitem"
@@ -91,6 +124,10 @@ export function UserMenu() {
             {signingOut ? 'Signing out…' : 'Sign out'}
           </button>
         </div>
+      ) : null}
+
+      {pinOpen && tenantId ? (
+        <ManagerPinDialog tenantId={tenantId} onClose={() => setPinOpen(false)} />
       ) : null}
     </div>
   );

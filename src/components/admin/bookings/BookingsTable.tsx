@@ -1,5 +1,11 @@
 import { useEffect, useState } from 'react';
-import { formatCurrency, formatOccupancy, MISSING_VALUE } from '../../../lib/format';
+import {
+  formatCurrency,
+  formatMoney,
+  formatOccupancy,
+  MISSING_VALUE,
+  parseNumeric,
+} from '../../../lib/format';
 import { formatDisplayDate, nightsBetween } from '../../../lib/date';
 import { bookingTotal } from '../../../lib/bookings';
 import {
@@ -231,12 +237,18 @@ export function BookingsTable({
               <Th align="right" className="min-w-[7rem]">
                 <HeaderLabel>Total</HeaderLabel>
               </Th>
+              {/* Balance — the LIVE folio balance, so the desk sees at a glance
+                  who owes money. Read for the whole page in one query against the
+                  booking_balances view (022); never folio_balance() per row. */}
+              <Th align="right" className="min-w-[8rem]">
+                <HeaderLabel>Balance</HeaderLabel>
+              </Th>
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={9} className="px-4 py-12 text-center">
+                <td colSpan={10} className="px-4 py-12 text-center">
                   {loading ? (
                     <span
                       className="inline-flex items-center gap-2 text-sm text-charcoal-muted"
@@ -338,7 +350,67 @@ function BookingTableRow({
       <td className="whitespace-nowrap px-4 py-3 text-right font-bold tabular-nums text-charcoal">
         {formatCurrency(total, currency)}
       </td>
+      <BalanceCell balance={row.balance} currency={currency} />
     </tr>
+  );
+}
+
+// The live folio balance for one booking.
+//
+// Three states, three readings — a bare number cannot carry this:
+//   > 0  the guest owes; normal weight, normal colour. This is the ordinary case
+//        and must not be alarming.
+//   = 0  settled. Shown as the word, not as ₦0.00, because "Settled" is what the
+//        receptionist is actually looking for.
+//   < 0  the hotel owes the guest — an over-payment or an unconsumed deposit.
+//        FLAGGED, and shown as a positive amount under a "Refund due" label: the
+//        engine deliberately does not floor a negative balance (021 §8.3) because
+//        that would hide real money, and a bare "−₦50,000" at a busy desk is read
+//        as a mistake or, worse, as something owed.
+// A null balance (no row in the view) renders as the shared dash — never as a
+// confident zero for a folio we could not read.
+function BalanceCell({
+  balance,
+  currency,
+}: {
+  balance: string | null;
+  currency: string;
+}) {
+  const value = parseNumeric(balance);
+
+  if (value === null) {
+    return (
+      <td className="whitespace-nowrap px-4 py-3 text-right tabular-nums text-charcoal-muted">
+        {MISSING_VALUE}
+      </td>
+    );
+  }
+
+  if (value === 0) {
+    return (
+      <td className="whitespace-nowrap px-4 py-3 text-right text-xs font-semibold text-charcoal-muted">
+        Settled
+      </td>
+    );
+  }
+
+  if (value < 0) {
+    return (
+      <td className="whitespace-nowrap px-4 py-3 text-right">
+        <span className="block font-semibold tabular-nums text-primary">
+          {formatMoney(-value, currency)}
+        </span>
+        <span className="block text-[11px] font-semibold text-primary">
+          Refund due
+        </span>
+      </td>
+    );
+  }
+
+  return (
+    <td className="whitespace-nowrap px-4 py-3 text-right font-semibold tabular-nums text-charcoal">
+      {formatMoney(value, currency)}
+    </td>
   );
 }
 

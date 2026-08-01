@@ -75,6 +75,14 @@ export interface BookingListRow extends Booking {
   company: { name: string } | null;
   // Only the rate is selected — the list sums these for the per-booking total.
   booking_nights: { rate: string }[];
+  // The booking's LIVE folio balance, attached by fetchBookingsPage from the
+  // booking_balances view (022) in ONE extra query for the whole page — never a
+  // folio_balance() call per row. numeric(14,2) -> STRING (§6); parse before any
+  // arithmetic or comparison. Positive = the guest owes; negative = a refund is
+  // due. null only if the view returned no row for this booking, which should be
+  // impossible (every booking has a folio) and is shown as a dash rather than as
+  // a confident zero.
+  balance: string | null;
 }
 
 // A booking's full detail: the row, its embeds, and every night ordered by date
