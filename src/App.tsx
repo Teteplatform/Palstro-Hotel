@@ -23,6 +23,7 @@ import { SiteEditorPage } from './pages/admin/SiteEditorPage';
 import { RoomTypesPage } from './pages/admin/RoomTypesPage';
 import { CompaniesPage } from './pages/admin/CompaniesPage';
 import { BookingsPage } from './pages/admin/BookingsPage';
+import { BookingDetailPage } from './pages/admin/BookingDetailPage';
 import { ModuleNotAvailablePage } from './pages/admin/ModuleNotAvailablePage';
 
 /**
@@ -145,6 +146,18 @@ const router = createBrowserRouter([
                 element: (
                   <ModuleGuard module="bookings">
                     <BookingsPage />
+                  </ModuleGuard>
+                ),
+              },
+              // One booking, as its own page (build A §1) — deep-linkable and
+              // refreshable, which a modal panel never was. Same 'bookings'
+              // module guard as the list: a tenant without the module cannot
+              // reach the detail by typing the URL either.
+              {
+                path: 'bookings/:bookingId',
+                element: (
+                  <ModuleGuard module="bookings">
+                    <BookingDetailPage />
                   </ModuleGuard>
                 ),
               },

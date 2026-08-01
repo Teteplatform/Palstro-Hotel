@@ -32,33 +32,14 @@ export function paymentMethodLabel(method: PaymentMethod | string): string {
   }
 }
 
-// How a balance READS to a human, which is the whole point of §1's instruction
-// not to show a bare negative.
+// NOTE ON THE BALANCE LABEL, REMOVED IN BUILD A.
 //
-// The engine deliberately does NOT floor the balance at zero (021 §8.3): a
-// negative balance is real money the hotel owes back — an over-payment, or a
-// deposit taken before any charge has posted — and hiding it would hide a
-// liability. But "-₦50,000.00" at a front desk is read as a mistake, or worse, as
-// something owed. So the SIGN carries the meaning and the LABEL states it:
-//   > 0  the guest owes the hotel
-//   = 0  settled
-//   < 0  the hotel owes the guest (a refund is due), shown as a positive amount
-//        under an explicit "Refund due" label — never as a bare minus.
-export type BalanceDirection = 'owing' | 'settled' | 'refund_due';
-
-export function balanceDirection(balance: number): BalanceDirection {
-  if (balance > 0) return 'owing';
-  if (balance < 0) return 'refund_due';
-  return 'settled';
-}
-
-export function balanceLabel(direction: BalanceDirection): string {
-  switch (direction) {
-    case 'owing':
-      return 'Guest owes';
-    case 'refund_due':
-      return 'Refund due to guest';
-    case 'settled':
-      return 'Settled — nothing outstanding';
-  }
-}
+// This file used to export balanceDirection/balanceLabel, which rendered a
+// balance as "Guest owes" / "Settled — nothing outstanding" / "Refund due to
+// guest". Build A replaced that with a colour rule and one plain label
+// ("Outstanding Balance"), because the words were saying what the figure and its
+// colour already said. The rule now lives beside the balance row in FolioPanel:
+//   > 0  → text-negative (red), money is owed;
+//   <= 0 → text-positive (green), nothing is owed.
+// The only surviving caption is "refund due" in the bookings list's Balance
+// column, where a minus sign in a dense table genuinely needs the words.

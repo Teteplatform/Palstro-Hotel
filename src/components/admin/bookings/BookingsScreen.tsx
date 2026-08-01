@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Pagination } from '../../ui/Pagination';
 import { PlusIcon } from '../../ui/icons';
 import { useBookings } from '../../../hooks/useBookings';
@@ -11,21 +12,25 @@ import type { RoomType } from '../../../types/room';
 import { BookingsTable } from './BookingsTable';
 import { BookingStatusSummary } from './BookingStatusSummary';
 import { CreateBookingDialog } from './CreateBookingDialog';
-import { BookingDetailPanel } from './BookingDetailPanel';
 
 // The bookings screen (build 6b §3; table redesign per brief 1.txt §2). A dense,
 // server-paginated DATA TABLE (BookingsTable) whose column headers carry the
 // filtering inline — the standalone filter panel is gone. Above it sits a compact
 // inline summary across the WHOLE filtered set (rule 20) with a how-it-was-
 // calculated note (rule 16); below it the shared Pagination control (rule 1b).
-// Create goes through create_booking only (CreateBookingDialog); a row click opens
-// the unchanged BookingDetailPanel.
+// Create goes through create_booking only (CreateBookingDialog); a row click
+// NAVIGATES to that booking's own page (build A §1) — the old inline detail panel
+// is gone, so the detail can be linked to, refreshed into and shared.
 //
 // Reads scoped to the active property + tenant in the data layer (rule 19).
 
 interface BookingsScreenProps {
   propertyId: string;
   tenantId: string;
+  // The property's slug — the detail route lives under it
+  // (/admin/:propertySlug/bookings/:bookingId), so a row click navigates rather
+  // than opening a panel (build A §1).
+  propertySlug: string;
   // The property's IANA timezone — passed to the create dialog so the check-in
   // date input's min is the PROPERTY's today (matches the RPC guard, migration 020).
   timezone: string;
@@ -35,10 +40,12 @@ interface BookingsScreenProps {
 export function BookingsScreen({
   propertyId,
   tenantId,
+  propertySlug,
   timezone,
   currency,
 }: BookingsScreenProps) {
   const list = useBookings(tenantId, propertyId);
+  const navigate = useNavigate();
 
   // Companies + room types for the header-filter dropdowns. Both bounded fetches
   // (rule 1a). Companies: all live incl. dormant, so a filter can still reach past
@@ -75,7 +82,6 @@ export function BookingsScreen({
   // property (useBookingDraft keys by propertyId). Whether the dialog is open is
   // part of the draft; opening/closing/clearing all go through this hook.
   const { draft, update, clear, open } = useBookingDraft(propertyId);
-  const [manageId, setManageId] = useState<string | null>(null);
 
   return (
     <div className="mx-auto max-w-6xl">
@@ -125,7 +131,9 @@ export function BookingsScreen({
             roomTypes={roomTypes}
             currency={currency}
             loading={list.loading}
-            onOpenRow={setManageId}
+            // A row is a link to the booking's own page now — the inline detail
+            // panel is gone (build A §1).
+            onOpenRow={(id) => navigate(`/admin/${propertySlug}/bookings/${id}`)}
           />
 
           <div className="mt-6">
@@ -161,19 +169,6 @@ export function BookingsScreen({
         />
       ) : null}
 
-      {manageId ? (
-        <BookingDetailPanel
-          bookingId={manageId}
-          tenantId={tenantId}
-          propertyId={propertyId}
-          currency={currency}
-          // The folio tab dates its charges and payments in the PROPERTY's
-          // timezone, the same "today" the RPCs resolve server-side.
-          timezone={timezone}
-          onClose={() => setManageId(null)}
-          onChanged={() => void list.reload()}
-        />
-      ) : null}
     </div>
   );
 }

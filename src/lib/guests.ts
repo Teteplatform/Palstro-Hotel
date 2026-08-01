@@ -111,3 +111,64 @@ export async function createGuest(
   if (error) throw error;
   return data as Guest;
 }
+
+// Correct an existing guest's details (build A §2 — the Guest Details tab).
+//
+// THERE IS NO update_guest RPC, AND THIS DOES NOT INVENT ONE. The guest-update
+// path that already exists is the `guests_member_update` RLS policy from 014,
+// whose own comment states its purpose: "direct admin edits are for corrections".
+// That is the same shape every other piece of master data in this app uses —
+// updateRoomType and updateCompany are direct .update() calls under an
+// admin-only policy — so a guest correction follows the established pattern
+// rather than a new one.
+//
+// TWO CONSEQUENCES, BOTH DELIBERATE AND BOTH VISIBLE IN THE UI:
+//   1. ONLY AN OWNER/MANAGER MAY SAVE. The policy requires is_tenant_admin, so a
+//      front-desk user cannot fix a mistyped phone number — the screen hides the
+//      Edit action for them rather than offering a save that RLS will refuse.
+//      Widening that to front desk needs a staff-gated update_guest RPC (the
+//      mirror of create_guest, which IS staff-gated). That is a schema change and
+//      is NOT made here.
+//   2. full_name is GENERATED (018) and is never written — Postgres recomputes it
+//      from first/middle/last on every write, so the display name follows
+//      automatically and cannot drift from its parts.
+//
+// Scoped to the active tenant and to LIVE rows only (rules 19, 5), so a stale id
+// can never touch a soft-deleted or cross-tenant guest. The change_log trigger on
+// guests records the before/after of every field against the acting user.
+export async function updateGuest(
+  guestId: string,
+  tenantId: string,
+  values: GuestWrite,
+): Promise<Guest> {
+  const { data, error } = await supabase
+    .from('guests')
+    .update({
+      first_name: values.first_name.trim(),
+      last_name: values.last_name.trim(),
+      // Empty strings become NULL so "no middle name" is one value in the
+      // database, not two ('' and NULL) that render and sort differently.
+      middle_name: emptyToNull(values.middle_name),
+      phone: emptyToNull(values.phone),
+      email: emptyToNull(values.email),
+      nationality: emptyToNull(values.nationality),
+      id_type: emptyToNull(values.id_type),
+      id_number: emptyToNull(values.id_number),
+      // A date column: '' would be a cast error, NULL is "not recorded".
+      id_expiry: emptyToNull(values.id_expiry),
+      notes: emptyToNull(values.notes),
+    })
+    .eq('id', guestId)
+    .eq('tenant_id', tenantId) // rule 19
+    .is('deleted_at', null) // rule 5: only patch a live row
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data as Guest;
+}
+
+function emptyToNull(value: string | null | undefined): string | null {
+  const trimmed = (value ?? '').trim();
+  return trimmed.length > 0 ? trimmed : null;
+}

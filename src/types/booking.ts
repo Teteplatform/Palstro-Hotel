@@ -88,10 +88,21 @@ export interface BookingListRow extends Booking {
 // A booking's full detail: the row, its embeds, and every night ordered by date
 // with its locked rate + source (the per-night breakdown the manage view shows).
 export interface BookingDetail extends Booking {
+  // The guest as the detail PAGE needs them (build A §2): the structured name and
+  // the ID fields, editable in the Guest Details tab, plus the generated
+  // full_name for display. `id` is here because the tab writes back to that row.
   guest: {
+    id: string;
+    first_name: string;
+    last_name: string;
+    middle_name: string | null;
     full_name: string;
     phone: string | null;
     email: string | null;
+    nationality: string | null;
+    id_type: string | null;
+    id_number: string | null;
+    id_expiry: string | null;
   } | null;
   room_type: { name: string; max_adults: number; max_children: number } | null;
   company: { name: string } | null;

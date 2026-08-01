@@ -355,18 +355,19 @@ function BookingTableRow({
   );
 }
 
-// The live folio balance for one booking.
+// The live folio balance for one booking, under the SAME colour rule as the
+// folio's Outstanding Balance (build A §2), so the two screens never disagree
+// about what red means:
+//   > 0   text-negative (red) — the guest owes money.
+//   <= 0  text-positive (green) — nothing owed, either settled exactly or the
+//         hotel is holding the guest's money.
+// Both tones are theme tokens (rule 17), contrast-proven at their definition.
 //
-// Three states, three readings — a bare number cannot carry this:
-//   > 0  the guest owes; normal weight, normal colour. This is the ordinary case
-//        and must not be alarming.
-//   = 0  settled. Shown as the word, not as ₦0.00, because "Settled" is what the
-//        receptionist is actually looking for.
-//   < 0  the hotel owes the guest — an over-payment or an unconsumed deposit.
-//        FLAGGED, and shown as a positive amount under a "Refund due" label: the
-//        engine deliberately does not floor a negative balance (021 §8.3) because
-//        that would hide real money, and a bare "−₦50,000" at a busy desk is read
-//        as a mistake or, worse, as something owed.
+// A genuinely NEGATIVE balance keeps its small "refund due" caption, which is not
+// the redundant "settled" label: the engine deliberately does not floor a
+// negative (021 §8.3) because that would hide money the hotel owes back, and in a
+// dense list a minus sign alone is easy to misread as an amount owed.
+//
 // A null balance (no row in the view) renders as the shared dash — never as a
 // confident zero for a folio we could not read.
 function BalanceCell({
@@ -386,30 +387,20 @@ function BalanceCell({
     );
   }
 
-  if (value === 0) {
-    return (
-      <td className="whitespace-nowrap px-4 py-3 text-right text-xs font-semibold text-charcoal-muted">
-        Settled
-      </td>
-    );
-  }
-
-  if (value < 0) {
-    return (
-      <td className="whitespace-nowrap px-4 py-3 text-right">
-        <span className="block font-semibold tabular-nums text-primary">
-          {formatMoney(-value, currency)}
-        </span>
-        <span className="block text-[11px] font-semibold text-primary">
-          Refund due
-        </span>
-      </td>
-    );
-  }
+  const owed = value > 0;
 
   return (
-    <td className="whitespace-nowrap px-4 py-3 text-right font-semibold tabular-nums text-charcoal">
-      {formatMoney(value, currency)}
+    <td className="whitespace-nowrap px-4 py-3 text-right">
+      <span
+        className={`block font-semibold tabular-nums ${owed ? 'text-negative' : 'text-positive'}`}
+      >
+        {formatMoney(value, currency)}
+      </span>
+      {value < 0 ? (
+        <span className="block text-[11px] font-semibold text-positive">
+          refund due
+        </span>
+      ) : null}
     </td>
   );
 }

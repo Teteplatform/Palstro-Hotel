@@ -69,6 +69,34 @@
      As BG: white text 6.7:1 (normal ✓). */
   --brand-accent-hover: #8c4a23;
 
+  /* ---- Status tones: money owed vs money not owed -------------------------
+     TWO SEMANTIC TOKENS, added for the folio's balance (build A §2), which must
+     read green when nothing is owed and red when the guest owes. They are
+     deliberately NOT "green" and "red" in the abstract: they mean OWED and
+     NOT OWED, so every surface that answers that question — the folio balance,
+     the bookings list's Balance column — uses the same two values and re-themes
+     together if a property ever overrides them.
+
+     Why not reuse --brand-primary for "owed": primary is the terracotta that
+     already marks buttons, links and active nav, so it carries no meaning at a
+     glance. A figure that decides whether a guest is chased for money must not
+     share a colour with the "New booking" button.
+
+     Both are TEXT tones on the warm surfaces, and both clear AA for normal text
+     on every background this app puts them on. */
+
+  /* Positive — nothing owed (a settled or in-credit balance). Deep forest
+     green, desaturated to sit beside terracotta rather than fight it.
+     As TEXT: on cream 6.20:1, on sand 5.21:1, on white 6.73:1 (all normal ✓).
+     As BG: white text 6.73:1 (normal ✓). */
+  --brand-positive: #276749;
+
+  /* Negative — money is owed. A true crimson, chosen over a warmer brick so it
+     is not mistaken for --brand-primary (#9c4426) at a glance.
+     As TEXT: on cream 7.30:1, on sand 6.14:1, on white 7.92:1 (all normal ✓).
+     As BG: white text 7.92:1 (normal ✓). */
+  --brand-negative: #9b2226;
+
   /* ---- Brand fonts (override target, same pattern as the colours) ---------
      A property may pick one of the six curated pairings (lib/settings/fonts.ts);
      lib/theme.ts re-sets these two variables at runtime and loads that pairing's
@@ -100,6 +128,11 @@
   --color-sand-border: var(--brand-border);
   --color-accent: var(--brand-accent);
   --color-accent-hover: var(--brand-accent-hover);
+
+  /* Money status (text-positive / text-negative / bg-positive / bg-negative,
+     and the /10 tints of each for row highlights). */
+  --color-positive: var(--brand-positive);
+  --color-negative: var(--brand-negative);
 }
 
 /* ---- Base ---------------------------------------------------------------- */

@@ -333,8 +333,11 @@ export function bookingTotal(nights: { rate: string }[]): number {
 // Detail (per-night breakdown)
 // ---------------------------------------------------------------------------
 
+// The detail PAGE (build A) shows and edits the guest's identity, so the embed
+// carries the whole structured name and the ID fields — not just the display
+// name. id is included because the Guest Details tab writes back to that row.
 const DETAIL_SELECT =
-  '*, guest:guests(full_name, phone, email), room_type:room_types(name, max_adults, max_children), company:companies(name), booking_nights(stay_date, rate, rate_source)';
+  '*, guest:guests(id, first_name, last_name, middle_name, full_name, phone, email, nationality, id_type, id_number, id_expiry), room_type:room_types(name, max_adults, max_children), company:companies(name), booking_nights(stay_date, rate, rate_source)';
 
 // One booking with its embeds and every night ordered by date — the manage view's
 // per-night breakdown. Scoped to the active tenant + property (rule 19).
