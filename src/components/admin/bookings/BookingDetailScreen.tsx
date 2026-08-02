@@ -105,7 +105,19 @@ export function BookingDetailScreen({
     scrollToFolio();
   }, [detail, hash]);
 
-  const backHref = `/admin/${propertySlug}/bookings`;
+  // BACK GOES TO THE GUEST (build 2 §1), never to the bookings list. A stay is
+  // reached FROM its guest, so Back must return there — including on a DEEP LINK
+  // typed or pasted straight to a stay URL, where there is no history to go back
+  // through. That is why it is a computed href off the loaded booking rather
+  // than navigate(-1): -1 would send a deep-linked visitor to whatever page they
+  // were on before, or out of the app entirely.
+  //
+  // Until the booking has loaded the guest is unknown, so the control renders as
+  // a DISABLED button with the same label and geometry — it never flashes a
+  // different destination, and it never briefly points at the bookings list.
+  const backHref = detail?.guest
+    ? `/admin/${propertySlug}/guests/${detail.guest.id}`
+    : null;
 
   // PART 1: the nights this stay is DESCRIBED by are the nights it is BILLED
   // for. describeStayNights transcribes run_night_audit's own date predicate
@@ -115,13 +127,24 @@ export function BookingDetailScreen({
 
   return (
     <div className="mx-auto max-w-5xl">
-      <Link
-        to={backHref}
-        className="inline-flex items-center gap-2 rounded-full border border-sand-border bg-white/70 px-4 py-2 text-sm font-semibold text-charcoal transition-colors hover:bg-sand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-cream print:hidden"
-      >
-        <ArrowLeftIcon className="h-4 w-4" />
-        Back to bookings
-      </Link>
+      {backHref ? (
+        <Link
+          to={backHref}
+          className="inline-flex items-center gap-2 rounded-full border border-sand-border bg-white/70 px-4 py-2 text-sm font-semibold text-charcoal transition-colors hover:bg-sand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-cream print:hidden"
+        >
+          <ArrowLeftIcon className="h-4 w-4" />
+          Back to guest
+        </Link>
+      ) : (
+        <button
+          type="button"
+          disabled
+          className="inline-flex items-center gap-2 rounded-full border border-sand-border bg-white/70 px-4 py-2 text-sm font-semibold text-charcoal opacity-60 print:hidden"
+        >
+          <ArrowLeftIcon className="h-4 w-4" />
+          Back to guest
+        </button>
+      )}
 
       <header className="mt-4 mb-5">
         {/* THE GUEST'S NAME IS THE LINK TO THEIR HOME, and it is the page's
@@ -178,6 +201,21 @@ export function BookingDetailScreen({
               Billed to {detail.company.name}
             </span>
           ) : null}
+          {/* THIS is where a SINGLE stay is printed (build 2 §1) — the guest
+              ledger prints the whole account, this prints one bill. The
+              browser's own dialog, no PDF library and no second renderer: the
+              page on screen IS the page that prints, so the two can never
+              disagree. Every control is print:hidden, so it comes out as the
+              reservation and its bill alone. */}
+          {detail ? (
+            <button
+              type="button"
+              onClick={() => window.print()}
+              className="ml-auto rounded-full border border-sand-border bg-white/70 px-4 py-1 text-xs font-semibold text-charcoal transition-colors hover:bg-sand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-cream print:hidden"
+            >
+              Print bill
+            </button>
+          ) : null}
         </div>
       </header>
 
@@ -199,8 +237,12 @@ export function BookingDetailScreen({
             >
               Try again
             </button>
+            {/* The one place the bookings LIST is still the fallback: the
+                booking did not load, so there is no guest to go back to, and
+                stranding the user on a dead page would be worse than sending
+                them somewhere real. */}
             <Link
-              to={backHref}
+              to={`/admin/${propertySlug}/bookings`}
               className="rounded-full px-4 py-2 text-sm font-semibold text-charcoal-muted transition-colors hover:text-charcoal"
             >
               Back to bookings

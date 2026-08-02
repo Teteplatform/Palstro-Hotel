@@ -50,7 +50,11 @@ interface BookingsTableProps {
   roomTypes: RoomType[];
   currency: string;
   loading: boolean;
-  onOpenRow: (id: string) => void;
+  // THE WHOLE ROW, not just its id (build 2 §1). A row click now opens the
+  // GUEST HOME rather than the stay, so the caller needs the row's guest_id —
+  // and passing the row rather than a second `guestId` argument means the next
+  // navigation decision needs no third signature change.
+  onOpenRow: (row: BookingListRow) => void;
 }
 
 // Debounce for the two free-text header filters, so refetch fires once the user
@@ -273,7 +277,7 @@ export function BookingsTable({
                   key={row.id}
                   row={row}
                   currency={currency}
-                  onOpen={() => onOpenRow(row.id)}
+                  onOpen={() => onOpenRow(row)}
                 />
               ))
             )}

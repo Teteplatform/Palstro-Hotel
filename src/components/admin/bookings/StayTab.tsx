@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { DetailTable, DetailRow } from '../../ui/DetailTable';
+import { FactTable, type Fact } from '../../ui/FactTable';
 import { DateField, TextArea, TimeField } from '../../ui/form';
 import { useToast } from '../../ui/Toast';
 import { humanizeError } from '../../../lib/errors';
@@ -158,6 +158,13 @@ export function StayTab({
   // has until midnight to walk in, and a 23:00 check-in is ordinary. This mirrors
   // the identical guard inside mark_no_show; the server's copy is the real one
   // (an application check is user experience only, never the sole guard).
+  //
+  // THIS BUTTON SURVIVES migration 029, which made the night audit resolve
+  // uncollected bookings automatically. The two are the same act at two different
+  // levels of certainty: the audit waits for the whole day and runs once, at the
+  // cutoff; this is the desk's same-day "they are definitely not coming" call,
+  // made hours earlier by a person who has spoken to the guest. Both go through
+  // mark_no_show, so they can never post differently.
   const arrivalDayHasPassed = detail.check_in < propertyToday;
   const canMarkNoShow = status === 'confirmed' && arrivalDayHasPassed;
 
@@ -265,6 +272,121 @@ export function StayTab({
     if (ok) closePanel();
   }
 
+  // The reservation facts, built as DATA and only then rendered — the same shape
+  // the folio bill builds its rows in, and for the same reason: the order and the
+  // conditionality live in one readable list rather than being spread through
+  // markup.
+  function reservationFacts(): Fact[] {
+    const facts: Fact[] = [
+      { label: 'Room type', value: detail.room_type?.name ?? MISSING_VALUE },
+      {
+        label: 'Occupancy',
+        value: formatOccupancy(detail.adults, detail.children),
+      },
+      // RESERVED — what was booked. Labelled explicitly so the actual arrival
+      // below can never be mistaken for a correction of it.
+      {
+        label: 'Check-in (reserved)',
+        value: formatDisplayDate(detail.check_in) || MISSING_VALUE,
+      },
+      {
+        label: 'Check-out',
+        value: formatDisplayDate(detail.check_out) || MISSING_VALUE,
+      },
+      // NIGHTS — THE NUMBER THAT BECOMES MONEY, and nothing else. Once an arrival
+      // exists this is the ACTUAL count (billing runs from the arrival, so a
+      // guest who booked 3 and arrived on the last day owes 1); before check-in
+      // the reserved count is the only figure there is. The reserved figure
+      // survives as a muted "(reserved 3)" when the two disagree — it is what a
+      // dispute is argued from — and is omitted when they agree, because showing
+      // the same number twice invents a distinction that is not there.
+      {
+        label: 'Nights',
+        value: (
+          <>
+            <span className="font-semibold tabular-nums text-charcoal">
+              {stay.actual ?? stay.reserved}
+            </span>
+            {stay.differs ? (
+              <span className="ml-1.5 text-xs tabular-nums text-charcoal-muted">
+                (reserved {stay.reserved})
+              </span>
+            ) : null}
+          </>
+        ),
+      },
+      {
+        label: 'Company',
+        value: companyName ?? (
+          <span className="text-charcoal-muted">Walk-in</span>
+        ),
+      },
+      {
+        label: 'Bill to',
+        value:
+          detail.bill_to === 'company'
+            ? `Company${companyName ? ` — ${companyName}` : ''}`
+            : 'Guest',
+      },
+    ];
+
+    // ACTUAL ARRIVAL — when they turned up, as ONE value: the arrival instant in
+    // the HOTEL's clock ("1 Aug 2026, 22:13"). The bare date is the fallback for
+    // a pre-024 stay that has an arrival date but no recorded instant.
+    if (detail.actual_check_in) {
+      facts.push({
+        label: 'Arrived',
+        value: (
+          <span className="font-semibold text-charcoal">
+            {(detail.checked_in_at
+              ? formatDisplayDateTimeInZone(detail.checked_in_at, timezone)
+              : '') ||
+              formatDisplayDate(detail.actual_check_in) ||
+              MISSING_VALUE}
+          </span>
+        ),
+      });
+    }
+
+    // EXPECTED ARRIVAL (025) — a note the guest gave at booking. IT CHANGES
+    // NOTHING: not the price, not availability, not when a no-show may be
+    // recorded. The auto-resolve pass (029) waits for the whole reserved arrival
+    // DAY to end in the property's timezone, so a 22:00 arrival was never at
+    // risk; this exists so the desk is not surprised by an empty room at 20:00
+    // and does not go chasing a guest who is on their way.
+    if (detail.expected_arrival_time) {
+      facts.push({
+        label: 'Expected arrival',
+        value: (
+          <>
+            <span className="font-semibold text-charcoal">
+              ~{formatDisplayTime(detail.expected_arrival_time) || MISSING_VALUE}
+            </span>
+            <span className="ml-1.5 text-xs text-charcoal-muted">
+              (noted at booking)
+            </span>
+          </>
+        ),
+      });
+    }
+
+    if (detail.special_requests) {
+      facts.push({
+        label: 'Special requests',
+        value: detail.special_requests,
+      });
+    }
+
+    if (detail.status === 'cancelled' && detail.cancellation_reason) {
+      facts.push({
+        label: 'Cancellation reason',
+        value: detail.cancellation_reason,
+      });
+    }
+
+    return facts;
+  }
+
   async function handleNoShow() {
     const ok = await runAction(
       () => markNoShow(detail.id),
@@ -292,93 +414,19 @@ export function StayTab({
         />
       ) : null}
 
-      <DetailTable caption="Reservation">
-        <DetailRow label="Room type">
-          {detail.room_type?.name ?? MISSING_VALUE}
-        </DetailRow>
-        <DetailRow label="Occupancy">
-          {formatOccupancy(detail.adults, detail.children)}
-        </DetailRow>
-        {/* RESERVED — what was booked. Labelled explicitly so the actual arrival
-            below can never be mistaken for a correction of it. */}
-        <DetailRow label="Check-in (reserved)">
-          {formatDisplayDate(detail.check_in)}
-        </DetailRow>
-        {/* EXPECTED ARRIVAL (025) — a note the guest gave at booking, shown only
-            when they gave one. IT CHANGES NOTHING: not the price, not
-            availability, not when a no-show may be recorded. mark_no_show
-            already waits for the whole reserved arrival DAY to end in the
-            property's timezone, so a 22:00 arrival was never at risk of being
-            marked a no-show; this row exists so the desk is not surprised by an
-            empty room at 20:00 and does not go chasing a guest who is on their
-            way. */}
-        {detail.expected_arrival_time ? (
-          <DetailRow label="Expected arrival">
-            <span className="font-semibold text-charcoal">
-              ~{formatDisplayTime(detail.expected_arrival_time) || MISSING_VALUE}
-            </span>
-            <span className="ml-1.5 text-xs text-charcoal-muted">
-              (noted at booking)
-            </span>
-          </DetailRow>
-        ) : null}
-        {/* ACTUAL — when they turned up, as ONE value: the arrival instant in the
-            hotel's clock ("1 Aug 2026, 22:13"). The date used to be printed again
-            in front of it, which read as two facts where there is one. The bare
-            date is the fallback for a pre-024 stay that has an arrival date but no
-            recorded instant. Shown only once there IS an arrival; an empty row
-            before check-in would read as missing data. */}
-        {detail.actual_check_in ? (
-          <DetailRow label="Arrived">
-            <span className="font-semibold text-charcoal">
-              {(detail.checked_in_at
-                ? formatDisplayDateTimeInZone(detail.checked_in_at, timezone)
-                : '') ||
-                formatDisplayDate(detail.actual_check_in) ||
-                MISSING_VALUE}
-            </span>
-          </DetailRow>
-        ) : null}
-        <DetailRow label="Check-out">
-          {formatDisplayDate(detail.check_out)}
-        </DetailRow>
-        {/* NIGHTS — THE NUMBER THAT BECOMES MONEY, and nothing else.
-            Once an arrival exists this is the ACTUAL count (billing runs from the
-            arrival, so a guest who booked 3 and arrived on the last day owes 1);
-            before check-in the reserved count is the only figure there is. The
-            reserved figure survives as a muted "(reserved 3)" when the two
-            disagree — it is what a dispute is argued from — and is omitted when
-            they agree, because showing the same number twice invents a
-            distinction that is not there. */}
-        <DetailRow label="Nights">
-          <span className="font-semibold tabular-nums text-charcoal">
-            {stay.actual ?? stay.reserved}
-          </span>
-          {stay.differs ? (
-            <span className="ml-1.5 text-xs tabular-nums text-charcoal-muted">
-              (reserved {stay.reserved})
-            </span>
-          ) : null}
-        </DetailRow>
-        <DetailRow label="Company">
-          {companyName ?? <span className="text-charcoal-muted">Walk-in</span>}
-        </DetailRow>
-        <DetailRow label="Bill to">
-          {detail.bill_to === 'company'
-            ? `Company${companyName ? ` — ${companyName}` : ''}`
-            : 'Guest'}
-        </DetailRow>
-        {detail.special_requests ? (
-          <DetailRow label="Special requests">
-            {detail.special_requests}
-          </DetailRow>
-        ) : null}
-        {detail.status === 'cancelled' && detail.cancellation_reason ? (
-          <DetailRow label="Cancellation reason">
-            {detail.cancellation_reason}
-          </DetailRow>
-        ) : null}
-      </DetailTable>
+      {/* THE RESERVATION, as a COMPACT TABLE (build 2 §1) — two label/value pairs
+          per row on a laptop, one per row at 360px, in the same sharp style as
+          the folio bill and the stays table. It used to be a flat one-fact-per-
+          row dump that ran half a screen tall, which pushed the nights and the
+          bill-to — the two things a receptionist is actually looking for — below
+          the fold for no reason.
+
+          THE SEVEN CORE FACTS ARE ALWAYS PRESENT, in this order, so the table
+          has the same shape for every booking and the eye learns where to look.
+          The four conditional ones below them appear only when they carry a
+          value: an "Expected arrival: —" row on the 95% of bookings that noted
+          none is a row that says nothing. */}
+      <FactTable caption="Reservation" facts={reservationFacts()} />
 
       {/* THE BILLABLE nights, as a table: each night, why it cost what it did
           (rate_source), and the rate locked at booking. Nights before the actual

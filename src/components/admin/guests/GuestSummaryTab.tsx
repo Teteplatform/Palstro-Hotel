@@ -4,8 +4,9 @@ import { formatMoney, MISSING_VALUE } from '../../../lib/format';
 import { formatDisplayDate } from '../../../lib/date';
 import { AddChargeForm } from '../folio/AddChargeForm';
 import { TakePaymentForm } from '../folio/TakePaymentForm';
+import { FollowUpNotices } from '../FollowUpNotices';
 import { GuestStaysTable, type StayAction } from './GuestStaysTable';
-import { CancelPanel, CheckOutPanel } from './StayConfirmPanels';
+import { CancelPanel, CheckInPanel, CheckOutPanel } from './StayConfirmPanels';
 import { StandaloneEntryPanel } from './StandaloneEntryPanel';
 import type { GuestAccountSummary, GuestStayRow } from '../../../types/guestLedger';
 
@@ -72,6 +73,7 @@ const SUMMARY_NOTE =
 type PanelState =
   | { kind: 'payment'; row: GuestStayRow }
   | { kind: 'charge'; row: GuestStayRow }
+  | { kind: 'checkin'; row: GuestStayRow }
   | { kind: 'checkout'; row: GuestStayRow }
   | { kind: 'cancel'; row: GuestStayRow }
   | { kind: 'standalone' }
@@ -138,6 +140,17 @@ export function GuestSummaryTab({
       label: 'Open full bill',
       onSelect: () => onOpenStay(row.booking_id),
     });
+    // CHECK IN, on the guest home (build 2 §1) — the front desk pulls up the
+    // person, not the reservation, so this is where a stay begins. It NEVER
+    // checks anybody in silently: it opens the arrival date/time picker, because
+    // the arrival date is what decides which nights the folio bills.
+    if (row.status === 'confirmed') {
+      actions.push({
+        key: 'checkin',
+        label: 'Check in',
+        onSelect: () => setPanel({ kind: 'checkin', row }),
+      });
+    }
     if (row.status === 'checked_in') {
       actions.push({
         key: 'checkout',
@@ -161,6 +174,21 @@ export function GuestSummaryTab({
 
   return (
     <div className="space-y-5">
+      {/* THE NIGHT AUDIT'S FOLLOW-UPS FOR THIS GUEST (029) — above everything,
+          because if there is one it is the reason somebody opened this page. A
+          corporate stay the audit no-showed and charged has had its room
+          released; the desk is asked to call before it goes to someone else. It
+          renders nothing when there is nothing outstanding. */}
+      <FollowUpNotices
+        tenantId={tenantId}
+        propertyId={propertyId}
+        guestId={guestId}
+        // The acknowledgement changes no money and no availability, but the
+        // stays table is re-read anyway so the page is never showing a mix of
+        // pre- and post-action state.
+        onAcknowledged={() => void onAccountChanged()}
+      />
+
       <section aria-labelledby="guest-summary-heading" className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2
@@ -285,6 +313,14 @@ export function GuestSummaryTab({
             currency={currency}
             timezone={timezone}
             title={`Add charge — ${panel.row.booking_number}`}
+            onDone={afterMutation}
+            onCancel={() => setPanel(null)}
+          />
+        ) : null}
+        {panel?.kind === 'checkin' ? (
+          <CheckInPanel
+            row={panel.row}
+            timezone={timezone}
             onDone={afterMutation}
             onCancel={() => setPanel(null)}
           />

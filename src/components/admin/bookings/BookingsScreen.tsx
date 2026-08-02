@@ -8,6 +8,7 @@ import { fetchAllCompanies } from '../../../lib/companies';
 import { fetchAllRoomTypes } from '../../../lib/roomTypes';
 import type { Company } from '../../../types/company';
 import type { RoomType } from '../../../types/room';
+import { FollowUpNotices } from '../FollowUpNotices';
 import { BookingsTable } from './BookingsTable';
 import { BookingStatusSummary } from './BookingStatusSummary';
 
@@ -106,6 +107,15 @@ export function BookingsScreen({
         />
       ) : (
         <>
+          {/* THE NIGHT AUDIT'S FOLLOW-UPS (029), property-wide. A corporate
+              booking it no-showed and charged has had its room released, and the
+              desk is asked to call the company before that room goes to somebody
+              else. It renders nothing at all when there is nothing outstanding,
+              so a healthy property sees no extra chrome. */}
+          <div className="mb-4">
+            <FollowUpNotices tenantId={tenantId} propertyId={propertyId} />
+          </div>
+
           <div className="mb-4">
             <BookingStatusSummary
               summary={list.summary}
@@ -125,9 +135,20 @@ export function BookingsScreen({
             roomTypes={roomTypes}
             currency={currency}
             loading={list.loading}
-            // A row is a link to the booking's own page now — the inline detail
-            // panel is gone (build A §1).
-            onOpenRow={(id) => navigate(`/admin/${propertySlug}/bookings/${id}`)}
+            // A ROW OPENS THE GUEST, NOT THE STAY (build 2 §1). THE GUEST IS THE
+            // HUB: the front desk almost never wants one reservation in
+            // isolation — they want the person standing in front of them, all
+            // their stays and what they owe across the lot. Landing on a single
+            // stay meant reading one row of a story and then navigating back out
+            // to find the rest. The stay is still one click further in, from the
+            // guest's own stays table, which is where it belongs.
+            //
+            // This list stays exactly as it was otherwise: it is the "everyone"
+            // view and the entry point, and a hotel will accumulate thousands of
+            // bookings over years — which is what the server-side pager is for.
+            onOpenRow={(row) =>
+              navigate(`/admin/${propertySlug}/guests/${row.guest_id}`)
+            }
           />
 
           <div className="mt-6">

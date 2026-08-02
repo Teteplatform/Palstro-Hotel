@@ -362,6 +362,104 @@ export async function fetchBookingDetail(
 }
 
 // ---------------------------------------------------------------------------
+// The front-desk follow-up notice (migration 029)
+// ---------------------------------------------------------------------------
+
+// One outstanding follow-up: a booking the night audit no-showed and CHARGED to
+// a company, which the desk should call about before the room is resold.
+export interface BookingFollowUp {
+  booking_id: string;
+  booking_number: string;
+  guest_id: string;
+  check_in: string;
+  check_out: string;
+  note: string;
+  company_name: string | null;
+  room_type_name: string | null;
+}
+
+// PostgREST shape before the to-one embeds are flattened.
+interface FollowUpRow {
+  id: string;
+  booking_number: string;
+  guest_id: string;
+  check_in: string;
+  check_out: string;
+  follow_up_note: string;
+  company: { name: string } | null;
+  room_type: { name: string } | null;
+}
+
+// Every OUTSTANDING follow-up at this property, oldest arrival first — optionally
+// narrowed to one guest, which is how the guest home shows only theirs.
+//
+// "Outstanding" is `note is not null AND acknowledged_at is null`, which is
+// exactly the predicate migration 029's partial index covers, so this stays a
+// tiny read however many bookings the property accumulates.
+//
+// NOT PAGED, and that is a deliberate reading of rule 1b rather than an
+// exception to it: this is not a browse surface, it is a set of alerts that a
+// person clears, and it is empty on a healthy property. fetchAllPaged keeps each
+// REQUEST bounded (rule 1a) while still returning every row, so nothing is ever
+// silently unreachable — if a property somehow accumulated fifty of these, the
+// desk sees fifty, which is the point.
+export async function fetchOpenFollowUps(
+  tenantId: string,
+  propertyId: string,
+  guestId?: string,
+): Promise<BookingFollowUp[]> {
+  const rows = await fetchAllPaged<FollowUpRow>((from, to) => {
+    let q = supabase
+      .from('bookings')
+      .select(
+        'id, booking_number, guest_id, check_in, check_out, follow_up_note, company:companies(name), room_type:room_types(name)',
+      )
+      .eq('tenant_id', tenantId) // rule 19
+      .eq('property_id', propertyId) // rule 19
+      .is('deleted_at', null) // rule 5
+      .not('follow_up_note', 'is', null)
+      .is('follow_up_acknowledged_at', null);
+
+    if (guestId) q = q.eq('guest_id', guestId);
+
+    return q
+      .order('check_in', { ascending: true })
+      .order('booking_number', { ascending: true }) // unique → stable paging
+      .range(from, to)
+      .returns<FollowUpRow[]>();
+  });
+
+  return rows.map((r) => ({
+    booking_id: r.id,
+    booking_number: r.booking_number,
+    guest_id: r.guest_id,
+    check_in: r.check_in,
+    check_out: r.check_out,
+    // The stored sentence, printed as-is. It was composed from this booking's own
+    // rows at the moment it was raised (029 §4) — never re-rendered here, so the
+    // desk reads the notice that was actually given.
+    note: r.follow_up_note,
+    company_name: r.company?.name ?? null,
+    room_type_name: r.room_type?.name ?? null,
+  }));
+}
+
+// Dismiss one follow-up, recording who and when (029 §3). bookings has no update
+// RLS policy, so this goes through the RPC like every other booking mutation.
+// Idempotent by state at the database: a second call leaves the FIRST
+// acknowledger on the record rather than overwriting them.
+export async function acknowledgeBookingFollowUp(
+  bookingId: string,
+): Promise<Booking> {
+  const { data, error } = await supabase.rpc('acknowledge_booking_follow_up', {
+    p_booking_id: bookingId,
+    p_idempotency_key: null,
+  });
+  if (error) throw error;
+  return data as Booking;
+}
+
+// ---------------------------------------------------------------------------
 // Availability + pricing (read-only server functions)
 // ---------------------------------------------------------------------------
 

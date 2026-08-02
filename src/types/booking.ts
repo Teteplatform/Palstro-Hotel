@@ -57,6 +57,17 @@ export interface Booking {
   special_requests: string | null;
   cancelled_at: string | null;
   cancellation_reason: string | null;
+  // THE FRONT-DESK FOLLOW-UP (migration 029). Raised automatically when the
+  // night audit no-showed and CHARGED a corporate booking, because releasing a
+  // room a company held — and has just been billed for — without a phone call is
+  // how a corporate account is lost. A REMINDER ONLY: the room is already free
+  // (029 §2 makes count_available release a no_show) and this blocks nothing.
+  // The note is a rendered sentence stored at the moment it was raised, so it
+  // records what was true THEN rather than a reconstruction from today's rows.
+  // acknowledged_at NULL = still outstanding, which is what the notice filters on.
+  follow_up_note: string | null;
+  follow_up_acknowledged_at: string | null;
+  follow_up_acknowledged_by: string | null;
   deleted_at: string | null;
   created_at: string;
   updated_at: string;

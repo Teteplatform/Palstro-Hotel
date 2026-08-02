@@ -1,23 +1,38 @@
 import { useState } from 'react';
-import { TextArea } from '../../ui/form';
+import { DateField, TextArea, TimeField } from '../../ui/form';
 import { useToast } from '../../ui/Toast';
 import { humanizeError } from '../../../lib/errors';
 import { formatMoney } from '../../../lib/format';
-import { formatDisplayDate } from '../../../lib/date';
-import { cancelBooking, checkOutBooking } from '../../../lib/bookings';
+import {
+  formatDisplayDate,
+  nowTimeInZone,
+  todayIsoInZone,
+  zonedDateTimeToIso,
+} from '../../../lib/date';
+import {
+  cancelBooking,
+  checkInBooking,
+  checkOutBooking,
+} from '../../../lib/bookings';
 import { FolioActionCard } from '../folio/FolioActionCard';
 import type { GuestStayRow } from '../../../types/guestLedger';
 
-// THE TWO STATUS-GATED STAY ACTIONS, as confirmation steps on the guest home
-// (2.txt §2): CHECK OUT, and CANCEL.
+// THE STATUS-GATED STAY ACTIONS, as confirmation steps on the guest home:
+// CHECK IN, CHECK OUT, and CANCEL.
 //
 // They live here rather than on the booking page because the guest home is where
 // the front desk now works: the guest is standing at the desk, their stays are
-// on screen, and the most recent active one is the row whose kebab ends the
-// stay. Both go through the EXISTING RPCs unchanged — check_out_booking (026)
-// and cancel_booking (015 §8) — and neither computes or sends an amount.
+// on screen, and the relevant row's kebab is how their stay is started, ended or
+// called off. All three go through the EXISTING RPCs unchanged —
+// check_in_booking (024), check_out_booking (026) and cancel_booking (015 §8) —
+// and none of them computes or sends an amount.
 //
-// NEITHER IS EVER A ONE-PRESS ACTION, and for two different reasons:
+// NONE IS EVER A ONE-PRESS ACTION, for three different reasons:
+//   * CHECK-IN records WHEN the guest arrived, and that date decides which
+//     nights the folio bills. A silent "checked in at whatever time the button
+//     was pressed" would file a 02:00 walk-in — routinely keyed at 08:00 the
+//     next morning — against the wrong operating day, and bill a night that was
+//     never slept or miss one that was. So it always opens the picker.
 //   * CHECKOUT posts the room nights and then the guest walks out of the
 //     building. An F&B chit, a laundry ticket or a minibar item that never
 //     reached the folio is money the hotel simply does not collect, so the desk
@@ -26,6 +41,110 @@ import type { GuestStayRow } from '../../../types/guestLedger';
 //     disabled until it is ticked, and the handler refuses anyway.
 //   * CANCELLING needs a reason, permanently recorded on the booking, because a
 //     cancellation with no reason is indistinguishable from a mistake.
+
+interface CheckInPanelProps {
+  row: GuestStayRow;
+  // The PROPERTY's IANA timezone. LOAD-BEARING, not cosmetic: the arrival the
+  // desk types is a wall-clock reading in the HOTEL's zone, and check_in_booking
+  // derives the billing business date from that same zone. An instant built in
+  // the browser's zone would file a late-evening arrival against the wrong
+  // operating day.
+  timezone: string;
+  onDone: () => Promise<void> | void;
+  onCancel: () => void;
+}
+
+export function CheckInPanel({
+  row,
+  timezone,
+  onDone,
+  onCancel,
+}: CheckInPanelProps) {
+  const toast = useToast();
+  // The property's today, and now — seeded once when the panel mounts, which is
+  // the moment it is opened, so the default is "now" rather than "whenever this
+  // screen happened to load".
+  const [propertyToday] = useState(() => todayIsoInZone(timezone));
+  const [date, setDate] = useState(() => todayIsoInZone(timezone));
+  const [time, setTime] = useState(() => nowTimeInZone(timezone));
+  const [submitting, setSubmitting] = useState(false);
+
+  async function handleSubmit() {
+    if (submitting) return;
+    if (!date || !time) {
+      toast.error('Enter the date and time the guest arrived.');
+      return;
+    }
+    if (date > propertyToday) {
+      toast.error('An arrival cannot be in the future.');
+      return;
+    }
+    const arrivalAt = zonedDateTimeToIso(date, time, timezone);
+    if (!arrivalAt) {
+      toast.error('That arrival date and time could not be read. Please re-enter it.');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await checkInBooking(row.booking_id, arrivalAt);
+      toast.success('Guest checked in.');
+      await onDone();
+    } catch (e) {
+      // Rule 11: surfaced, never swallowed.
+      toast.error(humanizeError(e));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  // Charging runs from the LATER of the arrival and the reserved check-in: an
+  // early arrival has no locked rate for the earlier night (015 §5), so the
+  // audit and checkout both floor at the reserved date. Shown before the fact so
+  // the desk is never surprised by which nights appear on the bill.
+  const chargeFrom = date > row.check_in ? date : row.check_in;
+
+  return (
+    <FolioActionCard
+      title={`Record the arrival — ${row.booking_number}`}
+      description="Defaults to now in the hotel's own clock, but change it if the guest arrived earlier — a 2 a.m. arrival is routinely keyed in the next morning, and this is the date the room nights are charged from. The reserved check-in date is left untouched."
+      submitLabel="Confirm check-in"
+      submittingLabel="Checking in…"
+      submitting={submitting}
+      canSubmit={date !== '' && time !== ''}
+      onSubmit={() => void handleSubmit()}
+      onCancel={onCancel}
+    >
+      {/* At 360px the two fields stack; from sm they sit side by side. */}
+      <div className="grid gap-3 sm:grid-cols-2">
+        <DateField
+          label="Arrival date"
+          required
+          value={date}
+          onChange={setDate}
+          max={propertyToday}
+          disabled={submitting}
+          helpText="The hotel’s local date."
+        />
+        <TimeField
+          label="Arrival time"
+          required
+          value={time}
+          onChange={setTime}
+          disabled={submitting}
+          helpText="The hotel’s local time, 24-hour."
+        />
+      </div>
+
+      {date && date !== row.check_in ? (
+        <p className="text-xs font-medium text-charcoal">
+          This differs from the reserved check-in of{' '}
+          {formatDisplayDate(row.check_in)}. Nights will be charged from{' '}
+          {formatDisplayDate(chargeFrom)}.
+        </p>
+      ) : null}
+    </FolioActionCard>
+  );
+}
 
 interface CheckOutPanelProps {
   row: GuestStayRow;
