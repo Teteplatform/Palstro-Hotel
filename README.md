@@ -54,6 +54,50 @@ the existing charges and posts nothing. Its JSON response reports
 `posted` / `already_posted` / `booking_errors` per property so a failed or
 partial run is diagnosable without opening the logs.
 
+### Emailing a statement to a guest
+
+`POST /api/statements/email` sends one guest their statement as a PDF
+attachment. A browser cannot send email, so this is the only part of the export
+build that leaves the tab.
+
+**The PDF is generated on the server**, from the folio, by the same
+`assembleStatement` and `buildStatementPdfDefinition` the screen and the
+downloads use (`src/lib/statement.ts`, `src/lib/export/statementPdfDefinition.ts`
+— both deliberately free of any browser-only import so a Node function can
+compile them). The request carries ids and an address, never a figure, so a
+tampered client cannot email a doctored bill. The one exception is the
+letterhead image: every stored variant is WebP, which no PDF can embed, so the
+browser sends the PNG it already decoded and the server validates and bounds it
+(`api/_lib/statementLogoServer.ts` sets out that trade in full).
+
+**Who may send.** The caller must present their own Supabase access token; every
+read then runs as that user under RLS — there is no service-role key on this
+path — and they must additionally hold a grant to the property
+(`get_property_ids()`), checked in the endpoint and again inside
+`claim_statement_email`. A public caller cannot reach it.
+
+**Not sent twice.** Every send is claimed in `statement_emails` (migration 030)
+under an idempotency key before the mail is made, so a double-click or a retried
+request reports the first attempt's outcome instead of sending a second copy.
+The table also answers "did the guest get their bill?" — who sent which document
+to what address, when, and what the provider said.
+
+Four more environment variables, none `VITE_`-prefixed:
+
+| Variable | Purpose |
+| --- | --- |
+| `RESEND_API_KEY` | The transactional email provider's key. **Server-only** — it exists in this runtime and nowhere else in the repo, is never returned to the client and is never logged. The endpoint refuses to run when it is unset. |
+| `STATEMENT_FROM_EMAIL` | The platform's verified sender (e.g. `statements@yourdomain`). Used as the from-address until a hotel verifies its own domain. Required; the endpoint fails closed without it. |
+| `STATEMENT_SENDER_DOMAINS` | Optional, comma-separated. The domains verified on the Resend account. A property may set `statement_from_email` in its branding, and it is honoured **only** if its domain appears here — Resend rejects mail from an unverified domain, so an unchecked override would make every send fail. |
+| `SUPABASE_ANON_KEY` | Falls back to `VITE_SUPABASE_ANON_KEY`. The anon key is public by design; it is the caller's token, not this key, that grants access. |
+
+Whatever the from-address, the sender's display name is the property's own name
+and Reply-To is the property's own email, so the mail reads as the hotel's and a
+guest who replies reaches the desk.
+
+Note that `vite dev` does not serve `/api` — use `vercel dev` or a deployment to
+exercise this endpoint locally.
+
 Currently, two official plugins are available:
 
 - [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)

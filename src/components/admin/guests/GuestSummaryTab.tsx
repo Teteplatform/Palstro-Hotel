@@ -10,6 +10,9 @@ import { FollowUpNotices } from '../FollowUpNotices';
 import { GuestStaysTable, type StayAction } from './GuestStaysTable';
 import { CancelPanel, CheckInPanel, CheckOutPanel } from './StayConfirmPanels';
 import { StandaloneEntryPanel } from './StandaloneEntryPanel';
+import { SendStatementEmailDialog } from '../statement/SendStatementEmailDialog';
+import type { StatementData } from '../../../lib/statement';
+import type { StatementTarget } from '../../../lib/statementLoad';
 import type { GuestAccountSummary, GuestStayRow } from '../../../types/guestLedger';
 
 // THE SUMMARY TAB (2.txt §2) — the guest's account as it stands RIGHT NOW: six
@@ -108,6 +111,13 @@ export function GuestSummaryTab({
   onAccountChanged,
 }: GuestSummaryTabProps) {
   const [panel, setPanel] = useState<PanelState>(null);
+  // The stay whose statement is being emailed, with the document already
+  // assembled. Not a PanelState: the panels above are inline forms that replace
+  // the action strip, and this is a modal over the whole page.
+  const [emailing, setEmailing] = useState<{
+    statement: StatementData;
+    target: StatementTarget;
+  } | null>(null);
   // ONE exporter for the whole table: the target travels with each call, because
   // a hook per row is not something React allows. Opening a row's menu primes
   // that stay's document (see onActionsOpen below).
@@ -190,6 +200,23 @@ export function GuestSummaryTab({
         void statementExport.run('whatsapp', {
           kind: 'stay',
           bookingId: row.booking_id,
+        });
+      },
+    });
+    // EMAIL, the third way this document reaches the guest. It opens a dialog
+    // rather than sending, because the address on file is exactly the thing that
+    // is wrong often enough to matter — see SendStatementEmailDialog. The
+    // document is resolved FIRST (the menu opening already primed it) so the
+    // dialog can show what is about to be sent and to whom.
+    actions.push({
+      key: 'statement-email',
+      label: 'Email statement',
+      onSelect: () => {
+        const target: StatementTarget = { kind: 'stay', bookingId: row.booking_id };
+        void statementExport.prepare(target).then((statement) => {
+          // A null means the document could not be built and prepare() has
+          // already said why (rule 11); there is nothing to open a dialog on.
+          if (statement) setEmailing({ statement, target });
         });
       },
     });
@@ -424,6 +451,18 @@ export function GuestSummaryTab({
             timezone={timezone}
             onDone={afterMutation}
             onCancel={() => setPanel(null)}
+          />
+        ) : null}
+
+        {/* Mounted only while a statement is being emailed. `property` is
+            non-null here by construction — the exporter above needs it too — and
+            the dialog is not offered before the active property resolves. */}
+        {emailing && property ? (
+          <SendStatementEmailDialog
+            statement={emailing.statement}
+            target={emailing.target}
+            property={property}
+            onClose={() => setEmailing(null)}
           />
         ) : null}
 

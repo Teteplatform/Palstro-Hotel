@@ -6,8 +6,20 @@
     "types": ["node"],
     "skipLibCheck": true,
 
-    /* Bundler mode */
-    "module": "nodenext",
+    /* Bundler mode.
+       `api/` holds Vercel serverless functions, which Vercel compiles with
+       esbuild — a BUNDLER, not Node's own ESM loader. This project therefore
+       resolves the way esbuild does, and that is what lets a function import the
+       app's own extensionless modules (lib/statement, lib/export/…) so an
+       emailed statement is assembled and rendered by the SAME code the browser
+       uses. Under "nodenext" every one of those imports would need a `.ts`
+       extension the browser build does not write.
+       NOTE the deliberate omission of "DOM" from `lib` above: it is what stops a
+       serverless function from reaching for `document`, a Blob or a browser-only
+       module by accident. Such an import fails to type-check here rather than at
+       3am in production. */
+    "module": "esnext",
+    "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
     "moduleDetection": "force",

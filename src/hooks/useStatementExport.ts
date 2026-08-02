@@ -60,6 +60,14 @@ export interface UseStatementExportResult {
   // native share must be reached while the user's gesture is still live, and a
   // read in the middle of the handler is what spends it.
   prime: (target: StatementTarget) => void;
+  // The assembled document, for an action that needs it IN HAND rather than
+  // written to a file — the email dialog, which shows the guest's address and
+  // the document's reference before anything is sent. Resolves through the same
+  // cache as an export, so a menu that primed on open answers instantly.
+  //
+  // Returns null when the document could not be built, having already said why
+  // (rule 11) — the caller simply does not open its dialog.
+  prepare: (target: StatementTarget) => Promise<StatementData | null>;
 }
 
 // What to say when the document structurally does not exist. Deliberately
@@ -218,7 +226,21 @@ export function useStatementExport({
     [busy, resolve, toast],
   );
 
-  return { run, busy, prime };
+  const prepare = useCallback(
+    async (target: StatementTarget): Promise<StatementData | null> => {
+      try {
+        return await resolve(target);
+      } catch (e) {
+        toast.error(
+          e instanceof StatementUnavailableError ? e.message : humanizeError(e),
+        );
+        return null;
+      }
+    },
+    [resolve, toast],
+  );
+
+  return { run, busy, prime, prepare };
 }
 
 // ---------------------------------------------------------------------------

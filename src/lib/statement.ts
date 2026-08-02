@@ -1,12 +1,9 @@
-import { supabase } from './supabase';
 import { parseNumeric } from './format';
 import { brandingString } from './branding';
-import { fetchPropertyMedia } from './mediaAssets';
-import { buildMediaMap, mediaUrl } from './mediaUrl';
 import { formatPropertyAddress } from './address';
 import { paymentMethodLabel } from './folioLabels';
 import { describeStayNights } from './stayNights';
-import type { Property, PropertyBranding, PropertySettings } from '../types/tenant';
+import type { Property, PropertyBranding } from '../types/tenant';
 import type { Guest } from '../types/guest';
 import type { BookingDetail } from '../types/booking';
 import type {
@@ -26,10 +23,20 @@ import type {
 //
 // assembleStatement() turns the rows the folio engine already returns into ONE
 // plain object describing the document. It is pure: no React, no supabase, no
-// formatting. The screen renders it; the coming PDF / WhatsApp / Excel / Word
+// formatting. The screen renders it; the PDF / WhatsApp / Excel / Word
 // exporters serialise the SAME object. That is the whole point — a second
 // exporter that re-derived "what goes on the bill" from folio rows would be a
 // second bill, and the day the two disagreed nothing would error.
+//
+// ⚠ THIS FILE MUST IMPORT NOTHING BROWSER-BOUND. It is compiled into the
+// SERVERLESS FUNCTION that emails a statement (api/statements/email.ts) as well
+// as into the browser bundle, so the emailed PDF is assembled by this code and
+// not by a second implementation. `lib/supabase` reads `import.meta.env` at
+// module scope and would throw the moment Node loaded it, so the two reads that
+// used to live at the bottom of this file (the standalone-folio lookup and the
+// letterhead branding) now live in lib/statementLoad.ts with the rest of the
+// browser's reads. Keep it that way: a supabase import here breaks the email
+// endpoint at load time, not at call time.
 //
 // SO, TWO RULES FOR ANYONE EXTENDING THIS:
 //   1. Everything a reader sees on the statement is a field of StatementData.
@@ -526,75 +533,6 @@ function fileNamePart(value: string, maxLength = 40): string {
     .replace(/-+$/g, '');
 }
 
-// ---------------------------------------------------------------------------
-// Reads the statement needs that no existing helper covers
-// ---------------------------------------------------------------------------
-
-// The guest's ONE standalone (non-resident) folio at this property, READ ONLY.
-//
-// Deliberately NOT open_guest_folio (lib/guestLedger): that is a get-or-create,
-// and opening a folio as a side effect of viewing a document would be a write
-// performed by a read. A guest with no non-resident tab has no statement to
-// print, and null is exactly that answer.
-//
-// `booking_id is null` is the discriminator 028 §1's folios_owner_check
-// guarantees: exactly one of booking_id / guest_id is set, and the partial
-// unique index folios_guest_standalone_uniq makes a second one impossible — so
-// maybeSingle() cannot throw on multiple rows.
-export async function fetchStandaloneFolioForGuest(
-  guestId: string,
-  tenantId: string,
-  propertyId: string,
-): Promise<Folio | null> {
-  const { data, error } = await supabase
-    .from('folios')
-    .select('*')
-    .eq('guest_id', guestId)
-    .is('booking_id', null)
-    .eq('tenant_id', tenantId) // rule 19
-    .eq('property_id', propertyId) // rule 19
-    .maybeSingle();
-
-  if (error) throw error;
-  return (data ?? null) as Folio | null;
-}
-
-export interface StatementBranding {
-  branding: PropertyBranding;
-  logoUrl: string | null;
-}
-
-// The property's branding plus its logo resolved to a printable URL.
-//
-// The 'card' variant, not usePropertyLogo's 'thumb': that hook feeds a 64px
-// sidebar brand, and a thumb enlarged into a document header prints soft. Card
-// is the smallest variant that survives A4 (§ storage: one id resolves to any
-// variant, so this costs no extra row — mediaUrl derives the sibling path).
-//
-// A failure here is NOT swallowed the way usePropertyLogo swallows it: the
-// sidebar logo is chrome, but this is the letterhead of a document the guest
-// keeps, and a header that silently loses the hotel's identity is worth
-// surfacing. The caller decides whether to block on it.
-export async function fetchStatementBranding(
-  propertyId: string,
-  tenantId: string,
-): Promise<StatementBranding> {
-  const [settingsRes, mediaRows] = await Promise.all([
-    supabase
-      .from('property_settings')
-      .select('branding')
-      .eq('property_id', propertyId)
-      .maybeSingle<Pick<PropertySettings, 'branding'>>(),
-    fetchPropertyMedia(propertyId, tenantId),
-  ]);
-  if (settingsRes.error) throw settingsRes.error;
-
-  const branding: PropertyBranding = settingsRes.data?.branding ?? {};
-  const logoId = brandingString(branding, 'logo_url');
-  return {
-    branding,
-    // null — never a broken image — when no logo is set or the stored id is
-    // dangling. The renderer falls back to the property name as a wordmark.
-    logoUrl: mediaUrl(buildMediaMap(mediaRows), logoId, 'card'),
-  };
-}
+// The two reads this file used to carry (the guest's standalone folio, and the
+// letterhead branding) moved to lib/statementLoad.ts — see the header. Nothing
+// in this file may touch supabase again.

@@ -1,4 +1,5 @@
 import { bytesToBase64 } from './download';
+import type { StatementLogo } from './statementLogo';
 
 // THE LETTERHEAD LOGO, TURNED INTO SOMETHING A DOCUMENT FORMAT WILL ACCEPT.
 //
@@ -16,16 +17,8 @@ import { bytesToBase64 } from './download';
 // better served by a statement with a name at the top than by an export that
 // refused to run because a picture would not load.
 
-export interface StatementLogo {
-  // For pdfmake, which accepts only a data URL for an image node.
-  dataUrl: string;
-  // For the Word package, which stores the raw bytes as a part.
-  png: Uint8Array;
-  // Pixel dimensions of the re-encoded image, needed to size the Word drawing
-  // (which is specified in EMUs) without distorting the logo.
-  width: number;
-  height: number;
-}
+// The shape produced here is declared in ./statementLogo — see that file for why
+// a type the server also uses may not sit beside a canvas.
 
 // The widest the letterhead logo is ever drawn is about 140pt. Decoding at 3x
 // that keeps it crisp on a 300dpi print without carrying a 2000px hero into a

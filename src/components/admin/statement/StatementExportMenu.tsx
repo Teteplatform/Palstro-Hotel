@@ -1,20 +1,35 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { ChevronDownIcon, DownloadIcon, WhatsappIcon } from '../../ui/icons';
+import {
+  ChevronDownIcon,
+  DownloadIcon,
+  MailIcon,
+  WhatsappIcon,
+} from '../../ui/icons';
 import { useActiveProperty } from '../../../hooks/useActiveProperty';
+import { useToast } from '../../ui/Toast';
 import {
   useStatementExport,
   type StatementExportFormat,
 } from '../../../hooks/useStatementExport';
+import { SendStatementEmailDialog } from './SendStatementEmailDialog';
 import type { StatementData } from '../../../lib/statement';
 import type { StatementTarget } from '../../../lib/statementLoad';
 import type { Property } from '../../../types/tenant';
 
 // THE EXPORT / SHARE CONTROL.
 //
-// One button, four ways out of the document: PDF, Excel, Word and WhatsApp. It
-// sits beside Print rather than replacing it — printing makes paper for the file
-// and for a guest standing at the desk; these make a FILE, which is what gets
-// emailed, attached, or sent to a company's accounts department.
+// One button, five ways out of the document: Email, PDF, Excel, Word and
+// WhatsApp. It sits beside Print rather than replacing it — printing makes paper
+// for the file and for a guest standing at the desk; these make a FILE, which is
+// what gets attached or sent to a company's accounts department.
+//
+// EMAIL IS FIRST, AND IT IS NOT AN EXPORT. The other four hand a file to the
+// person at the keyboard; email sends the document to the GUEST, which is what a
+// desk is usually trying to do when it opens this menu at all. It is also the
+// only item that leaves the browser: the PDF is generated on the server from the
+// folio (api/statements/email.ts), because a browser cannot send mail and
+// because a bill assembled in the tab that asks for it is a bill a tampered tab
+// could rewrite.
 //
 // IT WORKS THE SAME ON A PHONE. The menu is anchored to the right edge and sized
 // in rems, so at 360px it opens inside the viewport instead of pushing the page
@@ -45,17 +60,24 @@ interface StatementExportMenuProps {
   tone?: 'default' | 'quiet';
 }
 
+// Email is not an export FORMAT — nothing is written to the user's machine, and
+// the action opens a dialog rather than producing a file — so it is a fifth
+// ACTION on the same menu. It belongs here because this is where a person
+// already looks for "get this document to the guest".
+type MenuAction = StatementExportFormat | 'email';
+
 interface MenuItem {
-  format: StatementExportFormat;
+  action: MenuAction;
   label: string;
   hint: string;
 }
 
 const ITEMS: MenuItem[] = [
-  { format: 'pdf', label: 'PDF', hint: 'The statement as issued, ready to send' },
-  { format: 'xlsx', label: 'Excel', hint: 'Figures as numbers, for checking' },
-  { format: 'docx', label: 'Word', hint: 'Editable copy' },
-  { format: 'whatsapp', label: 'WhatsApp', hint: 'Send the guest a summary' },
+  { action: 'email', label: 'Email', hint: 'Send the guest the PDF, to their address on file' },
+  { action: 'pdf', label: 'PDF', hint: 'The statement as issued, ready to send' },
+  { action: 'xlsx', label: 'Excel', hint: 'Figures as numbers, for checking' },
+  { action: 'docx', label: 'Word', hint: 'Editable copy' },
+  { action: 'whatsapp', label: 'WhatsApp', hint: 'Send the guest a summary' },
 ];
 
 export function StatementExportMenu({
@@ -65,13 +87,22 @@ export function StatementExportMenu({
   tone = 'default',
 }: StatementExportMenuProps) {
   const [open, setOpen] = useState(false);
+  // The document the email dialog is open on. Held rather than re-read, so what
+  // the dialog names (and what the endpoint is asked for) is the same document
+  // this menu resolved.
+  const [emailing, setEmailing] = useState<StatementData | null>(null);
+  // The email action has to LOAD before it can open its dialog on a surface that
+  // does not already hold the statement, and that wait needs a label of its own —
+  // `busy` belongs to the file exports.
+  const [preparingEmail, setPreparingEmail] = useState(false);
   const wrapper = useRef<HTMLDivElement | null>(null);
   const menuId = useId();
   const active = useActiveProperty();
+  const toast = useToast();
   // The context's property is the same object the pages pass down; either is
   // fine, and one of them is always there on an admin route.
   const resolvedProperty = property ?? active.property;
-  const { run, busy, prime } = useStatementExport({
+  const { run, busy, prime, prepare } = useStatementExport({
     statement,
     property: resolvedProperty,
   });
@@ -92,9 +123,30 @@ export function StatementExportMenu({
     };
   }, [open]);
 
-  const busyLabel = busy
-    ? (ITEMS.find((item) => item.format === busy)?.label ?? null)
-    : null;
+  const busyLabel = preparingEmail
+    ? 'Email'
+    : busy
+      ? (ITEMS.find((item) => item.action === busy)?.label ?? null)
+      : null;
+  const anyBusy = busy !== null || preparingEmail;
+
+  async function handleEmail() {
+    if (anyBusy) return;
+    if (!resolvedProperty) {
+      toast.error('No property is active yet. Please wait a moment and try again.');
+      return;
+    }
+    setPreparingEmail(true);
+    try {
+      // prepare() surfaces its own failure (a stay with no folio, a subject that
+      // does not resolve) and returns null, so there is nothing to report here —
+      // the dialog simply does not open on a document that does not exist.
+      const doc = await prepare(target);
+      if (doc) setEmailing(doc);
+    } finally {
+      setPreparingEmail(false);
+    }
+  }
 
   return (
     <div ref={wrapper} className="relative print:hidden">
@@ -132,19 +184,25 @@ export function StatementExportMenu({
         >
           {ITEMS.map((item) => (
             <button
-              key={item.format}
+              key={item.action}
               type="button"
               role="menuitem"
-              disabled={busy !== null}
+              disabled={anyBusy}
               onClick={() => {
                 setOpen(false);
-                void run(item.format, target);
+                if (item.action === 'email') {
+                  void handleEmail();
+                  return;
+                }
+                void run(item.action, target);
               }}
               className="flex w-full items-start gap-3 border-b border-sand-border/60 px-4 py-3 text-left transition-colors last:border-b-0 hover:bg-sand focus-visible:bg-sand focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-60"
             >
               <span className="mt-0.5 text-charcoal-muted">
-                {item.format === 'whatsapp' ? (
+                {item.action === 'whatsapp' ? (
                   <WhatsappIcon className="h-4 w-4" />
+                ) : item.action === 'email' ? (
+                  <MailIcon className="h-4 w-4" />
                 ) : (
                   <DownloadIcon className="h-4 w-4" />
                 )}
@@ -153,8 +211,9 @@ export function StatementExportMenu({
                 <span className="block text-sm font-semibold text-charcoal">
                   {item.label}
                 </span>
-                {/* Four formats is enough for "which one do I want?" to be a real
-                    question at the desk, so each says what it is for. */}
+                {/* Five ways out of one document is enough for "which one do I
+                    want?" to be a real question at the desk, so each says what it
+                    is for. */}
                 <span className="block text-xs leading-relaxed text-charcoal-muted">
                   {item.hint}
                 </span>
@@ -162,6 +221,17 @@ export function StatementExportMenu({
             </button>
           ))}
         </div>
+      ) : null}
+
+      {/* Mounted only while sending. The dialog is where the address is
+          confirmed or corrected — the menu never sends anything by itself. */}
+      {emailing && resolvedProperty ? (
+        <SendStatementEmailDialog
+          statement={emailing}
+          target={target}
+          property={resolvedProperty}
+          onClose={() => setEmailing(null)}
+        />
       ) : null}
     </div>
   );

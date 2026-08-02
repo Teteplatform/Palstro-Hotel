@@ -1,5 +1,5 @@
 import type { StatementData } from '../statement';
-import type { StatementLogo } from './logo';
+import type { StatementLogo } from './statementLogo';
 import {
   CONTENT_TYPES_NS,
   OFFICE_DOCUMENT_REL,

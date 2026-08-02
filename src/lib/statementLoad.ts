@@ -5,16 +5,16 @@ import {
   fetchFolioPayments,
   fetchFolioTotals,
 } from './folio';
-import {
-  assembleStatement,
-  fetchStandaloneFolioForGuest,
-  fetchStatementBranding,
-  type StatementData,
-} from './statement';
+import { supabase } from './supabase';
+import { assembleStatement, type StatementData } from './statement';
 import { fetchBookingDetail } from './bookings';
 import { fetchGuestById } from './guests';
+import { brandingString } from './branding';
+import { fetchPropertyMedia } from './mediaAssets';
+import { buildMediaMap, mediaUrl } from './mediaUrl';
 import { todayIsoInZone } from './date';
-import type { Property } from '../types/tenant';
+import type { Folio } from '../types/folio';
+import type { Property, PropertyBranding, PropertySettings } from '../types/tenant';
 
 // READING ONE STATEMENT, ONCE, FOR EVERY SURFACE THAT NEEDS IT.
 //
@@ -32,6 +32,16 @@ import type { Property } from '../types/tenant';
 //
 // NOTHING IS CACHED (rule 6). Every call re-reads folio_totals and the lines
 // from scratch; there is no local arithmetic on any balance and no patching.
+//
+// THIS IS THE BROWSER'S LOADER, AND THE ONLY ONE THAT MAY TOUCH lib/supabase.
+// The email endpoint (api/statements/email.ts) needs the same StatementSource
+// from a Node process holding the caller's JWT, and lib/supabase is a browser
+// singleton built from import.meta.env — so api/_lib/statementSource.ts restates
+// these reads against a request-scoped client. THE TWO MUST STAY IN STEP: any
+// filter added or removed below belongs there too, and vice versa. What is NOT
+// duplicated is the part that decides what the document says — assembleStatement
+// and the PDF definition are imported by both, so the emailed bill and the
+// downloaded one cannot disagree on a single figure.
 
 export type StatementTarget =
   | { kind: 'stay'; bookingId: string }
@@ -123,5 +133,110 @@ export async function loadStatement(
       totals,
     }),
     missing: null,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Reads the statement needs that no other helper covers
+// ---------------------------------------------------------------------------
+// Both moved here from lib/statement.ts when the email endpoint arrived: that
+// file is now compiled into a Node function as well as into the browser, and it
+// may no longer import lib/supabase (see its header).
+
+// The guest's ONE standalone (non-resident) folio at this property, READ ONLY.
+//
+// Deliberately NOT open_guest_folio (lib/guestLedger): that is a get-or-create,
+// and opening a folio as a side effect of viewing a document would be a write
+// performed by a read. A guest with no non-resident tab has no statement to
+// print, and null is exactly that answer.
+//
+// `booking_id is null` is the discriminator 028 §1's folios_owner_check
+// guarantees: exactly one of booking_id / guest_id is set, and the partial
+// unique index folios_guest_standalone_uniq makes a second one impossible — so
+// maybeSingle() cannot throw on multiple rows.
+export async function fetchStandaloneFolioForGuest(
+  guestId: string,
+  tenantId: string,
+  propertyId: string,
+): Promise<Folio | null> {
+  const { data, error } = await supabase
+    .from('folios')
+    .select('*')
+    .eq('guest_id', guestId)
+    .is('booking_id', null)
+    .eq('tenant_id', tenantId) // rule 19
+    .eq('property_id', propertyId) // rule 19
+    .maybeSingle();
+
+  if (error) throw error;
+  return (data ?? null) as Folio | null;
+}
+
+// WHOSE record a statement belongs to. A standalone statement IS a guest's
+// account, so the target already carries it; a stay statement's guest is the
+// booking's, and the assembled document deliberately does not carry the id (it
+// prints a name, not a key — see lib/statement's rule that every field is
+// something a reader sees).
+//
+// Read only when something needs to WRITE to that guest — today, saving a
+// corrected email address from the send dialog — so the common path spends
+// nothing. Scoped to the tenant and property (rule 19), live rows only (rule 5).
+export async function resolveStatementGuestId(
+  target: StatementTarget,
+  tenantId: string,
+  propertyId: string,
+): Promise<string | null> {
+  if (target.kind === 'standalone') return target.guestId;
+
+  const { data, error } = await supabase
+    .from('bookings')
+    .select('guest_id')
+    .eq('id', target.bookingId)
+    .eq('tenant_id', tenantId) // rule 19
+    .eq('property_id', propertyId) // rule 19
+    .is('deleted_at', null) // rule 5
+    .maybeSingle<{ guest_id: string | null }>();
+
+  if (error) throw error;
+  return data?.guest_id ?? null;
+}
+
+export interface StatementBranding {
+  branding: PropertyBranding;
+  logoUrl: string | null;
+}
+
+// The property's branding plus its logo resolved to a printable URL.
+//
+// The 'card' variant, not usePropertyLogo's 'thumb': that hook feeds a 64px
+// sidebar brand, and a thumb enlarged into a document header prints soft. Card
+// is the smallest variant that survives A4 (§ storage: one id resolves to any
+// variant, so this costs no extra row — mediaUrl derives the sibling path).
+//
+// A failure here is NOT swallowed the way usePropertyLogo swallows it: the
+// sidebar logo is chrome, but this is the letterhead of a document the guest
+// keeps, and a header that silently loses the hotel's identity is worth
+// surfacing. The caller decides whether to block on it.
+export async function fetchStatementBranding(
+  propertyId: string,
+  tenantId: string,
+): Promise<StatementBranding> {
+  const [settingsRes, mediaRows] = await Promise.all([
+    supabase
+      .from('property_settings')
+      .select('branding')
+      .eq('property_id', propertyId)
+      .maybeSingle<Pick<PropertySettings, 'branding'>>(),
+    fetchPropertyMedia(propertyId, tenantId),
+  ]);
+  if (settingsRes.error) throw settingsRes.error;
+
+  const branding: PropertyBranding = settingsRes.data?.branding ?? {};
+  const logoId = brandingString(branding, 'logo_url');
+  return {
+    branding,
+    // null — never a broken image — when no logo is set or the stored id is
+    // dangling. The renderer falls back to the property name as a wordmark.
+    logoUrl: mediaUrl(buildMediaMap(mediaRows), logoId, 'card'),
   };
 }

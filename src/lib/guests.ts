@@ -230,6 +230,33 @@ export async function updateGuestPreferences(
   return data as Guest;
 }
 
+// Save just the email address, from the "send the statement by email" dialog
+// (2.txt §UI: offer to save a corrected address to the guest record). ONE column,
+// for the same reason updateGuestPreferences is one column: a desk correcting an
+// address must not be able to blank a passport number by writing back a form it
+// never showed.
+//
+// Same guard as every other guest correction — the admin-only
+// `guests_member_update` policy from 014. The dialog offers the save only to an
+// owner or manager; the database refuses it regardless (rule 19).
+export async function updateGuestEmail(
+  guestId: string,
+  tenantId: string,
+  email: string,
+): Promise<Guest> {
+  const { data, error } = await supabase
+    .from('guests')
+    .update({ email: emptyToNull(email) })
+    .eq('id', guestId)
+    .eq('tenant_id', tenantId) // rule 19
+    .is('deleted_at', null) // rule 5
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data as Guest;
+}
+
 function emptyToNull(value: string | null | undefined): string | null {
   const trimmed = (value ?? '').trim();
   return trimmed.length > 0 ? trimmed : null;
