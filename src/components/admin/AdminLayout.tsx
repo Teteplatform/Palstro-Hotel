@@ -148,7 +148,10 @@ export function AdminLayout() {
           />
         </header>
 
-        <main className="px-4 py-6 sm:px-6 lg:px-8">
+        {/* print:p-0 — the screen's gutters are chrome too. On paper the @page
+            margin (index.css) positions the sheet, and adding this padding on
+            top of it would push a statement or a ledger off its own margins. */}
+        <main className="px-4 py-6 sm:px-6 lg:px-8 print:p-0">
           <Outlet />
         </main>
       </div>

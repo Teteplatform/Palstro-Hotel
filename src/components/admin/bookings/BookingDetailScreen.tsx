@@ -201,20 +201,36 @@ export function BookingDetailScreen({
               Billed to {detail.company.name}
             </span>
           ) : null}
-          {/* THIS is where a SINGLE stay is printed (build 2 §1) — the guest
-              ledger prints the whole account, this prints one bill. The
-              browser's own dialog, no PDF library and no second renderer: the
-              page on screen IS the page that prints, so the two can never
-              disagree. Every control is print:hidden, so it comes out as the
-              reservation and its bill alone. */}
+          {/* TWO PRINTABLE THINGS, AND THEY ARE NOT THE SAME DOCUMENT.
+              (3.txt §"Access")
+
+              GUEST STATEMENT — the clean, guest-facing bill for this stay, on
+              its own route. Voided lines, discount approvals, posting dates and
+              the per-line tools are all absent from it: it is what the desk
+              hands or sends to the guest. It is the primary action here, which
+              is why it is the accent control.
+
+              PRINT THIS PAGE — the INTERNAL working copy: this page as it
+              stands, reservation panel and full folio, void trail and all. Kept
+              because a stay still needs to be printable for the file, and
+              renamed from "Print bill" so nobody hands it to a guest thinking
+              it is one. */}
           {detail ? (
-            <button
-              type="button"
-              onClick={() => window.print()}
-              className="ml-auto rounded-full border border-sand-border bg-white/70 px-4 py-1 text-xs font-semibold text-charcoal transition-colors hover:bg-sand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-cream print:hidden"
-            >
-              Print bill
-            </button>
+            <span className="ml-auto flex flex-wrap items-center gap-2 print:hidden">
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="rounded-full border border-sand-border bg-white/70 px-4 py-1 text-xs font-semibold text-charcoal transition-colors hover:bg-sand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-cream"
+              >
+                Print this page
+              </button>
+              <Link
+                to={`/admin/${propertySlug}/bookings/${bookingId}/statement`}
+                className="rounded-full bg-accent px-4 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
+              >
+                Guest statement
+              </Link>
+            </span>
           ) : null}
         </div>
       </header>

@@ -173,6 +173,55 @@
   }
 }
 
+/* ---- Print: the guest-facing statement -----------------------------------
+   The statement (3.txt) is ONE component: the page on screen IS the page that
+   prints, and print CSS only hides the chrome around it (the admin sidebar,
+   header and every control carry `print:hidden`). There is deliberately no
+   second renderer that could disagree with the screen.
+
+   Everything below is page setup, not styling — no colour, no type and no
+   spacing decision is duplicated here. The document's own appearance lives in
+   StatementDocument, so what a guest reads on a phone and what they are handed
+   on paper are the same design.
+
+   White, not cream: the theme's warm background is a screen surface. Most
+   browsers drop background colours when printing anyway, so leaving it would
+   mean the page looked one way in the preview and another on paper. `white` is
+   a print reset, not a brand value — no rule-17 token belongs here. */
+@media print {
+  @page {
+    size: A4;
+    /* Generous enough for a letterhead and a signature line, tight enough that
+       a one-night bill still fits on a single sheet. */
+    margin: 14mm;
+  }
+
+  body {
+    background-color: white;
+  }
+
+  .statement-sheet {
+    /* The sheet IS the page: the browser's own margin box positions it. */
+    width: 100%;
+    max-width: none;
+  }
+
+  /* A charge line split across two sheets is a line a guest cannot read, and a
+     balance block split from its label is worse. Both stay whole. */
+  .statement-sheet tr,
+  .statement-sheet tbody,
+  .statement-sheet section,
+  .statement-sheet footer {
+    break-inside: avoid;
+  }
+
+  /* A bill that runs to a second sheet repeats its column headings there,
+     rather than presenting a page of unlabelled figures. */
+  .statement-sheet thead {
+    display: table-header-group;
+  }
+}
+
 /* ---- Base ---------------------------------------------------------------- */
 @layer base {
   html {

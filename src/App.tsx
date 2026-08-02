@@ -26,6 +26,7 @@ import { BookingsPage } from './pages/admin/BookingsPage';
 import { NewBookingPage } from './pages/admin/NewBookingPage';
 import { BookingDetailPage } from './pages/admin/BookingDetailPage';
 import { GuestDetailPage } from './pages/admin/GuestDetailPage';
+import { StatementPage } from './pages/admin/StatementPage';
 import { ModuleNotAvailablePage } from './pages/admin/ModuleNotAvailablePage';
 
 /**
@@ -176,6 +177,20 @@ const router = createBrowserRouter([
                   </ModuleGuard>
                 ),
               },
+              // THE GUEST-FACING STATEMENT for one stay (3.txt) — the printable
+              // bill the desk hands or sends to the guest. Its own route, not a
+              // tab or a modal, so it can be linked to, refreshed into and
+              // PRINTED on its own: the admin chrome is print:hidden, so what
+              // comes out of the printer is the document alone. Same 'bookings'
+              // guard as the stay it belongs to.
+              {
+                path: 'bookings/:bookingId/statement',
+                element: (
+                  <ModuleGuard module="bookings">
+                    <StatementPage />
+                  </ModuleGuard>
+                ),
+              },
               // One guest, as their own page (2.txt §2): stay history across
               // every booking, and the running ledger over those stays. Guarded
               // by the 'guests' module — the same module the (still coming_soon)
@@ -189,6 +204,19 @@ const router = createBrowserRouter([
                 element: (
                   <ModuleGuard module="guests">
                     <GuestDetailPage />
+                  </ModuleGuard>
+                ),
+              },
+              // The same statement for a guest's NON-RESIDENT account (028 §2):
+              // the charges and payments that belong to them but to no stay. One
+              // document, adapted — no room, no dates, no nights — never a
+              // second renderer. Guarded by 'guests', the module its subject
+              // belongs to.
+              {
+                path: 'guests/:guestId/statement',
+                element: (
+                  <ModuleGuard module="guests">
+                    <StatementPage />
                   </ModuleGuard>
                 ),
               },

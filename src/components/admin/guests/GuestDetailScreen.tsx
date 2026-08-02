@@ -100,6 +100,22 @@ export function GuestDetailScreen({
     navigate(`/admin/${propertySlug}/bookings/${bookingId}#booking-folio`);
   }
 
+  // THE GUEST-FACING STATEMENT (3.txt) — the printable bill for ONE stay, as
+  // opposed to openStay's internal folio. Both are reachable from the same
+  // kebab, deliberately: the desk needs the working document while the guest is
+  // at the counter and the clean one to hand over, and making them two menu
+  // items with two plain names is how a receptionist tells them apart at 02:00.
+  function openStayStatement(bookingId: string) {
+    navigate(`/admin/${propertySlug}/bookings/${bookingId}/statement`);
+  }
+
+  // The same document for the guest's NON-RESIDENT account (028 §2) — their
+  // charges and payments that belong to no stay. It adapts: no room, no dates,
+  // no nights.
+  function openStandaloneStatement() {
+    navigate(`/admin/${propertySlug}/guests/${guestId}/statement`);
+  }
+
   const backHref = `/admin/${propertySlug}/bookings`;
 
   return (
@@ -192,6 +208,8 @@ export function GuestDetailScreen({
                   onPageChange={account.setPage}
                   onPageSizeChange={account.setPageSize}
                   onOpenStay={openStay}
+                  onOpenStayStatement={openStayStatement}
+                  onOpenStandaloneStatement={openStandaloneStatement}
                   onAccountChanged={account.reload}
                 />
               </div>

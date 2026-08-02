@@ -9,6 +9,16 @@ import type { PropertyBranding } from '../types/tenant';
 //   logo_url, tagline, hero_images[], about_text, about_image, amenities[],
 //   gallery_images[], directions, social{}
 //
+// Also read by the GUEST-FACING STATEMENT (lib/statement), which prints the
+// property's own closing copy rather than inventing any (rule 17):
+//   statement_thank_you  — the closing line; falls back to a neutral default.
+//   statement_note       — payment terms, bank details, anything the property
+//                          wants on the foot of a bill. Omitted when unset.
+// ⚠ Both are PUBLIC: property_settings carries an anon read policy for the guest
+// site and RLS cannot hide a column, so anything written here is world-readable.
+// That is acceptable for copy printed on a bill the guest walks out with;
+// genuinely private finance config belongs on property_finance_settings (021 §3).
+//
 // NOT here: address, phone, email. Those moved to first-class properties columns
 // in 003 because invoices/receipts/tax documents read them too — branding is
 // presentation-only. directions and social links stay: they are genuinely

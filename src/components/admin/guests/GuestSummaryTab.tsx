@@ -54,6 +54,11 @@ interface GuestSummaryTabProps {
   onPageChange: (page: number) => void;
   onPageSizeChange: (size: number) => void;
   onOpenStay: (bookingId: string) => void;
+  // Opens the GUEST-FACING statement for one stay — the clean printable bill,
+  // as opposed to onOpenStay's internal folio (3.txt).
+  onOpenStayStatement: (bookingId: string) => void;
+  // The same document for the guest's non-resident account.
+  onOpenStandaloneStatement: () => void;
   onAccountChanged: () => Promise<void> | void;
 }
 
@@ -96,6 +101,8 @@ export function GuestSummaryTab({
   onPageChange,
   onPageSizeChange,
   onOpenStay,
+  onOpenStayStatement,
+  onOpenStandaloneStatement,
   onAccountChanged,
 }: GuestSummaryTabProps) {
   const [panel, setPanel] = useState<PanelState>(null);
@@ -139,6 +146,18 @@ export function GuestSummaryTab({
       key: 'bill',
       label: 'Open full bill',
       onSelect: () => onOpenStay(row.booking_id),
+    });
+    // THE GUEST-FACING BILL (3.txt), beside the internal one. Two entries, two
+    // plain names: "Open full bill" is the working document with the void trail
+    // and the per-line tools; "Statement" is the clean printable page the guest
+    // is handed or sent. Offered on EVERY stay, whatever its status — a folio
+    // with nothing on it prints an honest empty statement, and a checked-out
+    // guest asking for their bill a week later is the commonest reason anyone
+    // opens this menu at all.
+    actions.push({
+      key: 'statement',
+      label: 'Statement',
+      onSelect: () => onOpenStayStatement(row.booking_id),
     });
     // CHECK IN, on the guest home (build 2 §1) — the front desk pulls up the
     // person, not the reservation, so this is where a stay begins. It NEVER
@@ -279,13 +298,34 @@ export function GuestSummaryTab({
             Stays
           </h2>
           {panel === null ? (
-            <button
-              type="button"
-              onClick={() => setPanel({ kind: 'standalone' })}
-              className="rounded-full border border-sand-border bg-white/70 px-4 py-2 text-xs font-semibold text-charcoal transition-colors hover:bg-sand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-cream print:hidden"
-            >
-              Standalone charge / payment
-            </button>
+            <div className="flex flex-wrap items-center gap-2 print:hidden">
+              {/* The non-resident account's own statement (3.txt) — the same
+                  document, adapted: no room, no dates, no nights.
+
+                  SHOWN ONLY WHEN THERE IS SOMETHING TO PRINT. standalone_count
+                  (028 §7) counts standalone CHARGES, so the rare account
+                  holding only a payment and no charge does not surface a link
+                  here; it is still reachable at the route, and the statement
+                  page says plainly when a guest has no non-resident account. A
+                  permanently visible link that usually leads to an empty page
+                  would be worse than the edge case. */}
+              {summary && summary.standaloneCount > 0 ? (
+                <button
+                  type="button"
+                  onClick={onOpenStandaloneStatement}
+                  className="rounded-full border border-sand-border bg-white/70 px-4 py-2 text-xs font-semibold text-charcoal transition-colors hover:bg-sand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
+                >
+                  Non-resident statement
+                </button>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => setPanel({ kind: 'standalone' })}
+                className="rounded-full border border-sand-border bg-white/70 px-4 py-2 text-xs font-semibold text-charcoal transition-colors hover:bg-sand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
+              >
+                Standalone charge / payment
+              </button>
+            </div>
           ) : null}
         </div>
 
