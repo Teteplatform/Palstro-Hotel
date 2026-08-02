@@ -482,13 +482,48 @@ function buildReference(
   return { reference: folio.id.slice(0, 8).toUpperCase(), referenceLabel: 'Account' };
 }
 
-// A filename stem for the coming exports (PDF / Excel / Word) and for the share
-// sheet, built from the same document the screen renders so every channel names
-// the file identically: "Statement-HH-2608-0001". Safe characters only — a
-// booking number is generated, but a filename must not depend on that.
+// A filename stem for the exports (PDF / Excel / Word) and for the share sheet,
+// built from the same document the screen renders so every channel names the
+// file identically:
+//
+//   Statement-Heledon-Hotels-and-Suites-Ada-Okoro-HH-2608-0001-2026-08-02
+//
+// PROPERTY, GUEST, DOCUMENT NUMBER, DATE — the four things somebody looking at a
+// downloads folder, or an attachment in a WhatsApp thread, needs in order to
+// know what they are holding. Never the folio's uuid: a guest who is sent
+// "9f3c1a2e-....pdf" cannot tell it from any other file, and neither can the
+// desk when they are asked for it again a month later.
+//
+// The date is the ISO issue date (the property's operating day, per the assembly)
+// rather than a formatted one, so files sort chronologically in a file listing.
 export function statementFileBase(statement: StatementData): string {
-  const safe = statement.reference.replace(/[^A-Za-z0-9._-]+/g, '-');
-  return `Statement-${safe}`;
+  return [
+    'Statement',
+    fileNamePart(statement.property.name),
+    fileNamePart(statement.guest.name),
+    fileNamePart(statement.reference),
+    statement.issueDate,
+  ]
+    .filter((part) => part.length > 0)
+    .join('-');
+}
+
+// One filename segment: accents folded, anything not a plain letter or digit
+// turned into a single hyphen, and the whole thing capped. A property name and a
+// guest name are free text a tenant typed, so nothing about them can be assumed
+// — a name with a slash in it must not become a directory separator, and a very
+// long hotel name must not push the filename past what a filesystem or a mail
+// client will accept.
+function fileNamePart(value: string, maxLength = 40): string {
+  return value
+    .normalize('NFKD')
+    // Strip the combining marks the decomposition left behind, so "Adéọlá"
+    // becomes "Adeola" rather than losing the letters entirely.
+    .replace(/\p{Diacritic}/gu, '')
+    .replace(/[^A-Za-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, maxLength)
+    .replace(/-+$/g, '');
 }
 
 // ---------------------------------------------------------------------------

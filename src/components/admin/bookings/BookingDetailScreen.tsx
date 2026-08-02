@@ -9,6 +9,7 @@ import { fetchBookingDetail } from '../../../lib/bookings';
 import { bookingStatusLabel, bookingStatusTone } from '../../../lib/bookingLabels';
 import type { BookingDetail } from '../../../types/booking';
 import { FolioBill } from '../folio/FolioBill';
+import { StatementExportMenu } from '../statement/StatementExportMenu';
 import { StayTab } from './StayTab';
 
 // THE BOOKING DETAIL PAGE — ONE STAY, ON ONE PAGE, WITH NO TABS.
@@ -224,6 +225,16 @@ export function BookingDetailScreen({
               >
                 Print this page
               </button>
+              {/* SEND THE GUEST THEIR BILL WITHOUT LEAVING THE STAY. The formats
+                  are the statement's, not this page's: the menu loads the same
+                  assembled document the statement route renders, so a PDF
+                  produced here and one produced there are the same file. The
+                  INTERNAL page above it — void trail and all — is never what
+                  gets exported. */}
+              <StatementExportMenu
+                target={{ kind: 'stay', bookingId }}
+                tone="quiet"
+              />
               <Link
                 to={`/admin/${propertySlug}/bookings/${bookingId}/statement`}
                 className="rounded-full bg-accent px-4 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-cream"

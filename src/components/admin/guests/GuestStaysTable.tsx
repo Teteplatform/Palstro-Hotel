@@ -59,6 +59,10 @@ interface GuestStaysTableProps {
   // booking's status — and every one of them is re-checked by its RPC anyway,
   // so this decides what to OFFER, never what is allowed (rule 19).
   actionsFor: (row: GuestStayRow) => StayAction[];
+  // Called when a row's action menu is opened. The caller uses it to prime
+  // anything an action will need (the statement export loads its document here),
+  // so the click that follows spends no time on a read.
+  onActionsOpen?: (row: GuestStayRow) => void;
   // Opens that stay's full detailed bill.
   onOpenStay: (bookingId: string) => void;
 }
@@ -68,6 +72,7 @@ export function GuestStaysTable({
   currency,
   loading,
   actionsFor,
+  onActionsOpen,
   onOpenStay,
 }: GuestStaysTableProps) {
   return (
@@ -155,6 +160,9 @@ export function GuestStaysTable({
                 row={row}
                 currency={currency}
                 actions={actionsFor(row)}
+                onActionsOpen={
+                  onActionsOpen ? () => onActionsOpen(row) : undefined
+                }
                 onOpen={() => onOpenStay(row.booking_id)}
               />
             ))
@@ -169,11 +177,13 @@ function StayRow({
   row,
   currency,
   actions,
+  onActionsOpen,
   onOpen,
 }: {
   row: GuestStayRow;
   currency: string;
   actions: StayAction[];
+  onActionsOpen?: () => void;
   onOpen: () => void;
 }) {
   const roomType = row.room_type_name ?? MISSING_VALUE;
@@ -196,7 +206,11 @@ function StayRow({
   return (
     <tr className="group align-top transition-colors hover:bg-sand/40">
       <td className="relative w-9 px-1 py-3 align-top">
-        <StayActionsMenu actions={actions} label={`Actions for ${row.booking_number}`} />
+        <StayActionsMenu
+          actions={actions}
+          label={`Actions for ${row.booking_number}`}
+          onOpen={onActionsOpen}
+        />
       </td>
 
       {/* The dates cell is the row's click target (it opens the bill), so the
@@ -308,9 +322,15 @@ function BalanceCell({
 function StayActionsMenu({
   actions,
   label,
+  onOpen,
 }: {
   actions: StayAction[];
   label: string;
+  // Fired when the menu is opened, so a caller can start loading anything an
+  // action will need — the statement export primes its document here, because
+  // reading it inside the click is what costs the user's gesture (and with it
+  // the native share sheet).
+  onOpen?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const wrapper = useRef<HTMLDivElement | null>(null);
@@ -340,7 +360,14 @@ function StayActionsMenu({
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label={label}
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => {
+          // Read from state rather than from a setState updater: an updater can
+          // be invoked twice in development, and priming twice would double the
+          // read.
+          const next = !open;
+          setOpen(next);
+          if (next) onOpen?.();
+        }}
         className="inline-flex h-7 w-7 items-center justify-center rounded-full text-charcoal-muted transition-colors hover:bg-sand hover:text-charcoal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-cream"
       >
         <KebabIcon className="h-4 w-4" />

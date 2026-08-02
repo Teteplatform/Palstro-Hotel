@@ -5,6 +5,10 @@ import {
 } from '../../../lib/format';
 import { formatDisplayDate } from '../../../lib/date';
 import { formatNights } from '../../../lib/bookingLabels';
+import {
+  formatStatementAmount,
+  statementBalanceLabel,
+} from '../../../lib/export/statementSections';
 import type {
   StatementData,
   StatementGroup,
@@ -45,6 +49,17 @@ import type {
 // reconcile: folio_totals excludes voided rows and a voided charge produces no
 // tax lines, so what is printed sums to what is printed. The reasoning is
 // written out in lib/statement's header.
+//
+// ---------------------------------------------------------------------------
+// THIS ORDER IS ALSO THE EXPORTS' ORDER
+// ---------------------------------------------------------------------------
+// lib/export/statementSections' statementRows() transcribes the sequence below —
+// grouped charges, the discount working, subtotal, each tax once, total charges,
+// then payments — and the PDF, the spreadsheet and the Word file are built from
+// it. THE TWO ARE KEPT IN STEP BY HAND: this component keeps its own markup
+// because it has a mobile fold and a print stylesheet an exporter has no use
+// for, but if a row moves here it moves there. The labels and the amount
+// formatting are already shared, so only the ORDER can drift.
 //
 // ---------------------------------------------------------------------------
 // PRINT
@@ -441,10 +456,11 @@ function FigureRow({
   // column read as the subtraction it is.
   signed?: 'minus';
 }) {
-  const text =
-    signed === 'minus' && amount !== 0
-      ? `−${formatMoney(Math.abs(amount), currency)}`
-      : formatMoney(amount, currency);
+  // Formatted through the EXPORTS' own amount formatter (lib/export/
+  // statementSections), so the figure on this row and the figure in the PDF,
+  // the spreadsheet, the Word file and the WhatsApp summary are produced by one
+  // function rather than by five that happen to agree today.
+  const text = formatStatementAmount(signed === 'minus' ? -amount : amount, currency);
 
   return (
     <tr>
@@ -502,18 +518,15 @@ function BalanceBlock({ statement }: { statement: StatementData }) {
   const { amount, state } = statement.balance;
   const currency = statement.property.currency;
 
-  // "Credit / refund due" covers both readings on purpose, because the folio
-  // cannot tell them apart and must not pretend to: a negative balance is a
-  // pre-arrival deposit before any charges post (021 §9.4 — a deposit IS a
-  // payment on the open folio), and it is money to hand back once the stay is
-  // over. Same figure, and which one it is depends on where the stay has got
-  // to, which the desk knows and the document should not guess.
-  const label =
-    state === 'due'
-      ? 'Amount due'
-      : state === 'credit'
-        ? 'Credit / refund due'
-        : 'Paid in full';
+  // The three phrases live with the exports (lib/export/statementSections) so
+  // the page, the PDF, the spreadsheet, the Word file and the WhatsApp summary
+  // all say the same thing. "Credit / refund due" covers both readings on
+  // purpose, because the folio cannot tell them apart and must not pretend to: a
+  // negative balance is a pre-arrival deposit before any charges post (021 §9.4
+  // — a deposit IS a payment on the open folio), and it is money to hand back
+  // once the stay is over. Which one it is depends on where the stay has got to,
+  // which the desk knows and the document should not guess.
+  const label = statementBalanceLabel(state);
 
   return (
     <section

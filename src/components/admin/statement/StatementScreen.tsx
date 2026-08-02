@@ -4,6 +4,7 @@ import { describeError } from '../../../lib/errors';
 import { useStatement, type StatementTarget } from '../../../hooks/useStatement';
 import type { Property } from '../../../types/tenant';
 import { StatementDocument } from './StatementDocument';
+import { StatementExportMenu } from './StatementExportMenu';
 
 // THE STATEMENT PAGE'S CHROME — and nothing else.
 //
@@ -66,7 +67,10 @@ export function StatementScreen({
           {backLabel}
         </Link>
 
-        <div className="flex items-center gap-2">
+        {/* Wraps at 360px: the note, the export menu and Print do not fit on one
+            line on a phone, and a row that overflows would push the document
+            sideways. */}
+        <div className="flex flex-wrap items-center justify-end gap-2">
           {loading ? (
             <span className="text-xs text-charcoal-muted" aria-live="polite">
               Loading…
@@ -83,8 +87,19 @@ export function StatementScreen({
               >
                 ⓘ How this is calculated
               </span>
-              {/* The browser's own print dialog — no PDF library and no second
-                  renderer. The document below IS what comes out. */}
+              {/* EXPORT / SHARE, beside Print rather than instead of it. Print
+                  makes paper for the guest at the desk and for the file; these
+                  make a FILE — the thing that is emailed, attached, or sent to a
+                  company's accounts department. The menu is handed the ALREADY
+                  ASSEMBLED statement, so every format serialises exactly the
+                  document rendered below and no export can re-read anything. */}
+              <StatementExportMenu
+                statement={statement}
+                target={target}
+                property={property}
+              />
+              {/* The browser's own print dialog — no second renderer. The
+                  document below IS what comes out. */}
               <button
                 type="button"
                 onClick={() => window.print()}

@@ -404,6 +404,17 @@ export const LockIcon = ({ className }: IconProps) => (
   </Line>
 );
 
+// A tray with an arrow into it. The affordance for producing a FILE — the
+// statement exports — as distinct from the printer, which produces paper, and
+// the WhatsApp mark, which sends rather than saves.
+export const DownloadIcon = ({ className }: IconProps) => (
+  <Line className={className}>
+    <path d="M12 4v10" />
+    <path d="m8 10.5 4 4 4-4" />
+    <path d="M4.5 17.5v1a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-1" />
+  </Line>
+);
+
 /* --- Social --------------------------------------------------------------- */
 
 export const FacebookIcon = ({ className }: IconProps) => (

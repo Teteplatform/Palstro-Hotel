@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { useActiveProperty } from '../../../hooks/useActiveProperty';
+import { useStatementExport } from '../../../hooks/useStatementExport';
 import { Pagination } from '../../ui/Pagination';
 import { formatMoney, MISSING_VALUE } from '../../../lib/format';
 import { formatDisplayDate } from '../../../lib/date';
@@ -106,6 +108,11 @@ export function GuestSummaryTab({
   onAccountChanged,
 }: GuestSummaryTabProps) {
   const [panel, setPanel] = useState<PanelState>(null);
+  // ONE exporter for the whole table: the target travels with each call, because
+  // a hook per row is not something React allows. Opening a row's menu primes
+  // that stay's document (see onActionsOpen below).
+  const { property } = useActiveProperty();
+  const statementExport = useStatementExport({ property });
 
   async function afterMutation() {
     setPanel(null);
@@ -158,6 +165,33 @@ export function GuestSummaryTab({
       key: 'statement',
       label: 'Statement',
       onSelect: () => onOpenStayStatement(row.booking_id),
+    });
+    // THE TWO EXPORTS A DESK REACHES FOR WITHOUT WANTING TO OPEN A PAGE: save the
+    // guest their bill, or send it to them. Both build the SAME assembled
+    // document the statement route renders — the menu opening has already
+    // started loading it — so a PDF saved from here and one saved from the
+    // statement page are the same file. Excel and Word stay on the statement
+    // page and the stay page: they are the "I need to work on this" formats, and
+    // whoever needs them is already looking at the document.
+    actions.push({
+      key: 'statement-pdf',
+      label: 'Statement PDF',
+      onSelect: () => {
+        void statementExport.run('pdf', {
+          kind: 'stay',
+          bookingId: row.booking_id,
+        });
+      },
+    });
+    actions.push({
+      key: 'statement-whatsapp',
+      label: 'Send on WhatsApp',
+      onSelect: () => {
+        void statementExport.run('whatsapp', {
+          kind: 'stay',
+          bookingId: row.booking_id,
+        });
+      },
     });
     // CHECK IN, on the guest home (build 2 §1) — the front desk pulls up the
     // person, not the reservation, so this is where a stay begins. It NEVER
@@ -398,6 +432,12 @@ export function GuestSummaryTab({
           currency={currency}
           loading={loading}
           actionsFor={actionsFor}
+          // Start reading the stay's statement as the menu opens, so the export
+          // items below it act immediately — and, on a phone, so WhatsApp's
+          // native share is still reachable inside the click that follows.
+          onActionsOpen={(row) =>
+            statementExport.prime({ kind: 'stay', bookingId: row.booking_id })
+          }
           onOpenStay={onOpenStay}
         />
 
