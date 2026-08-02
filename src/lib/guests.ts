@@ -84,6 +84,10 @@ export interface GuestWrite {
   id_type?: string | null;
   id_number?: string | null;
   id_expiry?: string | null;
+  // Free-text stay preferences (027). Not passed to create_guest — the RPC's
+  // signature is fixed and a preference is something learned over stays, not
+  // asked at the desk in the middle of a booking. It is set by correction.
+  preferences?: string | null;
   notes?: string | null;
 }
 
@@ -141,11 +145,21 @@ export async function updateGuest(
   tenantId: string,
   values: GuestWrite,
 ): Promise<Guest> {
+  // preferences is written ONLY when the caller supplied the key. A screen that
+  // edits the name and contact fields must not blank a preference it never
+  // showed — and `emptyToNull(undefined)` is null, so an unconditional spread
+  // would do exactly that.
+  const preferencesPatch =
+    'preferences' in values
+      ? { preferences: emptyToNull(values.preferences) }
+      : {};
+
   const { data, error } = await supabase
     .from('guests')
     .update({
       first_name: values.first_name.trim(),
       last_name: values.last_name.trim(),
+      ...preferencesPatch,
       // Empty strings become NULL so "no middle name" is one value in the
       // database, not two ('' and NULL) that render and sort differently.
       middle_name: emptyToNull(values.middle_name),
@@ -161,6 +175,54 @@ export async function updateGuest(
     .eq('id', guestId)
     .eq('tenant_id', tenantId) // rule 19
     .is('deleted_at', null) // rule 5: only patch a live row
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data as Guest;
+}
+
+// One guest by id, for the guest detail page (2.txt §2). Scoped to the active
+// tenant and to LIVE rows only (rules 19, 5) — a stale or cross-tenant id simply
+// does not resolve, and the page says "not found" rather than rendering a shell.
+//
+// NOT property-scoped, deliberately: a guest belongs to the TENANT and is shared
+// across its properties (014). What IS property-scoped is their stay history and
+// ledger, which is where rule 19's property filter belongs.
+export async function fetchGuestById(
+  guestId: string,
+  tenantId: string,
+): Promise<Guest | null> {
+  const { data, error } = await supabase
+    .from('guests')
+    .select('*')
+    .eq('id', guestId)
+    .eq('tenant_id', tenantId) // rule 19
+    .is('deleted_at', null) // rule 5
+    .maybeSingle();
+
+  if (error) throw error;
+  return (data ?? null) as Guest | null;
+}
+
+// Save just the preferences (2.txt §1). ONE column, so a preference edit can
+// never touch a name, a phone number or an ID — and change_log records exactly
+// the one field that changed.
+//
+// Same path and the same guard as every other guest correction: the admin-only
+// `guests_member_update` policy from 014. A front-desk user is not offered the
+// action, and the database refuses it regardless (rule 19).
+export async function updateGuestPreferences(
+  guestId: string,
+  tenantId: string,
+  preferences: string,
+): Promise<Guest> {
+  const { data, error } = await supabase
+    .from('guests')
+    .update({ preferences: emptyToNull(preferences) })
+    .eq('id', guestId)
+    .eq('tenant_id', tenantId) // rule 19
+    .is('deleted_at', null) // rule 5
     .select()
     .single();
 

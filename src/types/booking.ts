@@ -118,6 +118,9 @@ export interface BookingDetail extends Booking {
     id_type: string | null;
     id_number: string | null;
     id_expiry: string | null;
+    // Stay preferences (027). Editable here as well as on the guest's own page —
+    // both write through updateGuest, the same admin-gated correction path.
+    preferences: string | null;
   } | null;
   room_type: { name: string; max_adults: number; max_children: number } | null;
   company: { name: string } | null;

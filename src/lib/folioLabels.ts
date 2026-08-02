@@ -38,7 +38,7 @@ export function paymentMethodLabel(method: PaymentMethod | string): string {
 // balance as "Guest owes" / "Settled — nothing outstanding" / "Refund due to
 // guest". Build A replaced that with a colour rule and one plain label
 // ("Outstanding Balance"), because the words were saying what the figure and its
-// colour already said. The rule now lives beside the balance row in FolioPanel:
+// colour already said. The rule now lives beside the balance row in FolioBill:
 //   > 0  → text-negative (red), money is owed;
 //   <= 0 → text-positive (green), nothing is owed.
 // The only surviving caption is "refund due" in the bookings list's Balance

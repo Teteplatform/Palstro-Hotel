@@ -6,7 +6,7 @@ import { MISSING_VALUE } from '../../../lib/format';
 import { fetchBookingDetail } from '../../../lib/bookings';
 import { bookingStatusLabel, bookingStatusTone } from '../../../lib/bookingLabels';
 import type { BookingDetail } from '../../../types/booking';
-import { FolioPanel } from '../folio/FolioPanel';
+import { FolioBill } from '../folio/FolioBill';
 import { GuestDetailsTab } from './GuestDetailsTab';
 import { StayTab } from './StayTab';
 
@@ -130,6 +130,19 @@ export function BookingDetailScreen({
               Billed to {detail.company.name}
             </span>
           ) : null}
+          {/* The way INTO the guest's own page (2.txt §2). This booking is one
+              stay; the guest may have many, and their ledger runs across all of
+              them. There is no guests LIST screen yet, so this is how the guest
+              view is reached — from a stay, which is how the front desk gets
+              there anyway. */}
+          {detail?.guest ? (
+            <Link
+              to={`/admin/${propertySlug}/guests/${detail.guest.id}`}
+              className="rounded-full border border-sand-border bg-white/70 px-3 py-1 text-xs font-semibold text-charcoal transition-colors hover:bg-sand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-cream"
+            >
+              Guest history &amp; ledger
+            </Link>
+          ) : null}
         </div>
       </header>
 
@@ -225,7 +238,13 @@ export function BookingDetailScreen({
 
             {tab === 'folio' ? (
               <div role="tabpanel" id="booking-panel-folio" aria-labelledby="booking-tab-folio">
-                <FolioPanel
+                {/* THIS STAY's bill, directly — the page is already scoped to one
+                    booking, so a one-row table of stays would be ceremony. The
+                    GUEST view (next build) shows the stays table and drills into
+                    this very component for the selected stay; FolioBill takes a
+                    booking id and loads everything itself precisely so that
+                    drill-in needs no change here or there. */}
+                <FolioBill
                   bookingId={bookingId}
                   tenantId={tenantId}
                   propertyId={propertyId}

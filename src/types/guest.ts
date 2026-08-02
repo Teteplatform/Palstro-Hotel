@@ -21,6 +21,9 @@ export interface Guest {
   id_type: string | null;
   id_number: string | null;
   id_expiry: string | null;
+  // Free-text stay preferences (027): "top floor, quiet room, early breakfast".
+  // Captured and displayed only — no logic reads it.
+  preferences: string | null;
   notes: string | null;
   deleted_at: string | null;
   created_at: string;

@@ -25,6 +25,7 @@ import { CompaniesPage } from './pages/admin/CompaniesPage';
 import { BookingsPage } from './pages/admin/BookingsPage';
 import { NewBookingPage } from './pages/admin/NewBookingPage';
 import { BookingDetailPage } from './pages/admin/BookingDetailPage';
+import { GuestDetailPage } from './pages/admin/GuestDetailPage';
 import { ModuleNotAvailablePage } from './pages/admin/ModuleNotAvailablePage';
 
 /**
@@ -172,6 +173,22 @@ const router = createBrowserRouter([
                 element: (
                   <ModuleGuard module="bookings">
                     <BookingDetailPage />
+                  </ModuleGuard>
+                ),
+              },
+              // One guest, as their own page (2.txt §2): stay history across
+              // every booking, and the running ledger over those stays. Guarded
+              // by the 'guests' module — the same module the (still coming_soon)
+              // Guests nav entry carries, so a tenant without it cannot reach
+              // the page by typing the URL either. There is deliberately no
+              // /guests LIST route yet: this build adds the detail view, reached
+              // from a booking, and the nav entry stays coming_soon rather than
+              // linking somewhere that does not exist.
+              {
+                path: 'guests/:guestId',
+                element: (
+                  <ModuleGuard module="guests">
+                    <GuestDetailPage />
                   </ModuleGuard>
                 ),
               },

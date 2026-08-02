@@ -89,8 +89,13 @@ export function AdminLayout() {
 
   return (
     <div className="min-h-screen bg-cream">
-      {/* Desktop sidebar: fixed so the main column scrolls independently. */}
-      <aside className="hidden lg:fixed lg:inset-y-0 lg:left-0 lg:flex lg:w-64 lg:flex-col lg:border-r lg:border-sand-border lg:bg-sand/40">
+      {/* Desktop sidebar: fixed so the main column scrolls independently.
+          print:hidden — the admin chrome is navigation, and navigation on paper
+          is wasted ink. The guest ledger's "Print statement" action (2.txt §3)
+          relies on this: the page that prints is the statement alone, with no
+          second renderer and therefore nothing that can disagree with what is
+          on screen. */}
+      <aside className="hidden print:hidden lg:fixed lg:inset-y-0 lg:left-0 lg:flex lg:w-64 lg:flex-col lg:border-r lg:border-sand-border lg:bg-sand/40">
         <SidebarBrand
           logoUrl={logoUrl}
           name={property.name}
@@ -99,9 +104,10 @@ export function AdminLayout() {
         <NavList slug={property.slug} />
       </aside>
 
-      {/* Main column, offset for the fixed sidebar on desktop. */}
-      <div className="lg:pl-64">
-        <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-sand-border bg-cream/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-cream/80 sm:px-6">
+      {/* Main column, offset for the fixed sidebar on desktop — and NOT offset
+          when printing, since the sidebar is not there. */}
+      <div className="lg:pl-64 print:pl-0">
+        <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-sand-border bg-cream/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-cream/80 sm:px-6 print:hidden">
           <button
             type="button"
             onClick={() => setDrawerOpen(true)}

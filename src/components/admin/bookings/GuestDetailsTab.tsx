@@ -46,6 +46,9 @@ interface GuestForm {
   id_type: string;
   id_number: string;
   id_expiry: string;
+  // Free-text stay preferences (027). Editable here as well as on the guest's
+  // own page — both write through the same admin-gated correction path.
+  preferences: string;
 }
 
 function toForm(guest: NonNullable<BookingDetail['guest']>): GuestForm {
@@ -59,6 +62,7 @@ function toForm(guest: NonNullable<BookingDetail['guest']>): GuestForm {
     id_type: guest.id_type ?? '',
     id_number: guest.id_number ?? '',
     id_expiry: guest.id_expiry ?? '',
+    preferences: guest.preferences ?? '',
   };
 }
 
@@ -230,6 +234,31 @@ export function GuestDetailsTab({
             onChange={(v) => set({ nationality: v })}
             disabled={saving}
           />
+        </DetailRow>
+      </DetailTable>
+
+      {/* Stay preferences (2.txt §1). Its own section because it is a different
+          kind of fact from contact details — something the hotel LEARNS about a
+          guest over several stays, free text, read by no logic. The same field
+          is editable on the guest's own page; both save through updateGuest's
+          admin-only path. */}
+      <DetailTable caption="Stay preferences">
+        <DetailRow label="Preferences">
+          {editing ? (
+            <textarea
+              value={values.preferences}
+              onChange={(e) => set({ preferences: e.target.value })}
+              disabled={saving}
+              rows={3}
+              aria-label="Stay preferences"
+              placeholder="Top floor, quiet room, early breakfast…"
+              className={controlClasses}
+            />
+          ) : (
+            <span className="whitespace-pre-wrap">
+              {guest.preferences?.trim() ? guest.preferences : MISSING_VALUE}
+            </span>
+          )}
         </DetailRow>
       </DetailTable>
 
