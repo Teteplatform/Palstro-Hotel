@@ -373,6 +373,17 @@ export const CheckIcon = ({ className }: IconProps) => (
   </Line>
 );
 
+// A closed padlock. Used where an action is GATED rather than merely warned
+// about — the manager-PIN prompt on a discount — so the requirement reads at a
+// glance before any of the words are.
+export const LockIcon = ({ className }: IconProps) => (
+  <Line className={className}>
+    <rect x="4" y="10.5" width="16" height="10" rx="2" />
+    <path d="M8 10.5V7a4 4 0 0 1 8 0v3.5" />
+    <path d="M12 14.5v2" />
+  </Line>
+);
+
 /* --- Social --------------------------------------------------------------- */
 
 export const FacebookIcon = ({ className }: IconProps) => (

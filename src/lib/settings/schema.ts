@@ -27,23 +27,31 @@ export type SettingsValues = Record<string, SettingsValue>;
 // ---------------------------------------------------------------------------
 // Storage targets — WHERE a value lands
 // ---------------------------------------------------------------------------
-// Settings live in three tables and, within one of them, a JSONB column — four
+// Settings live in four tables and, within one of them, a JSONB column — five
 // distinct destinations. Making the target explicit on every field is the whole
 // point: the save code splits changed values by target and calls the matching
-// migration-008 RPC for each, and a reader sees the destination at a glance.
+// patch RPC for each, and a reader sees the destination at a glance.
 //
-//   properties        -> a column on the properties row        (timezone, phone)
-//   property_settings -> a column on the property_settings row (template, booking_enabled)
-//   branding          -> a key inside property_settings.branding JSONB (colours, tagline)
-//   tenant_settings   -> a column on the tenant_settings row    (default_vat_rate)
+//   properties               -> a column on the properties row        (timezone, phone)
+//   property_settings        -> a column on the property_settings row (template, booking_enabled)
+//   branding                 -> a key inside property_settings.branding JSONB (colours, tagline)
+//   tenant_settings          -> a column on the tenant_settings row   (default_vat_rate)
+//   property_finance_settings -> a column on the property_finance_settings row
+//                               (discount_threshold — 021 §3). A SEPARATE table
+//                               from property_settings on purpose: that one is
+//                               publicly readable by guest-site visitors and RLS
+//                               cannot hide a single column, so an internal
+//                               financial threshold must not live there.
 export type FieldStorage =
   | { target: 'properties'; column: string }
   | { target: 'property_settings'; column: string }
   | { target: 'branding'; brandingKey: string }
-  | { target: 'tenant_settings'; column: string };
+  | { target: 'tenant_settings'; column: string }
+  | { target: 'property_finance_settings'; column: string };
 
-// The four RPC-routable tables (branding writes through the property_settings
-// row too, but via a different RPC, so it is tracked separately downstream).
+// The five RPC-routable destinations (branding writes through the
+// property_settings row too, but via a different RPC, so it is tracked
+// separately downstream).
 export type StorageTargetName = FieldStorage['target'];
 
 // ---------------------------------------------------------------------------

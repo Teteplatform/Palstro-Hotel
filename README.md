@@ -23,6 +23,37 @@ Only extensionless app routes fall through to the SPA fallback. If you change th
 pattern, keep that exclusion intact: a rewrite that swallows `/assets/…` would
 serve HTML in place of the app's own scripts and styles and break the site.
 
+`/api/` is excluded for the same reason: it holds real serverless functions (the
+night-audit cron below), and a rewrite that swallowed it would answer the
+scheduler with the SPA's HTML and the audit would silently never run.
+
+### The night-audit cron
+
+`vercel.json` schedules `/api/cron/night-audit` at `0 5 * * *` — **05:00 UTC**,
+which is **06:00 in Africa/Lagos**, the default `properties.night_audit_time`.
+Vercel cron expressions are always UTC and there is one schedule for all
+properties, so the offset is chosen rather than derived. The **business date is
+not** chosen here: `run_night_audit` derives it per property as "yesterday in
+that property's own timezone", which is correct at any hour of that property's
+operating day. See the header comment in `api/cron/night-audit.ts` for the
+timezone limitation this leaves and the recommended fix (an hourly schedule
+filtered per property) if properties ever span far-western timezones.
+
+Three environment variables must be set on the Vercel project (Production and
+Preview). None is `VITE_`-prefixed, so none can reach the browser bundle:
+
+| Variable | Purpose |
+| --- | --- |
+| `CRON_SECRET` | Vercel's scheduler sends it automatically as `Authorization: Bearer …` on every cron invocation. The endpoint requires it and **refuses every request when it is unset** — it fails closed rather than accepting anonymous callers. |
+| `SUPABASE_SERVICE_ROLE_KEY` | Lets one invocation audit every tenant's properties. Server-only, never in the client bundle. |
+| `SUPABASE_URL` | The project URL. Falls back to `VITE_SUPABASE_URL` if absent, since the URL is not a secret. |
+
+Re-running the endpoint is harmless: every posting is idempotent per
+(booking, night) via a deterministic key and a unique index, so a retry returns
+the existing charges and posts nothing. Its JSON response reports
+`posted` / `already_posted` / `booking_errors` per property so a failed or
+partial run is diagnosable without opening the logs.
+
 Currently, two official plugins are available:
 
 - [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)

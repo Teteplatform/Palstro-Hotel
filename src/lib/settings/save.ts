@@ -3,6 +3,7 @@ import type { SettingsPatches } from './values';
 import type { SettingsRows } from './values';
 import type {
   Property,
+  PropertyFinanceSettings,
   PropertySettings,
   TenantSettings,
 } from '../../types/tenant';
@@ -73,6 +74,19 @@ export async function saveSettingsPatches(
       p_expected_updated_at: rows.tenant.updated_at,
     });
     applied.tenant = row;
+  }
+  // property_finance_settings (023 §3) — its own row, so its own updated_at
+  // token; nothing else writes it, so there is no threading to do.
+  if (patches.finance) {
+    const row = await callRpc<PropertyFinanceSettings>(
+      'update_property_finance_settings',
+      {
+        p_property_id: propertyId,
+        p_patch: patches.finance,
+        p_expected_updated_at: rows.finance.updated_at,
+      },
+    );
+    applied.finance = row;
   }
 
   return applied;

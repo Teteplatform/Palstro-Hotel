@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Pagination } from '../../ui/Pagination';
 import { PlusIcon } from '../../ui/icons';
 import { useBookings } from '../../../hooks/useBookings';
-import { useBookingDraft } from '../../../hooks/useBookingDraft';
 import { describeError } from '../../../lib/errors';
 import { fetchAllCompanies } from '../../../lib/companies';
 import { fetchAllRoomTypes } from '../../../lib/roomTypes';
@@ -11,29 +10,29 @@ import type { Company } from '../../../types/company';
 import type { RoomType } from '../../../types/room';
 import { BookingsTable } from './BookingsTable';
 import { BookingStatusSummary } from './BookingStatusSummary';
-import { CreateBookingDialog } from './CreateBookingDialog';
 
 // The bookings screen (build 6b §3; table redesign per brief 1.txt §2). A dense,
 // server-paginated DATA TABLE (BookingsTable) whose column headers carry the
 // filtering inline — the standalone filter panel is gone. Above it sits a compact
 // inline summary across the WHOLE filtered set (rule 20) with a how-it-was-
 // calculated note (rule 16); below it the shared Pagination control (rule 1b).
-// Create goes through create_booking only (CreateBookingDialog); a row click
-// NAVIGATES to that booking's own page (build A §1) — the old inline detail panel
-// is gone, so the detail can be linked to, refreshed into and shared.
+//
+// BOTH directions off this screen are now ROUTES, not panels: "New booking"
+// navigates to /bookings/new (build B §1) and a row click to that booking's own
+// page (build A §1). Neither is a modal any more, so both can be linked to,
+// refreshed into and shared — and this screen holds no create state at all. The
+// half-filled booking still survives leaving and returning because the draft
+// lives in BookingDraftProvider above the routes, which is untouched.
 //
 // Reads scoped to the active property + tenant in the data layer (rule 19).
 
 interface BookingsScreenProps {
   propertyId: string;
   tenantId: string;
-  // The property's slug — the detail route lives under it
-  // (/admin/:propertySlug/bookings/:bookingId), so a row click navigates rather
-  // than opening a panel (build A §1).
+  // The property's slug — both routes off this screen live under it
+  // (/admin/:propertySlug/bookings/new and /bookings/:bookingId), so creating a
+  // booking and opening one both navigate rather than open a panel.
   propertySlug: string;
-  // The property's IANA timezone — passed to the create dialog so the check-in
-  // date input's min is the PROPERTY's today (matches the RPC guard, migration 020).
-  timezone: string;
   currency: string;
 }
 
@@ -41,7 +40,6 @@ export function BookingsScreen({
   propertyId,
   tenantId,
   propertySlug,
-  timezone,
   currency,
 }: BookingsScreenProps) {
   const list = useBookings(tenantId, propertyId);
@@ -77,12 +75,6 @@ export function BookingsScreen({
     };
   }, [tenantId, propertyId]);
 
-  // The create-booking form lives in the session-scoped draft (above the routes),
-  // so it survives navigating to another admin screen and back — scoped to THIS
-  // property (useBookingDraft keys by propertyId). Whether the dialog is open is
-  // part of the draft; opening/closing/clearing all go through this hook.
-  const { draft, update, clear, open } = useBookingDraft(propertyId);
-
   return (
     <div className="mx-auto max-w-6xl">
       <header className="mb-6 flex flex-wrap items-start justify-between gap-3">
@@ -95,14 +87,16 @@ export function BookingsScreen({
             lifecycle, and see what each stay is worth.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={open}
-          className="inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
+        {/* A route, not a dialog (build B §1). An in-progress draft is picked up
+            by that page, so this is "go back to what I was filling in" as much
+            as "start a new one". */}
+        <Link
+          to={`/admin/${propertySlug}/bookings/new`}
+          className="inline-flex min-h-11 items-center gap-2 rounded-full bg-primary px-5 text-sm font-semibold text-white transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
         >
           <PlusIcon className="h-4 w-4" />
           New booking
-        </button>
+        </Link>
       </header>
 
       {list.error ? (
@@ -149,25 +143,6 @@ export function BookingsScreen({
           </div>
         </>
       )}
-
-      {draft.open ? (
-        <CreateBookingDialog
-          tenantId={tenantId}
-          propertyId={propertyId}
-          timezone={timezone}
-          currency={currency}
-          draft={draft}
-          update={update}
-          // Cancel/close clears the draft (a fresh start next time). Navigating
-          // away does NOT call this — it just leaves the draft in place.
-          onClose={clear}
-          onCreated={() => {
-            // A successful submission clears the draft.
-            clear();
-            void list.reload();
-          }}
-        />
-      ) : null}
 
     </div>
   );

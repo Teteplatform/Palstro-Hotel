@@ -204,7 +204,22 @@ export function BookingDetailScreen({
 
             {tab === 'stay' ? (
               <div role="tabpanel" id="booking-panel-stay" aria-labelledby="booking-tab-stay">
-                <StayTab detail={detail} currency={currency} onChanged={load} />
+                {/* timezone is load-bearing here, not decorative: the arrival
+                    the desk records is a wall-clock reading in the PROPERTY's
+                    zone, and the business date derived from it decides which
+                    nights the audit bills. */}
+                <StayTab
+                  detail={detail}
+                  currency={currency}
+                  timezone={timezone}
+                  onChanged={load}
+                  // Checkout posts the room nights and hands back the balance
+                  // (026); when money is still owed the summary sends the desk
+                  // straight to the settlement screen. The tab lives in the URL,
+                  // so this is the page's own selectTab — not a second writer of
+                  // the same query param.
+                  onGoToFolio={() => selectTab('folio')}
+                />
               </div>
             ) : null}
 

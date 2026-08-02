@@ -43,6 +43,25 @@ export interface FieldControlProps {
 
 const FONT_OPTIONS = FONT_PAIRINGS.map((p) => ({ value: p.id, label: p.label }));
 
+// A <select> can only show a value that is one of its options. If a row holds a
+// value the curated list does not contain — a timezone or currency set before
+// this list existed, one seeded straight into the DB, or one trimmed from the
+// list later — the control would render the FIRST option instead, and the very
+// next Save would write that first option over a value nobody chose to change.
+//
+// For timezone and currency that is not a cosmetic slip: it silently moves every
+// business date, or re-denominates every price. So the stored value is appended
+// as its own option, flagged so the admin can see it is off-list. Generic on
+// purpose — it is a property of rendering a select against stored data, not a
+// rule about any one field, so no per-field branch is needed here or later.
+function withStoredValue(
+  options: { value: string; label: string }[],
+  stored: string,
+): { value: string; label: string }[] {
+  if (!stored || options.some((o) => o.value === stored)) return options;
+  return [...options, { value: stored, label: `${stored} — current value` }];
+}
+
 export function FieldControl({
   field,
   value,
@@ -113,7 +132,7 @@ export function FieldControl({
           {...base}
           value={asString(value)}
           onChange={onChange}
-          options={field.options}
+          options={withStoredValue(field.options, asString(value))}
           placeholder={field.placeholder}
         />
       );

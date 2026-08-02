@@ -1,14 +1,17 @@
 import { useState } from 'react';
 import { CurrencyField, TextArea } from '../../ui/form';
 import { useToast } from '../../ui/Toast';
+import { LockIcon } from '../../ui/icons';
 import { formatMoney, parseNumeric } from '../../../lib/format';
 import {
   applyChargeDiscount,
   folioErrorMessage,
   newIdempotencyKey,
 } from '../../../lib/folio';
+import { approvalStateFor, needsPin } from '../../../lib/discountApproval';
 import type { FolioChargeWithCategory } from '../../../types/folio';
 import { FolioActionCard } from './FolioActionCard';
+import { DiscountApprovalMeter } from './DiscountApprovalMeter';
 
 // "Discount" — the accountable one (brief §4).
 //
@@ -28,6 +31,11 @@ import { FolioActionCard } from './FolioActionCard';
 //   * otherwise, above the property's discount_threshold needs a PIN; at or below
 //     it, the staff member's own authority applies and they are recorded as the
 //     approver.
+//
+// Both rules live in ONE place on the client — approvalStateFor in
+// DiscountApprovalMeter — so the meter's wording, the PIN field's visibility and
+// the submit button's enabled state can never disagree with each other about
+// what the server is going to do.
 //
 // THE UI HINT IS CONVENIENCE. THE RPC IS THE GUARD. apply_charge_discount re-reads
 // the threshold from property_finance_settings and re-applies both rules itself,
@@ -71,12 +79,10 @@ export function DiscountForm({
   const gross = parseNumeric(charge.gross_amount) ?? 0;
   const existing = parseNumeric(charge.discount_amount) ?? 0;
 
-  const entered = amount ?? 0;
-  // A comp is 100% off, compared against GROSS because the discount is absolute
-  // and replaces whatever was there before — the same comparison the RPC makes.
-  const isComp = entered > 0 && entered >= gross;
-  const aboveThreshold = entered > threshold;
-  const needsPin = isComp || aboveThreshold;
+  // The single prediction of what the RPC will decide, recomputed on every
+  // keystroke and shared by the meter, the PIN field and the submit button.
+  const state = approvalStateFor(amount, threshold, gross);
+  const pinRequired = needsPin(state);
 
   const canSubmit =
     amount !== null &&
@@ -85,7 +91,7 @@ export function DiscountForm({
     reason.trim().length > 0 &&
     // The field is required when the UI believes a PIN is needed. If the UI is
     // wrong — a threshold changed under us — the RPC rejects the call and says so.
-    (!needsPin || pin.trim().length > 0);
+    (!pinRequired || pin.trim().length > 0);
 
   async function handleSubmit() {
     if (!canSubmit || submitting) return;
@@ -102,9 +108,9 @@ export function DiscountForm({
         idempotencyKey: newIdempotencyKey(),
       });
       toast.success(
-        needsPin
+        pinRequired
           ? 'Discount approved and recorded against the approving manager.'
-          : 'Discount applied.',
+          : 'Discount applied and recorded against you.',
       );
       await onDone();
     } catch (e) {
@@ -134,7 +140,7 @@ export function DiscountForm({
             : ''}
         </>
       }
-      submitLabel={needsPin ? 'Approve discount' : 'Apply discount'}
+      submitLabel={pinRequired ? 'Approve discount' : 'Apply discount'}
       submittingLabel="Applying…"
       submitting={submitting}
       canSubmit={canSubmit}
@@ -149,7 +155,7 @@ export function DiscountForm({
         currency={currency}
         disabled={submitting}
         error={
-          amount !== null && amount > gross
+          state === 'invalid'
             ? `A discount cannot exceed the charge (${formatMoney(gross, currency)}).`
             : undefined
         }
@@ -158,6 +164,16 @@ export function DiscountForm({
             ? 'This REPLACES the existing discount on this charge — it is not added to it.'
             : `Up to ${formatMoney(gross, currency)}. Discounting the full amount is a comp.`
         }
+      />
+
+      {/* The live signal: shown from the start (not only once a PIN is needed),
+          so the limit is visible BEFORE anything is typed and the transition
+          across it is watched rather than discovered. */}
+      <DiscountApprovalMeter
+        amount={amount}
+        threshold={threshold}
+        gross={gross}
+        currency={currency}
       />
 
       <TextArea
@@ -173,19 +189,23 @@ export function DiscountForm({
 
       {/* The PIN field appears only when approval is required — but the database
           decides, not this component. */}
-      {needsPin ? (
-        <div className="rounded-lg border border-primary/30 bg-primary/5 p-3">
-          <p className="text-xs font-semibold text-charcoal">
-            {isComp
-              ? 'This is a full comp — a manager must authorise it.'
-              : `This is above the approval limit of ${formatMoney(threshold, currency)} — a manager must authorise it.`}
+      {pinRequired ? (
+        <div className="rounded-xl border-2 border-primary/40 bg-primary/5 p-3 sm:p-4">
+          <p className="flex flex-wrap items-center gap-2 text-sm font-bold text-primary">
+            <LockIcon className="h-5 w-5 shrink-0" />
+            A manager must authorise this discount
           </p>
-          <p className="mt-1 text-xs text-charcoal-muted">
-            Ask a manager to enter their PIN. The approval is recorded against
-            that manager by name on this charge — not against you.
+          <p className="mt-1.5 text-xs text-charcoal">
+            {state === 'comp'
+              ? `This writes off the entire ${formatMoney(gross, currency)} charge.`
+              : `This is ${formatMoney((amount ?? 0) - threshold, currency)} above the ${formatMoney(threshold, currency)} approval limit.`}{' '}
+            Hand the terminal to a manager — the approval is recorded on this
+            charge <strong>against them by name</strong>, not against you, and it
+            stays in the change log.
           </p>
-          <label className="mt-2 block">
-            <span className="mb-1 block text-sm font-medium text-charcoal">
+
+          <label className="mt-3 block">
+            <span className="mb-1 block text-sm font-semibold text-charcoal">
               Manager PIN{' '}
               <span className="text-primary" aria-hidden="true">
                 *
@@ -203,21 +223,19 @@ export function DiscountForm({
               onChange={(e) => setPin(e.target.value)}
               disabled={submitting}
               aria-label="Manager PIN"
-              className="w-full max-w-[12rem] rounded-lg border border-sand-border bg-white/70 px-3 py-2 text-sm tracking-[0.4em] text-charcoal transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-cream disabled:cursor-not-allowed disabled:opacity-60"
+              // Full width on a phone, capped on a wider screen so it does not
+              // read as a general text field.
+              className="w-full max-w-[14rem] rounded-lg border border-sand-border bg-white/80 px-3 py-2.5 text-base tracking-[0.4em] text-charcoal transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-cream disabled:cursor-not-allowed disabled:opacity-60"
             />
           </label>
-          <p className="mt-1.5 text-[11px] text-charcoal-muted">
+
+          <p className="mt-2 text-[11px] text-charcoal-muted">
             The PIN is sent only to the approval check and is cleared from this
-            screen the moment it is used. It is never stored or displayed.
+            screen the moment it is used. It is never stored or displayed, and no
+            PIN is ever kept in this browser.
           </p>
         </div>
-      ) : (
-        <p className="text-xs text-charcoal-muted">
-          This is within your own approval limit
-          {threshold > 0 ? ` of ${formatMoney(threshold, currency)}` : ''}, so no
-          manager PIN is needed — and it will be recorded against you.
-        </p>
-      )}
+      ) : null}
     </FolioActionCard>
   );
 }

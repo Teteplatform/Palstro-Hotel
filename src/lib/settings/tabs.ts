@@ -5,6 +5,8 @@
 
 import type { SettingsField, SettingsTab } from './schema';
 import { GUEST_SECTIONS } from './sections';
+import { TIMEZONE_OPTIONS } from './timezones';
+import { CURRENCY_OPTIONS } from './currencies';
 
 // --- Brand and theme -------------------------------------------------------
 // Colours and the font pairing live in property_settings.branding (presentation
@@ -288,29 +290,44 @@ const contactFields: SettingsField[] = [
 
 // --- Operations ------------------------------------------------------------
 // Timezone/currency/night-audit are operational properties columns; booking is a
-// property_settings column.
+// property_settings column. All four are written by update_property_details.
+//
+// TIMEZONE AND CURRENCY ARE NOT COSMETIC, AND BOTH ARE PICKERS FOR THAT REASON.
+//
+//   TIMEZONE decides WHICH BUSINESS DAY every operational record belongs to.
+//   run_night_audit (023 §2) derives the night it bills as "yesterday in THIS
+//   property's timezone"; create_booking's past-date guard (020), post_charge and
+//   record_payment (021 §9) all resolve "today" the same way. Lagos is UTC+1, so
+//   between 23:00 and midnight local the UTC date is already the day before —
+//   change this field and last night's room charges land on a different
+//   operating day, and every report that groups by business_date moves with them.
+//
+//   CURRENCY is the code every money figure in the app is formatted with — rates,
+//   folio lines, the balance, invoices. It is passed straight to
+//   Intl.NumberFormat, so a value that is not a real ISO 4217 code degrades every
+//   amount in the product to "XYZ 45,000".
+//
+// Both were free-text fields, which is what makes a picker the fix rather than a
+// polish: 'Africa/Lagoss' and 'ABC' both passed the old validation, and neither
+// fails until a guest is looking at the wrong number.
 const operationsFields: SettingsField[] = [
   {
     key: 'timezone',
     label: 'Timezone',
-    help: 'IANA timezone name, e.g. Africa/Lagos. Drives the night-audit cutoff.',
-    type: 'text',
+    help: 'Not cosmetic — this decides which business day a charge, payment or room night belongs to. The night audit bills “yesterday” in THIS timezone, and every report groups by that business date.',
+    type: 'select',
     required: true,
     storage: { target: 'properties', column: 'timezone' },
-    placeholder: 'Africa/Lagos',
+    options: TIMEZONE_OPTIONS,
   },
   {
     key: 'currency',
     label: 'Currency',
-    help: 'Three-letter ISO code, e.g. NGN. Every amount on the site uses it.',
-    type: 'text',
+    help: 'Not cosmetic — every amount in the system is formatted in this currency: room rates, folio lines, balances, invoices and receipts.',
+    type: 'select',
     required: true,
     storage: { target: 'properties', column: 'currency' },
-    placeholder: 'NGN',
-    validation: {
-      pattern: /^[A-Za-z]{3}$/,
-      patternMessage: 'Use a three-letter currency code (e.g. NGN).',
-    },
+    options: CURRENCY_OPTIONS,
   },
   {
     key: 'night_audit_time',
@@ -331,6 +348,48 @@ const operationsFields: SettingsField[] = [
     help: 'When off, the guest site shows the property but takes no online bookings.',
     type: 'toggle',
     storage: { target: 'property_settings', column: 'booking_enabled' },
+  },
+];
+
+// --- Finance ---------------------------------------------------------------
+// Internal financial CONTROLS, as distinct from the Tax tab's accounting
+// configuration. discount_threshold lives on property_finance_settings (021 §3),
+// which exists precisely because property_settings carries a public (anon) read
+// policy for the guest site and Postgres RLS cannot hide a single column — a
+// hotel's discount approval ceiling is not for the internet to read.
+//
+// WHAT THIS NUMBER ACTUALLY DOES (apply_charge_discount, 021 §9.3):
+//   discount <= threshold -> the staff member's own authority, no PIN, and they
+//                            are recorded as the approver;
+//   discount >  threshold -> a manager PIN must verify or the call is REJECTED,
+//                            and that manager is recorded as the approver;
+//   a full comp (100% off) -> ALWAYS needs a PIN, whatever this is set to.
+// 0 is the deliberately strict default: every discount needs a manager.
+//
+// The RPC re-reads this value on every discount, so raising it here changes what
+// the database allows — not merely what the screen shows (rule 19).
+const financeFields: SettingsField[] = [
+  {
+    key: 'discount_threshold',
+    label: 'Discount approval threshold',
+    help: 'Discounts above this amount require a manager PIN. Set to 0 to require approval for every discount. A full comp (100% off a charge) always needs a manager PIN, whatever this is set to.',
+    type: 'currency',
+    required: true,
+    storage: {
+      target: 'property_finance_settings',
+      column: 'discount_threshold',
+    },
+    validation: {
+      min: 0,
+      // The column is NOT NULL and 0 is meaningful (it means "always ask"), so a
+      // BLANK field must be rejected rather than written — a cleared value that
+      // silently became 0 would tighten the hotel's policy without anyone
+      // choosing to, and one that silently became NULL would break the write.
+      validate: (v) =>
+        v === null
+          ? 'Enter a threshold (use 0 to require approval for every discount).'
+          : null,
+    },
   },
 ];
 
@@ -389,6 +448,13 @@ export const SETTINGS_TABS: SettingsTab[] = [
     label: 'Operations',
     description: 'Timezone, currency, the night-audit cutoff and online booking.',
     fields: operationsFields,
+  },
+  {
+    id: 'finance',
+    label: 'Finance',
+    description:
+      'Internal financial controls. Never shown on the guest site — these values are private to your staff.',
+    fields: financeFields,
   },
   {
     id: 'tax',

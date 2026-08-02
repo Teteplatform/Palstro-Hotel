@@ -94,7 +94,12 @@
   /* Negative — money is owed. A true crimson, chosen over a warmer brick so it
      is not mistaken for --brand-primary (#9c4426) at a glance.
      As TEXT: on cream 7.30:1, on sand 6.14:1, on white 7.92:1 (all normal ✓).
-     As BG: white text 7.92:1 (normal ✓). */
+     As BG: white text 7.92:1 (normal ✓).
+     As a 10% TINT (bg-negative/10 — the alert/callout surface: the checkout
+     reminder, the checkout summary when a balance is owed, the no-availability
+     notice). Measured over cream, the darkest surface it is used on, so the
+     figures are the floor: negative text 6.23:1, charcoal text 11.72:1 (both
+     normal ✓). Over white/70 panels both are higher. */
   --brand-negative: #9b2226;
 
   /* ---- Brand fonts (override target, same pattern as the colours) ---------
@@ -133,6 +138,39 @@
      and the /10 tints of each for row highlights). */
   --color-positive: var(--brand-positive);
   --color-negative: var(--brand-negative);
+}
+
+/* ---- Motion: the one deliberate attention-grab --------------------------- */
+/* A slow red halo, used ONLY by the checkout reminder (the front desk's "any
+   last orders?" prompt), because a charge that misses the folio before a guest
+   departs cannot be added afterwards. It is a HALO, not a colour or opacity
+   animation: the callout's own text and border stay at their documented contrast
+   ratios at every frame of the cycle, so the pulse can never make the copy
+   harder to read. The colour is --brand-negative through color-mix, never a
+   literal (rule 17), so a property that re-themes its "money owed" tone
+   re-themes this too.
+
+   PREFERS-REDUCED-MOTION: the animation is removed outright. What remains is the
+   callout itself — a red border on a red tint with a red heading — which is
+   prominent without moving. Nothing is communicated by the pulse alone. */
+@keyframes palstro-pulse-alert {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--brand-negative) 45%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 0.65rem color-mix(in srgb, var(--brand-negative) 0%, transparent);
+  }
+}
+
+.animate-pulse-alert {
+  animation: palstro-pulse-alert 1.8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-pulse-alert {
+    animation: none;
+  }
 }
 
 /* ---- Base ---------------------------------------------------------------- */

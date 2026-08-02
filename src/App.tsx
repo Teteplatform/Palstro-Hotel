@@ -23,6 +23,7 @@ import { SiteEditorPage } from './pages/admin/SiteEditorPage';
 import { RoomTypesPage } from './pages/admin/RoomTypesPage';
 import { CompaniesPage } from './pages/admin/CompaniesPage';
 import { BookingsPage } from './pages/admin/BookingsPage';
+import { NewBookingPage } from './pages/admin/NewBookingPage';
 import { BookingDetailPage } from './pages/admin/BookingDetailPage';
 import { ModuleNotAvailablePage } from './pages/admin/ModuleNotAvailablePage';
 
@@ -146,6 +147,19 @@ const router = createBrowserRouter([
                 element: (
                   <ModuleGuard module="bookings">
                     <BookingsPage />
+                  </ModuleGuard>
+                ),
+              },
+              // Creating a booking, as its own page (build B §1) — the modal
+              // dialog is gone. Declared BEFORE the :bookingId route for
+              // readability; react-router ranks the static 'new' segment above
+              // the dynamic one regardless, so /bookings/new can never be read
+              // as a booking id.
+              {
+                path: 'bookings/new',
+                element: (
+                  <ModuleGuard module="bookings">
+                    <NewBookingPage />
                   </ModuleGuard>
                 ),
               },

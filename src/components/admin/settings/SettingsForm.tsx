@@ -17,6 +17,7 @@ import type { SettingsMediaContext } from './mediaFieldContext';
 import type { MediaAssetMap } from '../../../lib/mediaUrl';
 import type {
   Property,
+  PropertyFinanceSettings,
   PropertySettings,
   TenantSettings,
 } from '../../../types/tenant';
@@ -192,6 +193,18 @@ export function SettingsForm({
           p_expected_updated_at: rows.tenant.updated_at,
         });
         onSaved({ tenant: row });
+      }
+      // property_finance_settings (023 §3): its own row, its own token.
+      if (patches.finance) {
+        const row = await callRpc<PropertyFinanceSettings>(
+          'update_property_finance_settings',
+          {
+            p_property_id: propertyId,
+            p_patch: patches.finance,
+            p_expected_updated_at: rows.finance.updated_at,
+          },
+        );
+        onSaved({ finance: row });
       }
 
       toast.success('Settings saved.');

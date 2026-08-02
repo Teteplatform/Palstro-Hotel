@@ -15,7 +15,6 @@ export function BookingsPage() {
       propertyId={property.id}
       tenantId={property.tenant_id}
       propertySlug={property.slug}
-      timezone={property.timezone}
       currency={property.currency}
     />
   );

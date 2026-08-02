@@ -1,8 +1,14 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "crons": [
+    {
+      "path": "/api/cron/night-audit",
+      "schedule": "0 5 * * *"
+    }
+  ],
   "rewrites": [
     {
-      "source": "/((?!assets/|favicon\\.ico|robots\\.txt|sitemap\\.xml|manifest\\.webmanifest|.*\\.[a-zA-Z0-9]+$).*)",
+      "source": "/((?!api/|assets/|favicon\\.ico|robots\\.txt|sitemap\\.xml|manifest\\.webmanifest|.*\\.[a-zA-Z0-9]+$).*)",
       "destination": "/index.html"
     }
   ]

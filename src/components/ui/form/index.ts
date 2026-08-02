@@ -3,6 +3,7 @@
 export { FieldShell, controlClasses, type BaseFieldProps } from './FieldShell';
 export { TextField } from './TextField';
 export { DateField } from './DateField';
+export { TimeField } from './TimeField';
 export { TextArea } from './TextArea';
 export { NumberField } from './NumberField';
 export { CurrencyField } from './CurrencyField';

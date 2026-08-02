@@ -37,6 +37,21 @@ export interface Booking {
   adults: number;
   children: number;
   status: BookingStatus;
+  // ACTUAL ARRIVAL (migration 024). checked_in_at is the instant the guest
+  // physically arrived — a timestamptz, so an ISO-8601 string; actual_check_in
+  // is that instant's date in the PROPERTY's timezone ('YYYY-MM-DD'), and it is
+  // what the night audit charges from. Both null until the booking is checked
+  // in. Distinct from check_in, which is what was RESERVED: a guest who books
+  // the 30th and arrives on the 1st has both, and they disagree legitimately.
+  checked_in_at: string | null;
+  actual_check_in: string | null;
+  // EXPECTED ARRIVAL TIME (migration 025). A bare `time` — PostgREST returns
+  // 'HH:MM:SS' — noted at booking when the guest says roughly when they will
+  // reach the desk ("arriving ~22:00"). PURELY INFORMATIONAL: nothing reads it.
+  // It does not affect charging, availability, or the no-show guard; it exists
+  // so a late arrival is expected rather than mistaken for one. Distinct from
+  // checked_in_at, which is the arrival that actually HAPPENED.
+  expected_arrival_time: string | null;
   company_id: string | null;
   bill_to: BillTo;
   special_requests: string | null;

@@ -6,17 +6,23 @@
 import { parseNumeric } from '../format';
 import type {
   Property,
+  PropertyFinanceSettings,
   PropertySettings,
   TenantSettings,
 } from '../../types/tenant';
 import { emptyValueFor, type SettingsField, type SettingsTab } from './schema';
 import type { SettingsValue, SettingsValues } from './schema';
 
-// The three rows a settings surface reads from — loaded together in one pass.
+// The four rows a settings surface reads from — loaded together in one pass.
 export interface SettingsRows {
   property: Property;
   settings: PropertySettings;
   tenant: TenantSettings;
+  // Per-property INTERNAL finance config (021 §3) — the discount threshold. A
+  // separate row because property_settings is publicly readable and RLS cannot
+  // hide a column; guaranteed to exist by an AFTER INSERT trigger, so this is
+  // never optional.
+  finance: PropertyFinanceSettings;
 }
 
 // Round away binary-float noise introduced by the scale conversion (a
@@ -38,6 +44,8 @@ function readRaw(field: SettingsField, rows: SettingsRows): unknown {
       return (rows.settings as unknown as Record<string, unknown>)[s.column];
     case 'tenant_settings':
       return (rows.tenant as unknown as Record<string, unknown>)[s.column];
+    case 'property_finance_settings':
+      return (rows.finance as unknown as Record<string, unknown>)[s.column];
     case 'branding':
       return (rows.settings.branding as Record<string, unknown>)?.[s.brandingKey];
   }
@@ -138,7 +146,7 @@ function serializeField(field: SettingsField, value: SettingsValue): unknown {
   }
 }
 
-// The four per-destination patches for a save, each present only if it has at
+// The five per-destination patches for a save, each present only if it has at
 // least one changed field. branding + config both write the property_settings
 // row (via different RPCs) and so share its updated_at token downstream.
 export interface SettingsPatches {
@@ -146,6 +154,7 @@ export interface SettingsPatches {
   config?: Record<string, unknown>; // property_settings columns
   properties?: Record<string, unknown>;
   tenant?: Record<string, unknown>;
+  finance?: Record<string, unknown>; // property_finance_settings columns
 }
 
 export function buildPatches(
@@ -174,6 +183,9 @@ export function buildPatches(
         break;
       case 'tenant_settings':
         (patches.tenant ??= {})[s.column] = serialized;
+        break;
+      case 'property_finance_settings':
+        (patches.finance ??= {})[s.column] = serialized;
         break;
     }
   }

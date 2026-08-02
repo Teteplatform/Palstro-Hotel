@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useAuth } from '../../../hooks/useAuth';
 import { useFolio } from '../../../hooks/useFolio';
 import { describeError } from '../../../lib/errors';
@@ -13,7 +13,6 @@ import { formatDisplayDate, isoDateInZone } from '../../../lib/date';
 import { paymentMethodLabel } from '../../../lib/folioLabels';
 import { staffLabel } from '../../../lib/staffLabel';
 import type {
-  FolioChargeTaxRow,
   FolioChargeWithCategory,
   FolioPayment,
 } from '../../../types/folio';
@@ -22,29 +21,49 @@ import { DiscountForm } from './DiscountForm';
 import { TakePaymentForm } from './TakePaymentForm';
 import { VoidForm } from './VoidForm';
 
-// THE FOLIO TAB — the guest's account, presented as a statement (build A §2).
+// THE FOLIO TAB — the guest's account, presented as a BILL.
 //
-// PRESENTATION CHANGED, NOTHING ELSE. No RPC, no money computation and no total
-// on this screen has changed: every figure still comes from folio_totals and the
-// folio_charge_taxes view, re-read after every mutation (rule 6 — no cached
-// balance). What changed is the shape: an account-summary TABLE, and a
-// TRIAL-BALANCE LEDGER with two figure columns, column totals and a grand total,
-// instead of stacked label/value pairs.
+// PRESENTATION ONLY. No RPC, no engine function and no figure changed: every
+// authoritative number still comes from folio_totals and the folio_charge_taxes
+// view, re-read after every mutation (rule 6 — nothing cached). What changed is
+// how it reads.
 //
-// THE LEDGER RECONCILES BY CONSTRUCTION (rule 9). Each charge contributes its NET
-// to the Charges column and each of its tax lines contributes its own amount, so
-// the Charges column sums to exactly folio_totals.charges_total (= net + tax).
-// The Payments column sums to payments_total. The grand total is therefore
-// charges − payments = balance. The footer prints the ENGINE's figures, not the
-// column arithmetic, so if a presentation bug ever made them differ, the screen
-// shows the database's number and the discrepancy is visible rather than hidden.
+// WHAT THE PREVIOUS LAYOUT GOT WRONG, and what replaced it:
 //
-// VOIDED ROWS ARE SHOWN, NOT HIDDEN — struck through, with no figure in either
-// column, because the engine excludes them from every total. A bill that quietly
-// drops a reversed line cannot be audited.
+//   * a trial-balance grid (Charges | Payments | running Balance) on every line.
+//     A running balance beside each row is an accountant's tool; a guest bill has
+//     ONE balance and it lives at the foot. The column is gone, and with it the
+//     temptation to read a mid-statement figure as "what is owed".
+//   * the computation printed inline on the description line
+//     ("1 × NGN 130,000 = NGN 130,000"), competing with the description for the
+//     same eye. It is now a muted subline, and it is DROPPED ENTIRELY at quantity
+//     1, where it says nothing the amount does not already say.
+//   * tax interleaved as an indented row under each charge, each with its own
+//     running balance. Taxes now appear ONCE, aggregated per tax, in their own
+//     section just above the balance — which is where a bill puts them.
+//   * Discount / Void buttons sitting inside the rows. They are behind a per-line
+//     ⋯ menu now: quiet until reached for, on desktop and on touch.
+//   * totals stated twice (an account-summary table AND a statement footer). One
+//     statement, one set of totals, one balance.
 //
-// BUSINESS DATE, NOT CREATION TIME (rules 8, 12): the statement is ordered by
-// charge_date / payment_date, and a posting date is shown only when it differs.
+// WHAT DID NOT CHANGE, and must not:
+//
+//   * VOIDED ROWS ARE STILL SHOWN — struck through and muted, with their reason
+//     and who voided them, excluded from every total. A bill that quietly drops a
+//     reversed line cannot be audited. Quiet, not hidden.
+//   * BUSINESS DATE, NOT CREATION TIME (rules 8, 12): ordered by charge_date /
+//     payment_date, with a posting date shown only when it differs.
+//   * THE AUTHORITATIVE FIGURES ARE THE ENGINE'S (rule 9). Subtotal, tax, total
+//     charges, payments received and the balance are printed from folio_totals /
+//     folio_charge_taxes — never summed from the rows on screen. The ONLY figures
+//     this file adds up are the per-GROUP subtotals, because the engine has no
+//     concept of a group; they sum exactly the same per-line net amounts printed
+//     beside them, and they are shown only when there is more than one group.
+//
+// GROUPS EXIST BEFORE THE MODULES THAT FILL THEM. Charges are grouped Room /
+// Extras today; F&B, laundry and minibar all post through the same post_charge
+// with their own charge_category, so they land in Extras the day those modules
+// ship, with no change here.
 
 interface FolioPanelProps {
   bookingId: string;
@@ -65,29 +84,50 @@ type ActionState =
   | { kind: 'void-payment'; payment: FolioPayment }
   | null;
 
-// One line of the statement. `charge` and `payment` are the two figure columns;
-// exactly one of them carries a number on a live row, and neither does on a
-// voided one.
-interface LedgerLine {
+// One printed line of the bill: a date, a description, an amount, and — quietly —
+// the detail and the tools.
+interface StatementLine {
   key: string;
   date: string;
   postedDate: string | null;
-  detail: ReactNode;
-  charge: number | null;
-  payment: number | null;
+  // The description that carries the line. Nothing competes with it.
+  title: ReactNode;
+  // The muted subline: the computation (only when it says something), a discount
+  // and who approved it, a void and why. Null when there is nothing to add.
+  meta: ReactNode | null;
+  // What COUNTS. null on a voided line, so every subtotal here excludes it for
+  // exactly the reason the engine does.
+  amount: number | null;
+  // What PRINTS. A voided line keeps its figure, struck through: "this was billed
+  // and then reversed" is a fact of the bill, and a dash would erase it.
+  figure: number | null;
   voided: boolean;
-  // A tax line sits under the charge it belongs to and is indented.
-  sub: boolean;
-  actions?: ReactNode;
+  actions: { label: string; onClick: () => void }[];
 }
 
+interface StatementGroup {
+  key: string;
+  label: string;
+  lines: StatementLine[];
+  // Sum of this group's live line amounts. See the header: the one figure on this
+  // screen that is added up here rather than read from the engine, because the
+  // engine has no per-group total to give.
+  subtotal: number;
+}
+
+// The charge_categories.code the room-night poster resolves (021 §9.2 —
+// `cc.code = 'room'`). A stable MACHINE KEY defined by the schema, like a booking
+// status, not tenant content: the tenant's own display NAME for it is
+// category.name and is what actually prints on the line (rule 17).
+const ROOM_CATEGORY_CODE = 'room';
+
 const TOTALS_NOTE =
-  'Computed live from this folio: gross is every non-voided charge before ' +
-  'discount; net is gross less discounts; tax is the property’s active taxes ' +
-  'and service charges applied to each net line; charges is net plus tax; ' +
-  'payments is every non-voided payment, net of refunds. Outstanding balance is ' +
-  'charges less payments. Voided charges and voided payments are excluded. ' +
-  'Nothing is stored or cached — these figures are recalculated on every read.';
+  'Computed live from this folio: the subtotal is every non-voided charge less ' +
+  'its discounts; tax is the property’s active taxes and service charges applied ' +
+  'to each net line; total charges is subtotal plus tax; payments is every ' +
+  'non-voided payment, net of refunds. Outstanding balance is total charges less ' +
+  'payments. Voided charges and voided payments are shown but excluded. Nothing ' +
+  'is stored or cached — these figures are recalculated on every read.';
 
 export function FolioPanel({
   bookingId,
@@ -160,27 +200,21 @@ export function FolioPanel({
   const folioOpen = folio.status === 'open';
   const folioClosed = folio.status === 'closed';
   const balance = parseNumeric(totals?.balance) ?? 0;
+  const discountTotal = parseNumeric(totals?.discount_total) ?? 0;
 
-  // Group the ONE tax fetch two ways: per charge for the statement's tax lines,
-  // and per tax code for the tax summary. Both from the same rows, so the lines
-  // and the summary can never disagree.
-  const taxesByCharge = new Map<string, FolioChargeTaxRow[]>();
+  // ONE tax fetch, aggregated per tax code for the taxes section. The per-charge
+  // grouping the old layout needed for its indented rows is gone with those rows;
+  // the section and the engine's tax_total come from the same numbers either way.
   const taxesByCode = new Map<string, { name: string; rate: string; total: number }>();
   for (const row of chargeTaxes) {
-    const list = taxesByCharge.get(row.charge_id) ?? [];
-    list.push(row);
-    taxesByCharge.set(row.charge_id, list);
-
     const amount = parseNumeric(row.amount) ?? 0;
     const bucket = taxesByCode.get(row.code);
     if (bucket) bucket.total += amount;
     else taxesByCode.set(row.code, { name: row.name, rate: row.rate, total: amount });
   }
 
-  const lines = buildLedger({
+  const groups = buildChargeGroups({
     charges,
-    payments,
-    taxesByCharge,
     currency,
     timezone,
     currentUserId,
@@ -189,9 +223,22 @@ export function FolioPanel({
     folioClosed,
     onDiscount: (charge) => setAction({ kind: 'discount', charge }),
     onVoidCharge: (charge) => setAction({ kind: 'void-charge', charge }),
+  });
+
+  const paymentLines = buildPaymentLines({
+    payments,
+    timezone,
+    currentUserId,
+    canAct: action === null,
+    folioClosed,
     onVoidPayment: (payment) => setAction({ kind: 'void-payment', payment }),
   });
-  const runningBalances = runningBalanceSeries(lines);
+
+  const isEmpty = groups.length === 0 && paymentLines.length === 0;
+  // Group subtotals are noise when there is only one group — they would restate
+  // the subtotal line immediately below them, which is exactly the repetition
+  // this redesign removes.
+  const showGroupSubtotals = groups.length > 1;
 
   return (
     <div className="space-y-4">
@@ -277,13 +324,23 @@ export function FolioPanel({
         />
       ) : null}
 
-      {/* ---------------------------------------------------------------- */}
-      {/* Account summary — a table, ending in the outstanding balance.    */}
-      {/* ---------------------------------------------------------------- */}
-      <div className="overflow-hidden rounded-2xl border border-sand-border bg-white/60">
+      {/* ------------------------------------------------------------------ */}
+      {/* THE BILL. One card, one balance.                                    */}
+      {/*                                                                     */}
+      {/* NO min-width and no horizontal scroll. Below `sm` the Date column is  */}
+      {/* dropped and each line carries its date in the muted subline instead   */}
+      {/* (StatementRow), so at 360px the description keeps a readable width    */}
+      {/* and the bill stays a bill on a phone instead of a sideways-scrolling  */}
+      {/* grid. Nothing is removed at any width — only moved.                   */}
+      {/*                                                                     */}
+      {/* overflow is NOT hidden on the wrapper — the per-line ⋯ menu is       */}
+      {/* absolutely positioned and would be clipped by it. The caption       */}
+      {/* rounds its own top corners so the sand band still follows the card. */}
+      {/* ------------------------------------------------------------------ */}
+      <div className="rounded-2xl border border-sand-border bg-white/60">
         <table className="w-full border-collapse text-sm">
-          <caption className="flex flex-wrap items-center justify-between gap-2 border-b border-sand-border bg-sand/40 px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-charcoal-muted">
-            <span>Account summary</span>
+          <caption className="flex flex-wrap items-center justify-between gap-2 rounded-t-2xl border-b border-sand-border bg-sand/40 px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-charcoal-muted sm:px-4">
+            <span>Statement</span>
             <span className="flex items-center gap-2 normal-case">
               {loading ? <span aria-live="polite">Updating…</span> : null}
               {/* Rule 16: how these figures were calculated, in full. */}
@@ -298,121 +355,135 @@ export function FolioPanel({
               </span>
             </span>
           </caption>
-          <tbody className="divide-y divide-sand-border/70">
-            <SummaryRow label="Charges before discount" value={totals?.gross_total} currency={currency} />
-            <SummaryRow label="Discounts" value={totals?.discount_total} currency={currency} negative />
-            <SummaryRow label="Net charges" value={totals?.net_total} currency={currency} />
-            <SummaryRow label="Tax & service charge" value={totals?.tax_total} currency={currency} />
-            <SummaryRow label="Total charges" value={totals?.charges_total} currency={currency} strong />
-            <SummaryRow label="Payments received" value={totals?.payments_total} currency={currency} negative />
-          </tbody>
-          <tfoot>
-            <BalanceRow balance={totals ? balance : null} currency={currency} colSpan={1} />
-          </tfoot>
-        </table>
-      </div>
 
-      {/* ---------------------------------------------------------------- */}
-      {/* The statement — trial-balance style                              */}
-      {/* ---------------------------------------------------------------- */}
-      <div className="overflow-x-auto rounded-2xl border border-sand-border bg-white/60">
-        <table className="w-full min-w-[42rem] border-collapse text-sm">
-          <caption className="border-b border-sand-border bg-sand/40 px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-charcoal-muted">
-            Statement
-          </caption>
           <thead>
             <tr className="border-b border-sand-border/70 text-left">
-              <th scope="col" className="w-[6.5rem] px-4 py-2 text-xs font-semibold text-charcoal-muted">
+              {/* Hidden below `sm`, where the date moves into each line's subline
+                  (see StatementRow) so the description keeps a readable width. */}
+              <th
+                scope="col"
+                className="hidden px-3 py-2 text-xs font-semibold text-charcoal-muted sm:table-cell sm:w-[7rem] sm:px-4"
+              >
                 Date
               </th>
-              <th scope="col" className="px-4 py-2 text-xs font-semibold text-charcoal-muted">
-                Detail
+              <th scope="col" className="px-1 py-2 text-xs font-semibold text-charcoal-muted sm:px-2">
+                Description
               </th>
-              <th scope="col" className="w-[8rem] px-4 py-2 text-right text-xs font-semibold text-charcoal-muted">
-                Charges
+              <th scope="col" className="px-3 py-2 text-right text-xs font-semibold text-charcoal-muted sm:px-4">
+                Amount
               </th>
-              <th scope="col" className="w-[8rem] px-4 py-2 text-right text-xs font-semibold text-charcoal-muted">
-                Payments
-              </th>
-              <th scope="col" className="w-[8rem] px-4 py-2 text-right text-xs font-semibold text-charcoal-muted">
-                Balance
+              {/* The actions column has no visible header — a header over a ⋯
+                  affordance would be louder than the affordance. */}
+              <th scope="col" className="w-8 px-0 py-2">
+                <span className="sr-only">Line actions</span>
               </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-sand-border/70">
-            {lines.length === 0 ? (
+
+          {isEmpty ? (
+            <tbody>
               <tr>
-                <td colSpan={5} className="px-4 py-10 text-center text-sm text-charcoal-muted">
+                <td colSpan={4} className="px-4 py-10 text-center text-sm text-charcoal-muted">
                   Nothing on this folio yet. Room nights post automatically at
-                  night audit; extras and payments can be added above.
+                  night audit and at checkout; extras and payments can be added
+                  above.
                 </td>
               </tr>
-            ) : (
-              lines.map((line, index) => (
-                <LedgerRow
-                  key={line.key}
-                  line={line}
-                  // The running balance is a presentation of the same figures,
-                  // accumulated down the page the way a statement reads. The
-                  // AUTHORITATIVE closing figure is the engine's, printed in the
-                  // footer below — never this column's last value.
-                  running={runningBalances[index]}
+            </tbody>
+          ) : null}
+
+          {/* --- Charges, grouped by kind ---------------------------------- */}
+          {groups.map((group) => (
+            <tbody key={group.key} className="divide-y divide-sand-border/50">
+              <SectionHeading label={group.label} />
+              {group.lines.map((line) => (
+                <StatementRow key={line.key} line={line} currency={currency} />
+              ))}
+              {showGroupSubtotals ? (
+                <FigureRow
+                  label={`${group.label} subtotal`}
+                  amount={group.subtotal}
                   currency={currency}
+                  muted
                 />
-              ))
-            )}
-          </tbody>
+              ) : null}
+            </tbody>
+          ))}
+
+          {/* --- Subtotal, then tax, then the total ------------------------ */}
+          {!isEmpty ? (
+            <tbody className="divide-y divide-sand-border/50 border-t border-sand-border/70">
+              {/* Shown only when something was actually given away: on a bill
+                  with no discounts, a "− ₦0.00" line is a question with no
+                  answer. Both figures are the engine's. */}
+              {discountTotal > 0 ? (
+                <>
+                  <FigureRow
+                    label="Charges before discount"
+                    amount={parseNumeric(totals?.gross_total)}
+                    currency={currency}
+                    muted
+                  />
+                  <FigureRow
+                    label="Discounts"
+                    amount={discountTotal}
+                    currency={currency}
+                    muted
+                    signed="minus"
+                  />
+                </>
+              ) : null}
+              <FigureRow
+                label="Subtotal"
+                amount={parseNumeric(totals?.net_total)}
+                currency={currency}
+              />
+
+              {/* TAX, ONCE. One line per tax the property levies, aggregated
+                  across every charge it applied to — never interleaved with the
+                  charges themselves. Computed live from folio_charge_taxes, so a
+                  rate change cannot make history disagree with itself. */}
+              {[...taxesByCode.entries()].map(([code, tax]) => (
+                <FigureRow
+                  key={code}
+                  label={`${tax.name} (${formatRatePercent(tax.rate)})`}
+                  amount={tax.total}
+                  currency={currency}
+                  muted
+                />
+              ))}
+
+              <FigureRow
+                label="Total charges"
+                amount={parseNumeric(totals?.charges_total)}
+                currency={currency}
+                strong
+              />
+            </tbody>
+          ) : null}
+
+          {/* --- Payments, in their own section, never interleaved --------- */}
+          {paymentLines.length > 0 ? (
+            <tbody className="divide-y divide-sand-border/50 border-t border-sand-border/70">
+              <SectionHeading label="Payments" />
+              {paymentLines.map((line) => (
+                <StatementRow key={line.key} line={line} currency={currency} />
+              ))}
+              <FigureRow
+                label="Payments received"
+                amount={parseNumeric(totals?.payments_total)}
+                currency={currency}
+                signed="minus"
+              />
+            </tbody>
+          ) : null}
+
+          {/* --- THE balance. Once, at the foot. --------------------------- */}
           <tfoot>
-            {/* Column totals, straight from folio_totals — not summed from the
-                rows above (rule 9: the engine is the source, the rows are the
-                presentation). */}
-            <tr className="border-t border-sand-border bg-sand/30">
-              <th scope="row" colSpan={2} className="px-4 py-2.5 text-left text-sm font-semibold text-charcoal">
-                Totals
-              </th>
-              <td className="whitespace-nowrap px-4 py-2.5 text-right text-sm font-bold tabular-nums text-charcoal">
-                {formatMoney(totals?.charges_total, currency)}
-              </td>
-              <td className="whitespace-nowrap px-4 py-2.5 text-right text-sm font-bold tabular-nums text-charcoal">
-                {formatMoney(totals?.payments_total, currency)}
-              </td>
-              <td className="px-4 py-2.5" />
-            </tr>
-            <BalanceRow balance={totals ? balance : null} currency={currency} colSpan={4} />
+            <BalanceRow balance={totals ? balance : null} currency={currency} />
           </tfoot>
         </table>
       </div>
-
-      {/* Tax summary — computed, never stored. */}
-      {taxesByCode.size > 0 ? (
-        <div className="overflow-hidden rounded-2xl border border-sand-border bg-white/60">
-          <table className="w-full border-collapse text-sm">
-            <caption className="border-b border-sand-border bg-sand/40 px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-charcoal-muted">
-              Tax & service charge
-            </caption>
-            <tbody className="divide-y divide-sand-border/70">
-              {[...taxesByCode.entries()].map(([code, tax]) => (
-                <tr key={code}>
-                  <th scope="row" className="px-4 py-2.5 text-left font-normal text-charcoal">
-                    {tax.name}{' '}
-                    <span className="text-charcoal-muted">
-                      ({formatRatePercent(tax.rate)})
-                    </span>
-                  </th>
-                  <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums text-charcoal">
-                    {formatMoney(tax.total, currency)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <p className="border-t border-sand-border px-4 py-2 text-[11px] text-charcoal-muted">
-            Computed live from each charge’s net amount and this property’s active
-            taxes — never stored, so a rate change cannot make history disagree
-            with itself.
-          </p>
-        </div>
-      ) : null}
 
       {folio.status !== 'open' ? (
         <p className="text-xs text-charcoal-muted">
@@ -426,16 +497,16 @@ export function FolioPanel({
   );
 }
 
-// --- The statement rows -----------------------------------------------------
+// --- Building the lines -----------------------------------------------------
 
-// Build the ledger: every charge (its NET in the Charges column) followed by its
-// tax lines, plus every payment (in the Payments column), ordered by BUSINESS
-// date. Charges sort before payments on the same day, which is how a statement
-// reads: what was incurred, then what was paid against it.
-function buildLedger({
+// Charges, grouped by kind and ordered by BUSINESS date within each group.
+//
+// TWO GROUPS TODAY: room nights, and everything else ("Extras"). The split is on
+// charge_categories.code, so the day F&B, laundry and minibar start posting they
+// appear in Extras with no change here — which is the point of grouping before
+// the modules exist rather than after.
+function buildChargeGroups({
   charges,
-  payments,
-  taxesByCharge,
   currency,
   timezone,
   currentUserId,
@@ -444,11 +515,8 @@ function buildLedger({
   folioClosed,
   onDiscount,
   onVoidCharge,
-  onVoidPayment,
 }: {
   charges: FolioChargeWithCategory[];
-  payments: FolioPayment[];
-  taxesByCharge: Map<string, FolioChargeTaxRow[]>;
   currency: string;
   timezone: string;
   currentUserId: string | null;
@@ -457,232 +525,323 @@ function buildLedger({
   folioClosed: boolean;
   onDiscount: (charge: FolioChargeWithCategory) => void;
   onVoidCharge: (charge: FolioChargeWithCategory) => void;
-  onVoidPayment: (payment: FolioPayment) => void;
-}): LedgerLine[] {
-  const groups: { date: string; order: number; lines: LedgerLine[] }[] = [];
+}): StatementGroup[] {
+  const room: StatementLine[] = [];
+  const extras: StatementLine[] = [];
 
-  charges.forEach((charge, index) => {
+  for (const charge of charges) {
     const voided = charge.is_voided === true;
+    const quantity = parseNumeric(charge.quantity) ?? 1;
     const discount = parseNumeric(charge.discount_amount) ?? 0;
     const postedDate = isoDateInZone(charge.created_at, timezone);
-    const lines: LedgerLine[] = [
-      {
-        key: `charge-${charge.id}`,
-        date: charge.charge_date,
-        postedDate: postedDate && postedDate !== charge.charge_date ? postedDate : null,
-        detail: (
-          <>
-            <span className={voided ? 'line-through' : ''}>
-              <span className="font-semibold">
-                {charge.category?.name ?? MISSING_VALUE}
-              </span>
-              {charge.description ? ` — ${charge.description}` : ''}
-            </span>
-            <span className="block text-xs text-charcoal-muted">
-              {formatQuantity(charge.quantity)} ×{' '}
-              {formatMoney(charge.unit_amount, currency)} ={' '}
-              {formatMoney(charge.gross_amount, currency)}
-              {/* The discount as its own visible fact, with reason and the name
-                  it was approved under — the accountability record the engine
-                  exists to create. */}
-              {discount > 0 ? (
-                <>
-                  {' · less '}
-                  {formatMoney(discount, currency)} discount
-                  {charge.discount_reason ? ` (${charge.discount_reason})` : ''} ·
-                  approved by {staffLabel(charge.discount_approved_by, currentUserId)}
-                </>
-              ) : null}
-            </span>
-            {voided ? (
-              <VoidedNote
-                reason={charge.void_reason}
-                actor={staffLabel(charge.voided_by, currentUserId)}
-              />
-            ) : null}
-          </>
-        ),
-        charge: voided ? null : parseNumeric(charge.net_amount),
-        payment: null,
-        voided,
-        sub: false,
-        actions:
-          canAct && !voided ? (
-            <span className="flex flex-wrap justify-end gap-1.5">
-              {folioOpen ? (
-                <RowAction onClick={() => onDiscount(charge)}>Discount</RowAction>
-              ) : null}
-              {!folioClosed ? (
-                <RowAction onClick={() => onVoidCharge(charge)}>Void</RowAction>
-              ) : null}
-            </span>
-          ) : undefined,
-      },
-    ];
 
-    // Tax lines belong to their charge and sit under it, indented. A voided
-    // charge has none — a void carries no tax.
-    for (const tax of taxesByCharge.get(charge.id) ?? []) {
-      lines.push({
-        key: `tax-${charge.id}-${tax.tax_charge_id}`,
-        date: charge.charge_date,
-        postedDate: null,
-        detail: (
-          <span className="text-charcoal-muted">
-            {tax.name} ({formatRatePercent(tax.rate)})
-          </span>
-        ),
-        charge: parseNumeric(tax.amount),
-        payment: null,
-        voided: false,
-        sub: true,
-      });
+    // THE COMPUTATION, QUIETENED. At quantity 1 it is dropped outright: "1 ×
+    // ₦130,000" restates the amount in the next column and does nothing but
+    // compete with the description. Above 1 it earns its place — "3 × ₦12,500" is
+    // the only thing that explains the figure.
+    const parts: ReactNode[] = [];
+    if (quantity > 1) {
+      parts.push(
+        `${formatQuantity(charge.quantity)} × ${formatMoney(charge.unit_amount, currency)}`,
+      );
+    }
+    // The discount stays visible with its reason and the name it was approved
+    // under — that accountability record is the reason the discount feature
+    // exists, and it is not clutter.
+    if (discount > 0) {
+      parts.push(
+        `less ${formatMoney(discount, currency)} discount${
+          charge.discount_reason ? ` (${charge.discount_reason})` : ''
+        } · approved by ${staffLabel(charge.discount_approved_by, currentUserId)}`,
+      );
+    }
+    if (voided) {
+      parts.push(
+        `Voided${charge.void_reason ? ` · ${charge.void_reason}` : ''} · by ${staffLabel(
+          charge.voided_by,
+          currentUserId,
+        )} · not included`,
+      );
     }
 
-    groups.push({ date: charge.charge_date, order: index, lines });
-  });
+    const actions: { label: string; onClick: () => void }[] = [];
+    if (canAct && !voided) {
+      if (folioOpen) actions.push({ label: 'Discount', onClick: () => onDiscount(charge) });
+      if (!folioClosed) actions.push({ label: 'Void', onClick: () => onVoidCharge(charge) });
+    }
 
-  payments.forEach((payment, index) => {
+    const line: StatementLine = {
+      key: `charge-${charge.id}`,
+      date: charge.charge_date,
+      postedDate: postedDate && postedDate !== charge.charge_date ? postedDate : null,
+      // "Room — Executive Suite — 1 Aug 2026": the tenant's own category name and
+      // the poster's description, nothing invented here (rule 17).
+      title: (
+        <>
+          {charge.category?.name ?? MISSING_VALUE}
+          {charge.description ? ` — ${charge.description}` : ''}
+        </>
+      ),
+      meta: parts.length > 0 ? joinMeta(parts) : null,
+      amount: voided ? null : parseNumeric(charge.net_amount),
+      figure: parseNumeric(charge.net_amount),
+      voided,
+      actions,
+    };
+
+    if (charge.category?.code === ROOM_CATEGORY_CODE) room.push(line);
+    else extras.push(line);
+  }
+
+  const groups: StatementGroup[] = [];
+  if (room.length > 0) {
+    groups.push({
+      key: 'room',
+      label: 'Room charges',
+      lines: sortByDate(room),
+      subtotal: sumLines(room),
+    });
+  }
+  if (extras.length > 0) {
+    groups.push({
+      key: 'extras',
+      label: 'Extras',
+      lines: sortByDate(extras),
+      subtotal: sumLines(extras),
+    });
+  }
+  return groups;
+}
+
+function buildPaymentLines({
+  payments,
+  timezone,
+  currentUserId,
+  canAct,
+  folioClosed,
+  onVoidPayment,
+}: {
+  payments: FolioPayment[];
+  timezone: string;
+  currentUserId: string | null;
+  canAct: boolean;
+  folioClosed: boolean;
+  onVoidPayment: (payment: FolioPayment) => void;
+}): StatementLine[] {
+  const lines = payments.map((payment) => {
     const voided = payment.is_voided === true;
     const amount = parseNumeric(payment.amount) ?? 0;
     const postedDate = isoDateInZone(payment.created_at, timezone);
-    groups.push({
+
+    const parts: ReactNode[] = [
+      `received by ${staffLabel(payment.received_by, currentUserId)}`,
+    ];
+    if (voided) {
+      parts.push(
+        `Voided${payment.void_reason ? ` · ${payment.void_reason}` : ''} · by ${staffLabel(
+          payment.voided_by,
+          currentUserId,
+        )} · not included`,
+      );
+    }
+
+    return {
+      key: `payment-${payment.id}`,
       date: payment.payment_date,
-      // +1_000_000 keeps every payment after every charge on the same date while
-      // preserving each list's own order.
-      order: 1_000_000 + index,
-      lines: [
-        {
-          key: `payment-${payment.id}`,
-          date: payment.payment_date,
-          postedDate:
-            postedDate && postedDate !== payment.payment_date ? postedDate : null,
-          detail: (
-            <>
-              <span className={voided ? 'line-through' : ''}>
-                <span className="font-semibold">
-                  {paymentMethodLabel(payment.method)}
-                </span>
-                {amount < 0 ? ' — refund' : ''}
-                {payment.reference ? ` · ref ${payment.reference}` : ''}
-              </span>
-              <span className="block text-xs text-charcoal-muted">
-                received by {staffLabel(payment.received_by, currentUserId)}
-              </span>
-              {voided ? (
-                <VoidedNote
-                  reason={payment.void_reason}
-                  actor={staffLabel(payment.voided_by, currentUserId)}
-                />
-              ) : null}
-            </>
-          ),
-          charge: null,
-          payment: voided ? null : amount,
-          voided,
-          sub: false,
-          actions:
-            canAct && !voided && !folioClosed ? (
-              <span className="flex justify-end">
-                <RowAction onClick={() => onVoidPayment(payment)}>Void</RowAction>
-              </span>
-            ) : undefined,
-        },
-      ],
-    });
+      postedDate:
+        postedDate && postedDate !== payment.payment_date ? postedDate : null,
+      title: (
+        <>
+          {paymentMethodLabel(payment.method)}
+          {/* A refund is a negative payment (021 DECISION 3) — the sign carries
+              it, the word stops it being misread as money in. */}
+          {amount < 0 ? ' — refund' : ''}
+          {payment.reference ? ` · ref ${payment.reference}` : ''}
+        </>
+      ),
+      meta: joinMeta(parts),
+      amount: voided ? null : amount,
+      figure: amount,
+      voided,
+      actions:
+        canAct && !voided && !folioClosed
+          ? [{ label: 'Void', onClick: () => onVoidPayment(payment) }]
+          : [],
+    } satisfies StatementLine;
   });
 
-  return groups
-    .sort((a, b) => (a.date === b.date ? a.order - b.order : a.date < b.date ? -1 : 1))
-    .flatMap((g) => g.lines);
+  return sortByDate(lines);
 }
 
-// The running balance beside each row: charges so far less payments so far, in
-// one pass. Presentation only — the closing figure printed in the footer is the
-// engine's folio_totals.balance, never this column's last value.
-function runningBalanceSeries(lines: LedgerLine[]): number[] {
-  let running = 0;
-  return lines.map((line) => {
-    running += line.charge ?? 0;
-    running -= line.payment ?? 0;
-    return running;
-  });
+// Business date first (rules 8, 12), input order as the stable tiebreak — the
+// charges and payments arrive already ordered by the query.
+function sortByDate(lines: StatementLine[]): StatementLine[] {
+  return lines
+    .map((line, index) => ({ line, index }))
+    .sort((a, b) =>
+      a.line.date === b.line.date
+        ? a.index - b.index
+        : a.line.date < b.line.date
+          ? -1
+          : 1,
+    )
+    .map((entry) => entry.line);
 }
 
-function LedgerRow({
+// A group subtotal: the sum of the very amounts printed on its lines. Voided
+// lines carry null and are therefore excluded, exactly as the engine excludes
+// them from folio_totals.
+function sumLines(lines: StatementLine[]): number {
+  return lines.reduce((sum, line) => sum + (line.amount ?? 0), 0);
+}
+
+function joinMeta(parts: ReactNode[]): ReactNode {
+  return parts.map((part, index) => (
+    <span key={index}>
+      {index > 0 ? ' · ' : ''}
+      {part}
+    </span>
+  ));
+}
+
+// --- Rows -------------------------------------------------------------------
+
+// A light heading over a group. `sand/20` rather than a rule and a bold label:
+// it should separate the sections without competing with the lines inside them.
+function SectionHeading({ label }: { label: string }) {
+  return (
+    <tr className="bg-sand/25">
+      <th
+        scope="colgroup"
+        colSpan={4}
+        className="px-3 py-1.5 text-left text-[11px] font-semibold uppercase tracking-wide text-charcoal-muted sm:px-4"
+      >
+        {label}
+      </th>
+    </tr>
+  );
+}
+
+// One printed line: date, description, amount — and the ⋯ menu, which is the only
+// interactive thing in the read and is quiet until reached for.
+function StatementRow({
   line,
-  running,
   currency,
 }: {
-  line: LedgerLine;
-  running: number;
+  line: StatementLine;
   currency: string;
 }) {
+  // THE MOBILE REFLOW. At 360px a Date column would leave the description about
+  // twelve characters wide and wrap "Room — Executive Suite — 1 Aug 2026" over
+  // four lines. So below `sm` the date column is dropped and the date leads the
+  // muted subline instead — the same fact, moved, never removed. Nothing scrolls
+  // sideways and the bill still reads top-to-bottom on a phone.
+  const dateText = formatDisplayDate(line.date);
+  const postedText = line.postedDate
+    ? `posted ${formatDisplayDate(line.postedDate)}`
+    : null;
+
   return (
-    <tr className={line.voided ? 'bg-sand/20' : undefined}>
-      <td className="whitespace-nowrap px-4 py-2.5 align-top text-charcoal-muted">
-        {line.sub ? '' : formatDisplayDate(line.date)}
-        {line.postedDate ? (
-          <span className="block text-[11px]">
-            posted {formatDisplayDate(line.postedDate)}
+    <tr className="group align-top">
+      <td className="hidden whitespace-nowrap px-3 py-2.5 text-xs text-charcoal-muted sm:table-cell sm:px-4 sm:text-sm">
+        {dateText}
+        {/* Rule 8's separate posting date, shown ONLY when it differs from the
+            business date — a back-dated or late-posted line, and nothing else. */}
+        {postedText ? <span className="block text-[11px]">{postedText}</span> : null}
+      </td>
+      <td className="px-1 py-2.5 sm:px-2">
+        <span
+          className={`block ${
+            line.voided ? 'text-charcoal-muted line-through' : 'text-charcoal'
+          }`}
+        >
+          {line.title}
+        </span>
+        {/* Hidden from `sm` up when there is no meta — otherwise every plain line
+            would carry an empty 11px row on desktop, where the date already has
+            its own column. */}
+        <span
+          className={`mt-0.5 block text-[11px] leading-snug text-charcoal-muted ${
+            line.meta ? '' : 'sm:hidden'
+          }`}
+        >
+          <span className="sm:hidden">
+            {dateText}
+            {postedText ? ` (${postedText})` : ''}
+            {line.meta ? ' · ' : ''}
           </span>
-        ) : null}
+          {line.meta}
+        </span>
       </td>
-      <td className={`px-4 py-2.5 align-top text-charcoal ${line.sub ? 'pl-8' : ''}`}>
-        {line.detail}
-        {line.actions ? <div className="mt-1.5">{line.actions}</div> : null}
+      <td
+        className={`whitespace-nowrap px-3 py-2.5 text-right tabular-nums sm:px-4 ${
+          line.voided ? 'text-charcoal-muted line-through' : 'text-charcoal'
+        }`}
+      >
+        {/* line.figure, not line.amount: a voided line prints what it was, struck
+            through, while counting nowhere. */}
+        {formatMoney(line.figure, currency)}
       </td>
-      <td className="whitespace-nowrap px-4 py-2.5 text-right align-top tabular-nums text-charcoal">
-        {line.charge === null ? MISSING_VALUE : formatMoney(line.charge, currency)}
-      </td>
-      <td className="whitespace-nowrap px-4 py-2.5 text-right align-top tabular-nums text-charcoal">
-        {line.payment === null ? MISSING_VALUE : formatMoney(line.payment, currency)}
-      </td>
-      <td className="whitespace-nowrap px-4 py-2.5 text-right align-top tabular-nums text-charcoal-muted">
-        {formatMoney(running, currency)}
+      <td className="relative w-8 px-0 py-2 align-top">
+        {line.actions.length > 0 ? <LineActions items={line.actions} /> : null}
       </td>
     </tr>
   );
 }
 
-function SummaryRow({
+// A figure line: a label and an amount, no date, no actions. Subtotals, taxes,
+// total charges and payments received all share it, so they line up in the same
+// column as the charges above them.
+function FigureRow({
   label,
-  value,
+  amount,
   currency,
-  negative = false,
+  muted = false,
   strong = false,
+  signed,
 }: {
   label: string;
-  value: string | null | undefined;
+  amount: number | null;
   currency: string;
+  muted?: boolean;
+  strong?: boolean;
   // Discounts and payments REDUCE what is owed; a leading minus makes the column
   // read as the subtraction it is.
-  negative?: boolean;
-  strong?: boolean;
+  signed?: 'minus';
 }) {
-  const amount = parseNumeric(value);
   const text =
     amount === null
       ? MISSING_VALUE
-      : `${negative && amount !== 0 ? '−' : ''}${formatMoney(Math.abs(amount), currency)}`;
+      : `${signed === 'minus' && amount !== 0 ? '−' : ''}${formatMoney(
+          Math.abs(amount),
+          currency,
+        )}`;
 
   return (
     <tr>
+      {/* A spacer for the date column, which only exists from `sm` up. A colSpan
+          would eat the amount column on mobile, where that column is gone. */}
+      <td className="hidden sm:table-cell" />
       <th
         scope="row"
-        className={`px-4 py-2 text-left ${
-          strong ? 'font-semibold text-charcoal' : 'font-normal text-charcoal-muted'
+        className={`px-3 py-2 text-left sm:px-2 ${
+          strong
+            ? 'font-semibold text-charcoal'
+            : muted
+              ? 'font-normal text-charcoal-muted'
+              : 'font-medium text-charcoal'
         }`}
       >
         {label}
       </th>
       <td
-        className={`whitespace-nowrap px-4 py-2 text-right tabular-nums text-charcoal ${
-          strong ? 'font-semibold' : ''
+        className={`whitespace-nowrap px-3 py-2 text-right tabular-nums sm:px-4 ${
+          strong ? 'font-semibold text-charcoal' : muted ? 'text-charcoal-muted' : 'text-charcoal'
         }`}
       >
         {text}
       </td>
+      <td className="w-8 px-0" />
     </tr>
   );
 }
@@ -698,71 +857,115 @@ function SummaryRow({
 // literal in a component (rule 17), and both carry their measured AA contrast on
 // every surface at their definition in index.css (§8).
 //
-// The label is exactly "Outstanding Balance" with the amount and nothing else: a
-// zero outstanding balance is self-evidently settled, and appending the word
-// would be telling the reader what the number already says.
+// It appears EXACTLY ONCE on this screen now. The label is "Outstanding Balance"
+// with the amount and nothing else: a zero outstanding balance is self-evidently
+// settled, and appending the word would tell the reader what the number says.
 function BalanceRow({
   balance,
   currency,
-  colSpan,
 }: {
   balance: number | null;
   currency: string;
-  colSpan: number;
 }) {
   const owed = balance !== null && balance > 0;
 
   return (
     <tr className="border-t-2 border-sand-border bg-sand/40">
+      {/* Date-column spacer, present only from `sm` up — see FigureRow. */}
+      <td className="hidden rounded-bl-2xl sm:table-cell" />
       <th
         scope="row"
-        colSpan={colSpan}
-        className="px-4 py-3 text-left text-sm font-bold text-charcoal"
+        className="rounded-bl-2xl px-3 py-3 text-left text-sm font-bold text-charcoal sm:rounded-none sm:px-2"
       >
         Outstanding Balance
       </th>
       <td
-        className={`whitespace-nowrap px-4 py-3 text-right text-base font-bold tabular-nums ${
+        className={`whitespace-nowrap px-3 py-3 text-right text-base font-bold tabular-nums sm:px-4 ${
           owed ? 'text-negative' : 'text-positive'
         }`}
       >
         {balance === null ? MISSING_VALUE : formatMoney(balance, currency)}
       </td>
+      <td className="w-8 rounded-br-2xl px-0" />
     </tr>
   );
 }
 
-function VoidedNote({
-  reason,
-  actor,
+// THE PER-LINE TOOLS, OUT OF THE READ.
+//
+// Discount and Void used to sit as two pill buttons inside every charge row,
+// which put the loudest elements on the page inside the quietest part of the
+// bill. They live behind a ⋯ button now:
+//
+//   * on a pointer device it is faint until the row is hovered or something in it
+//     is focused, so a clean statement stays clean;
+//   * it never disappears entirely, and it is a real <button> in the tab order,
+//     so keyboard and touch users can reach it without hovering anything;
+//   * the panel closes on Escape, on an outside pointer press, and on selecting
+//     an item — the three ways a person expects a menu to close.
+//
+// The menu itself carries no rules about WHAT may be done: the caller passes only
+// the actions that are currently allowed (the folio's status and the row's voided
+// state are decided where the line is built, and re-checked by the RPC anyway).
+function LineActions({
+  items,
 }: {
-  reason: string | null;
-  actor: string;
+  items: { label: string; onClick: () => void }[];
 }) {
-  return (
-    <span className="mt-1 inline-flex flex-wrap items-center gap-1.5 rounded-full bg-charcoal/10 px-2 py-0.5 text-[11px] font-semibold text-charcoal">
-      Voided
-      <span className="font-normal">
-        {reason ? `· ${reason}` : ''} · by {actor} · excluded from totals
-      </span>
-    </span>
-  );
-}
+  const [open, setOpen] = useState(false);
+  const wrapper = useRef<HTMLDivElement | null>(null);
 
-function RowAction({
-  onClick,
-  children,
-}: {
-  onClick: () => void;
-  children: ReactNode;
-}) {
+  useEffect(() => {
+    if (!open) return;
+    function onPointerDown(event: PointerEvent) {
+      if (!wrapper.current?.contains(event.target as Node)) setOpen(false);
+    }
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') setOpen(false);
+    }
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [open]);
+
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="rounded-full border border-sand-border bg-white/80 px-3 py-1 text-[11px] font-semibold text-charcoal transition-colors hover:bg-sand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-cream"
-    >
-      {children}
-    </button>
+    <div ref={wrapper} className="relative flex justify-end">
+      <button
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label="Line actions"
+        onClick={() => setOpen((v) => !v)}
+        className={`rounded-full px-1.5 py-0.5 text-base leading-none text-charcoal-muted transition-opacity hover:bg-sand hover:text-charcoal focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-cream sm:opacity-40 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 ${
+          open ? 'sm:opacity-100' : ''
+        }`}
+      >
+        ⋯
+      </button>
+      {open ? (
+        <div
+          role="menu"
+          className="absolute right-0 top-full z-10 mt-1 min-w-[8rem] overflow-hidden rounded-xl border border-sand-border bg-white shadow-lg"
+        >
+          {items.map((item) => (
+            <button
+              key={item.label}
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setOpen(false);
+                item.onClick();
+              }}
+              className="block w-full px-3 py-2 text-left text-xs font-semibold text-charcoal transition-colors hover:bg-sand focus-visible:bg-sand focus-visible:outline-none"
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
   );
 }

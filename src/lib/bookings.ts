@@ -415,6 +415,11 @@ export interface CreateBookingInput {
   companyId: string | null;
   // 'company' bill_to is only valid with a company; the caller enforces this.
   billTo: 'guest' | 'company';
+  // 'HH:MM' as typed by the desk, or null. INFORMATIONAL ONLY (migration 025):
+  // it is stored on the booking and read by nothing — not the night audit, not
+  // availability, not the no-show guard. A heads-up so a 22:00 arrival is
+  // expected instead of chased.
+  expectedArrivalTime: string | null;
   // A fresh key per submit attempt (crypto.randomUUID) so a double-click / retry
   // cannot double-book — the DB's partial unique index is the true guard (rule 2/3).
   idempotencyKey: string;
@@ -439,6 +444,9 @@ export async function createBooking(
     p_special_requests: input.specialRequests,
     p_bill_to: input.billTo,
     p_company_id: input.companyId,
+    // 025. The RPC stores it and nothing else; it takes no part in the
+    // availability lock, the pricing loop, or the past-date guard.
+    p_expected_arrival_time: input.expectedArrivalTime,
   });
   if (error) throw error;
   return data as Booking;
@@ -470,12 +478,44 @@ export async function cancelBooking(
   return data as Booking;
 }
 
-// The two lifecycle transitions the screen exposes (016). Each is a distinct RPC
-// because each will touch the folio in 6c; the screen calls them by name rather
-// than a generic setter. There is no confirmBooking: create_booking already
-// creates a booking 'confirmed', so enquiry -> confirmed is unreachable in 6b.
-export async function checkInBooking(bookingId: string): Promise<Booking> {
+// The lifecycle transitions the screen exposes (016, extended by 024). Each is a
+// distinct RPC because each touches the folio differently; the screen calls them
+// by name rather than through a generic setter. There is no confirmBooking:
+// create_booking already creates a booking 'confirmed', so enquiry -> confirmed
+// is unreachable in 6b.
+
+// Check in, RECORDING THE ARRIVAL (024). arrivalAt is an ISO-8601 instant built
+// from the date and time the front desk typed, interpreted in the PROPERTY's
+// timezone (see zonedDateTimeToIso) — the RPC derives the arrival's business
+// date from that same timezone, and that date is what the night audit bills
+// from. Passing null lets the RPC default to now(), which is only correct when
+// the desk is checking the guest in as they stand there.
+export async function checkInBooking(
+  bookingId: string,
+  arrivalAt: string | null,
+): Promise<Booking> {
   const { data, error } = await supabase.rpc('check_in_booking', {
+    p_booking_id: bookingId,
+    p_idempotency_key: null,
+    p_arrival_at: arrivalAt,
+  });
+  if (error) throw error;
+  return data as Booking;
+}
+
+// Mark a confirmed booking whose reserved arrival has passed as a no-show (024).
+//
+// THE CHARGE IS THE SERVER'S DECISION, NOT THIS FUNCTION'S: mark_no_show posts
+// one night at the locked rate for a GUARANTEED booking (a company held the
+// room) and posts nothing for a walk-in, in the same transaction as the status
+// change. The screen's confirmation step states which outcome applies so the
+// user is never surprised, but it does not compute or send an amount — a client
+// that could name the charge could name the wrong one.
+//
+// The charge carries the deterministic 'noshow:<booking>' key server-side, so a
+// double-click cannot post two of them; no key is passed from here.
+export async function markNoShow(bookingId: string): Promise<Booking> {
+  const { data, error } = await supabase.rpc('mark_no_show', {
     p_booking_id: bookingId,
     p_idempotency_key: null,
   });
@@ -483,11 +523,69 @@ export async function checkInBooking(bookingId: string): Promise<Booking> {
   return data as Booking;
 }
 
-export async function checkOutBooking(bookingId: string): Promise<Booking> {
+// CHECKOUT COMPLETES THE BILL (migration 026), so it no longer returns a bare
+// booking row: check_out_booking posts every unbilled room night of the stay in
+// the same transaction as the status change and returns a SUMMARY of what that
+// did to the folio. The desk needs all three facts — what was posted, what was
+// already there, and what is now owed — because a guest leaving at 02:00 is
+// standing in front of them waiting to settle.
+//
+// THE NIGHTS CANNOT DOUBLE-POST, and this function passes no key to make that
+// true: the server posts each night through post_room_night_charge's
+// deterministic 'room:<booking>:<date>' key, the same key run_night_audit uses,
+// so whichever of the two reaches a night first wins and the other no-ops. A
+// double-clicked checkout is likewise idempotent by state.
+export interface CheckOutSummary {
+  booking: Booking;
+  // True when the booking was ALREADY checked out — a re-run. Nothing was posted
+  // and nothing was written; the counts below are a read-only report.
+  alreadyCheckedOut: boolean;
+  // The date billing ran from: the actual arrival, floored at the reserved
+  // check-in (the server's own expression, not recomputed here).
+  chargeFrom: string | null;
+  nightsTotal: number;
+  // Posted BY THIS CHECKOUT — the nights the audit had not reached yet.
+  nightsPosted: number;
+  // Already on the bill when checkout ran (the audit got there first).
+  nightsAlreadyPosted: number;
+  // Nights in the billable range carrying NO charge at all. Always 0 after a
+  // successful checkout — the server posts every night it counts — so a non-zero
+  // value can only come from a re-run of an already-departed stay. Not the voided
+  // case: a voided charge keeps its idempotency key and counts as already posted.
+  nightsUnbilled: number;
+  // What this checkout added to the folio, in money. 0 on a re-run.
+  amountPosted: number;
+  // The LIVE balance after posting, straight from folio_totals — positive means
+  // the guest still owes. null only if the booking somehow has no folio.
+  balance: number | null;
+}
+
+// numeric values inside a jsonb result arrive as JSON numbers rather than the
+// strings a top-level numeric column would give (§6) — parseNumeric accepts both,
+// so the parsing is explicit either way and never an implicit coercion.
+function toCount(value: unknown): number {
+  return parseNumeric(value as string | number | null) ?? 0;
+}
+
+export async function checkOutBooking(
+  bookingId: string,
+): Promise<CheckOutSummary> {
   const { data, error } = await supabase.rpc('check_out_booking', {
     p_booking_id: bookingId,
     p_idempotency_key: null,
   });
   if (error) throw error;
-  return data as Booking;
+
+  const row = (data ?? {}) as Record<string, unknown>;
+  return {
+    booking: row.booking as Booking,
+    alreadyCheckedOut: row.already_checked_out === true,
+    chargeFrom: (row.charge_from as string | null) ?? null,
+    nightsTotal: toCount(row.nights_total),
+    nightsPosted: toCount(row.nights_posted),
+    nightsAlreadyPosted: toCount(row.nights_already_posted),
+    nightsUnbilled: toCount(row.nights_unbilled),
+    amountPosted: toCount(row.amount_posted),
+    balance: parseNumeric(row.balance as string | number | null),
+  };
 }

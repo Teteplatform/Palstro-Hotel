@@ -84,6 +84,24 @@ export interface PropertySettings {
   updated_by: string | null;
 }
 
+// property_finance_settings (per-property INTERNAL finance config, 021 §3).
+//
+// Deliberately NOT part of property_settings: that table carries a public (anon)
+// read policy for the guest site, and Postgres RLS is row-level, so a threshold
+// placed there would be readable by the entire internet. This one is
+// member-read / admin-write with no public policy, and exactly one row per
+// property is guaranteed by an AFTER INSERT trigger.
+export interface PropertyFinanceSettings {
+  property_id: string;
+  // numeric(14,2) — a STRING over PostgREST (§6). Parse with parseNumeric before
+  // any arithmetic or comparison. 0 means EVERY discount needs a manager PIN.
+  discount_threshold: string;
+  created_at: string;
+  updated_at: string;
+  created_by: string | null;
+  updated_by: string | null;
+}
+
 // A resolved property plus its guest-facing settings and its parent tenant.
 // (property_settings, not tenant_settings — tenant_settings is not public.)
 export interface PropertyContext {
