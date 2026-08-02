@@ -37,6 +37,22 @@ interface AddChargeFormProps {
   propertyId: string;
   currency: string;
   timezone: string;
+  // ---- STANDALONE MODE (2.txt §2) ------------------------------------------
+  // A charge on the guest's NON-RESIDENT folio is the same act against a
+  // different folio — the same post_charge, the same categories, the same tax
+  // preview — so it is this form with its words changed, never a second charge
+  // screen that could drift from this one. Two differences, both deliberate:
+  // the description becomes REQUIRED (a charge tied to no stay is
+  // unexplainable a month later without one), and `source` is passed as
+  // 'standalone' so the bill and every later report can tell the two apart
+  // without inspecting the folio.
+  title?: string;
+  description?: string;
+  descriptionLabel?: string;
+  descriptionHelp?: string;
+  descriptionPlaceholder?: string;
+  descriptionRequired?: boolean;
+  source?: string;
   onDone: () => Promise<void> | void;
   onCancel: () => void;
 }
@@ -47,6 +63,13 @@ export function AddChargeForm({
   propertyId,
   currency,
   timezone,
+  title = 'Add charge',
+  description: blurb = 'For extras signed to the room — food & beverage, laundry, internet, transport. Room nights post automatically at night audit and are never added here.',
+  descriptionLabel = 'Description',
+  descriptionHelp,
+  descriptionPlaceholder = 'e.g. Dinner — table 4, laundry ticket 218',
+  descriptionRequired = false,
+  source,
   onDone,
   onCancel,
 }: AddChargeFormProps) {
@@ -109,7 +132,8 @@ export function AddChargeForm({
     quantity > 0 &&
     unitAmount !== null &&
     unitAmount >= 0 &&
-    date !== '';
+    date !== '' &&
+    (!descriptionRequired || description.trim().length > 0);
 
   async function handleSubmit() {
     if (!canSubmit || submitting) return;
@@ -126,6 +150,7 @@ export function AddChargeForm({
         // guard that makes a double-click return the first charge, not post a
         // second one.
         idempotencyKey: newIdempotencyKey(),
+        source,
       });
       toast.success('Charge posted.');
       await onDone();
@@ -138,8 +163,8 @@ export function AddChargeForm({
 
   return (
     <FolioActionCard
-      title="Add charge"
-      description="For extras signed to the room — food & beverage, laundry, internet, transport. Room nights post automatically at night audit and are never added here."
+      title={title}
+      description={blurb}
       submitLabel="Post charge"
       submittingLabel="Posting…"
       submitting={submitting}
@@ -165,11 +190,13 @@ export function AddChargeForm({
       />
 
       <TextField
-        label="Description"
+        label={descriptionLabel}
+        required={descriptionRequired}
         value={description}
         onChange={setDescription}
         disabled={submitting}
-        placeholder="e.g. Dinner — table 4, laundry ticket 218"
+        placeholder={descriptionPlaceholder}
+        helpText={descriptionHelp}
       />
 
       <div className="grid gap-3 sm:grid-cols-2">

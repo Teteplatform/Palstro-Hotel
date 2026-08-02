@@ -315,6 +315,12 @@ export interface PostChargeInput {
   // server-side from properties.timezone.
   chargeDate: string | null;
   idempotencyKey: string;
+  // PROVENANCE (021 §5: free text ON PURPOSE, so a new posting module never
+  // needs a migration to name itself). Omitted for an ordinary front-desk extra,
+  // which takes the RPC's own 'manual' default; the guest home passes
+  // 'standalone' for a charge posted to the non-resident folio, so the bill and
+  // every future report can tell the two apart without inspecting the folio.
+  source?: string;
 }
 
 // Post a manual charge. THE ONE charge RPC (021 §9.1) — F&B, laundry, internet,
@@ -335,6 +341,8 @@ export async function postCharge(input: PostChargeInput) {
     p_unit_amount: input.unitAmount,
     p_charge_date: input.chargeDate,
     p_idempotency_key: input.idempotencyKey,
+    // Omitted -> the RPC's 'manual' default (it coalesces a blank away too).
+    p_source: input.source ?? 'manual',
   });
   if (error) throw error;
   return data;

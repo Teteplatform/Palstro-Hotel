@@ -30,6 +30,19 @@ interface TakePaymentFormProps {
   // the browser's (rules 8, 12). A payment keyed at 00:30 in Lagos by a manager
   // whose laptop is on UTC must still land on the right business date.
   timezone: string;
+  // ---- STANDALONE MODE (2.txt §2) ------------------------------------------
+  // A payment on the guest's NON-RESIDENT folio is the same act against a
+  // different folio — same RPC, same idempotency, same business date — so it is
+  // the same form with its words changed, not a second payment screen that could
+  // drift from this one. The only behavioural difference is that the reference
+  // becomes REQUIRED: a payment tied to no stay is unexplainable a month later
+  // unless the person taking it says what it was for.
+  title?: string;
+  description?: string;
+  referenceLabel?: string;
+  referenceHelp?: string;
+  referencePlaceholder?: string;
+  referenceRequired?: boolean;
   onDone: () => Promise<void> | void;
   onCancel: () => void;
 }
@@ -38,6 +51,12 @@ export function TakePaymentForm({
   folioId,
   currency,
   timezone,
+  title = 'Take payment',
+  description = 'A deposit taken before check-in is simply a payment on this folio — the same action serves both.',
+  referenceLabel = 'Reference',
+  referenceHelp,
+  referencePlaceholder = 'Optional — teller no., POS slip, transfer ref',
+  referenceRequired = false,
   onDone,
   onCancel,
 }: TakePaymentFormProps) {
@@ -50,7 +69,11 @@ export function TakePaymentForm({
   const [date, setDate] = useState(todayIsoInZone(timezone));
   const [submitting, setSubmitting] = useState(false);
 
-  const canSubmit = amount !== null && amount !== 0 && date !== '';
+  const canSubmit =
+    amount !== null &&
+    amount !== 0 &&
+    date !== '' &&
+    (!referenceRequired || reference.trim().length > 0);
 
   async function handleSubmit() {
     if (!canSubmit || submitting) return;
@@ -84,8 +107,8 @@ export function TakePaymentForm({
 
   return (
     <FolioActionCard
-      title="Take payment"
-      description="A deposit taken before check-in is simply a payment on this folio — the same action serves both."
+      title={title}
+      description={description}
       submitLabel="Record payment"
       submittingLabel="Recording…"
       submitting={submitting}
@@ -117,11 +140,13 @@ export function TakePaymentForm({
           }))}
         />
         <TextField
-          label="Reference"
+          label={referenceLabel}
+          required={referenceRequired}
           value={reference}
           onChange={setReference}
           disabled={submitting}
-          placeholder="Optional — teller no., POS slip, transfer ref"
+          placeholder={referencePlaceholder}
+          helpText={referenceHelp}
         />
         <DateField
           label="Payment date"

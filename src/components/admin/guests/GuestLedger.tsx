@@ -9,9 +9,16 @@ import { fetchGuestLedger } from '../../../lib/guestLedger';
 import { useAuth } from '../../../hooks/useAuth';
 import type { GuestLedgerEntry } from '../../../types/guestLedger';
 
-// THE GUEST LEDGER (2.txt §3) — every stay and every payment across all of this
-// guest's folios at this property, as ONE running statement. A bank statement:
-// the balance goes UP with each stay's charges and DOWN with each payment.
+// THE GUEST LEDGER (2.txt §2) — every stay, every standalone charge and every
+// payment across all of this guest's folios at this property, as ONE running
+// statement. A bank statement: the balance goes UP with a charge-side line and
+// DOWN with a payment.
+//
+// STANDALONE LINES (028 §8) sit in the same statement as their own rows, dated
+// by their own business date, because that is what makes the foot balance the
+// guest's WHOLE account rather than just the part of it that happened to be
+// attached to a stay. They carry the required explanation note as their subline
+// and open nothing — there is no stay bill behind them.
 //
 // SELF-CONTAINED AND EMBEDDABLE, the same way FolioBill is: it takes a guest id
 // and loads, renders and reconciles everything itself, so it can sit in a tab, a
@@ -230,18 +237,29 @@ export function GuestLedger({
                   colSpan={5}
                   className="px-4 py-10 text-center text-sm text-charcoal-muted"
                 >
-                  Nothing on this guest's account yet. Their stays and payments
-                  appear here as soon as a booking is made for them.
+                  Nothing on this guest's account yet. Their stays, payments and
+                  any standalone charges appear here as soon as the first one is
+                  recorded.
                 </td>
               </tr>
             ) : (
               entries.map((entry) => (
                 <LedgerRow
-                  key={`${entry.entry_type}-${entry.payment_id ?? entry.booking_id}`}
+                  // entry_key is the row's OWN id (booking / charge / payment) —
+                  // the same total tiebreak the view's running-balance window
+                  // orders by, so it is unique here by construction.
+                  key={entry.entry_key}
                   entry={entry}
                   currency={currency}
                   currentUserId={currentUserId}
-                  onOpen={() => onOpenStay(entry.booking_id)}
+                  // A standalone line has no stay to open. Passing null rather
+                  // than a no-op handler is what lets the row render as plain
+                  // text instead of a button that does nothing.
+                  onOpen={
+                    entry.booking_id
+                      ? () => onOpenStay(entry.booking_id as string)
+                      : null
+                  }
                 />
               ))
             )}
@@ -271,8 +289,13 @@ export function GuestLedger({
   );
 }
 
-// One statement line. A stay adds to the balance, a payment subtracts from it;
-// both carry the stay they belong to, and both open that stay's own bill.
+// One statement line, of FOUR kinds (028 §8): a stay collapsed to its charges, a
+// STANDALONE charge, a payment on a stay's folio, or a STANDALONE payment. A
+// charge-side line pushes the balance up, a payment pulls it down.
+//
+// A STANDALONE LINE IS MARKED, IN WORDS, and does not open anything: it belongs
+// to no stay, so there is no bill to drill into, and a row that looked clickable
+// and did nothing would be worse than one that plainly is not.
 function LedgerRow({
   entry,
   currency,
@@ -282,49 +305,84 @@ function LedgerRow({
   entry: GuestLedgerEntry;
   currency: string;
   currentUserId: string | null;
-  onOpen: () => void;
+  // null when the line has no stay behind it (both standalone kinds).
+  onOpen: (() => void) | null;
 }) {
-  const isStay = entry.entry_type === 'stay';
+  const isCharge =
+    entry.entry_type === 'stay' || entry.entry_type === 'standalone_charge';
   const charge = parseNumeric(entry.charge_amount) ?? 0;
   const payment = parseNumeric(entry.payment_amount) ?? 0;
   const dateText = formatDisplayDate(entry.entry_date);
 
-  // "Stay · Executive Suite · 3 nights" — the room type is the tenant's own name
-  // for it (rule 17), and a retired type still names its stay (027 §3).
-  const detail = isStay
-    ? [
-        'Stay',
-        entry.room_type_name ?? MISSING_VALUE,
-        entry.nights === null ? null : formatNights(entry.nights),
-      ]
-        .filter(Boolean)
-        .join(' · ')
-    : [
-        paymentMethodLabel(entry.payment_method ?? 'other'),
-        // A refund is a negative payment (021 DECISION 3): the sign carries it,
-        // the word stops it being misread as money in.
-        payment < 0 ? 'refund' : null,
-        entry.payment_reference ? `ref ${entry.payment_reference}` : null,
-      ]
-        .filter(Boolean)
-        .join(' · ');
+  // "Stay · Executive Suite · 1 night" — the room type is the tenant's own name
+  // for it (rule 17), and a retired type still names its stay. The night count is
+  // display_nights: the ACTUAL nights the folio billed once the guest arrived
+  // (2.txt PART 1), so this line and the bill it collapses agree.
+  let detail: string;
+  if (entry.entry_type === 'stay') {
+    detail = [
+      'Stay',
+      entry.room_type_name ?? MISSING_VALUE,
+      entry.display_nights === null ? null : formatNights(entry.display_nights),
+    ]
+      .filter(Boolean)
+      .join(' · ');
+  } else if (entry.entry_type === 'standalone_charge') {
+    detail = [
+      'Charge',
+      entry.charge_type_name ?? MISSING_VALUE,
+      '(standalone)',
+    ].join(' · ');
+  } else {
+    detail = [
+      paymentMethodLabel(entry.payment_method ?? 'other'),
+      // A refund is a negative payment (021 DECISION 3): the sign carries it,
+      // the word stops it being misread as money in.
+      payment < 0 ? 'refund' : null,
+      entry.is_standalone ? '(standalone)' : null,
+      entry.payment_reference ? `ref ${entry.payment_reference}` : null,
+    ]
+      .filter(Boolean)
+      .join(' · ');
+  }
 
-  const meta = isStay
-    ? entry.booking_number
-    : `${entry.booking_number} · received by ${staffLabel(entry.received_by, currentUserId)}`;
+  // The subline: which stay it belongs to, or — for a standalone item — the
+  // required explanation note the desk typed when posting it, which is the whole
+  // reason that note is mandatory.
+  let meta: string;
+  if (entry.entry_type === 'stay') {
+    meta = entry.booking_number ?? MISSING_VALUE;
+  } else if (entry.entry_type === 'standalone_charge') {
+    meta = entry.charge_description?.trim() || 'Not tied to a stay';
+  } else {
+    meta = [
+      entry.booking_number ?? 'Not tied to a stay',
+      `received by ${staffLabel(entry.received_by, currentUserId)}`,
+    ].join(' · ');
+  }
+
+  const clickable = onOpen !== null;
 
   return (
     <tr
-      role="button"
-      tabIndex={0}
-      onClick={onOpen}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          onOpen();
-        }
-      }}
-      className="group cursor-pointer align-top transition-colors hover:bg-sand/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
+      role={clickable ? 'button' : undefined}
+      tabIndex={clickable ? 0 : undefined}
+      onClick={onOpen ?? undefined}
+      onKeyDown={
+        clickable
+          ? (e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onOpen?.();
+              }
+            }
+          : undefined
+      }
+      className={`group align-top transition-colors ${
+        clickable
+          ? 'cursor-pointer hover:bg-sand/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary'
+          : ''
+      }`}
     >
       <td className="hidden whitespace-nowrap px-3 py-3 text-charcoal-muted sm:table-cell sm:px-4">
         {dateText}
@@ -336,16 +394,16 @@ function LedgerRow({
             columns from `sm` up. */}
         <span className="mt-0.5 block text-xs text-charcoal-muted sm:hidden">
           {dateText} ·{' '}
-          {isStay
+          {isCharge
             ? formatMoney(charge, currency)
             : `− ${formatMoney(Math.abs(payment), currency)}`}
         </span>
       </td>
       <td className="hidden whitespace-nowrap px-3 py-3 text-right tabular-nums text-charcoal sm:table-cell">
-        {isStay ? formatMoney(charge, currency) : ''}
+        {isCharge ? formatMoney(charge, currency) : ''}
       </td>
       <td className="hidden whitespace-nowrap px-3 py-3 text-right tabular-nums text-charcoal sm:table-cell">
-        {isStay ? '' : formatMoney(payment, currency)}
+        {isCharge ? '' : formatMoney(payment, currency)}
       </td>
       <td className="whitespace-nowrap px-3 py-3 text-right font-semibold tabular-nums text-charcoal sm:px-4">
         {/* The database's cumulative figure, printed. */}

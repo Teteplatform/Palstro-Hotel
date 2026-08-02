@@ -4,8 +4,9 @@ import { useTenantContext } from '../../hooks/useTenantContext';
 import { ADMIN_ROLES } from '../../types/auth';
 import { GuestDetailScreen } from '../../components/admin/guests/GuestDetailScreen';
 
-// Route: /admin/:propertySlug/guests/:guestId (2.txt §2). The guest's own page —
-// their history across every stay, and the running ledger over those stays.
+// Route: /admin/:propertySlug/guests/:guestId (2.txt §2). THE GUEST HOME — the
+// single place everything about a person lives: their profile, their stays with
+// every per-stay action, and the running ledger across their whole account.
 //
 // Keyed by guest id so navigating from one guest to another remounts cleanly
 // (fresh load, fresh tab state), matching BookingDetailPage.
@@ -34,6 +35,10 @@ export function GuestDetailPage() {
       propertySlug={property.slug}
       propertyName={property.name}
       currency={property.currency}
+      // Load-bearing: a charge or payment posted from this page defaults to the
+      // HOTEL's operating day, and the server derives the same business date
+      // from the same zone (rules 8, 12).
+      timezone={property.timezone}
       isAdmin={isAdmin}
     />
   );

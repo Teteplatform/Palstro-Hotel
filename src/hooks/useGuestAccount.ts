@@ -1,23 +1,23 @@
 import { useCallback, useEffect, useState } from 'react';
 import { fetchGuestById } from '../lib/guests';
 import {
-  fetchGuestHistorySummary,
+  fetchGuestAccountSummary,
   fetchGuestStaysPage,
 } from '../lib/guestLedger';
 import type { Guest } from '../types/guest';
-import type { GuestHistorySummary, GuestStayRow } from '../types/guestLedger';
+import type { GuestAccountSummary, GuestStayRow } from '../types/guestLedger';
 
-// The guest detail page's data (2.txt §2): the guest record, their stay history
-// summary, and one server-paginated page of their stays.
+// The guest home's data (2.txt §2): the guest record, their account summary, and
+// one server-paginated page of their stays.
 //
 // THREE READS, DELIBERATELY SEPARATE — the same shape useBookings uses:
 //   * the GUEST row (tenant-scoped; a guest is shared across a tenant's
 //     properties, so no property filter here — 014),
-//   * the SUMMARY, aggregated across EVERY stay at this property (rule 20), so
-//     it is independent of which page is showing and never a page-derived
-//     lifetime figure,
+//   * the SUMMARY, aggregated BY THE DATABASE across every stay AND every
+//     standalone item at this property (rule 20), so it is independent of which
+//     page is showing and can never be a page-derived lifetime figure,
 //   * the PAGE, one .range() window with an exact count (rule 1b).
-// The summary re-fetches only when the guest/property changes or something is
+// The summary re-fetches when the guest/property changes or something is
 // reloaded; the page also re-fetches on a page/size change.
 //
 // NOTHING IS CACHED (rule 6): after any mutation the caller calls reload() and
@@ -26,12 +26,12 @@ import type { GuestHistorySummary, GuestStayRow } from '../types/guestLedger';
 
 const DEFAULT_PAGE_SIZE = 10;
 
-export interface UseGuestHistoryResult {
+export interface UseGuestAccountResult {
   guest: Guest | null;
   // True once the guest read has completed and found nothing — a deleted or
   // cross-tenant id. Distinct from "still loading" so the page can say so.
   notFound: boolean;
-  summary: GuestHistorySummary | null;
+  summary: GuestAccountSummary | null;
   summaryLoading: boolean;
   stays: GuestStayRow[];
   count: number;
@@ -46,14 +46,14 @@ export interface UseGuestHistoryResult {
   reload: () => Promise<void>;
 }
 
-export function useGuestHistory(
+export function useGuestAccount(
   guestId: string | null,
   tenantId: string | null,
   propertyId: string | null,
-): UseGuestHistoryResult {
+): UseGuestAccountResult {
   const [guest, setGuest] = useState<Guest | null>(null);
   const [notFound, setNotFound] = useState(false);
-  const [summary, setSummary] = useState<GuestHistorySummary | null>(null);
+  const [summary, setSummary] = useState<GuestAccountSummary | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(true);
   const [stays, setStays] = useState<GuestStayRow[]>([]);
   const [count, setCount] = useState(0);
@@ -76,7 +76,7 @@ export function useGuestHistory(
     setNonce((n) => n + 1);
   }, []);
 
-  // --- the guest row + the lifetime summary ---------------------------------
+  // --- the guest row + the account summary ----------------------------------
   useEffect(() => {
     let cancelled = false;
 
@@ -94,7 +94,7 @@ export function useGuestHistory(
       try {
         const [row, totals] = await Promise.all([
           fetchGuestById(guestId, tenantId),
-          fetchGuestHistorySummary(guestId, tenantId, propertyId),
+          fetchGuestAccountSummary(guestId, tenantId, propertyId),
         ]);
         if (cancelled) return;
         setGuest(row);

@@ -45,6 +45,26 @@ export const CloseIcon = ({ className }: IconProps) => (
   </Line>
 );
 
+// The row-actions affordance. VERTICAL dots (a "kebab"), deliberately distinct
+// from the folio bill's horizontal ⋯: a kebab sits in its own narrow column at
+// the head of a row and opens the actions for that WHOLE row, while the folio's
+// ⋯ trails a single line. Two shapes, two meanings, no guessing.
+export const KebabIcon = ({ className }: IconProps) => (
+  <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    <circle cx="12" cy="5" r="1.9" />
+    <circle cx="12" cy="12" r="1.9" />
+    <circle cx="12" cy="19" r="1.9" />
+  </svg>
+);
+
+// The profile-photo affordance on a guest avatar.
+export const CameraIcon = ({ className }: IconProps) => (
+  <Line className={className}>
+    <path d="M3 8.5A1.5 1.5 0 0 1 4.5 7h2.2l1.1-1.8a1 1 0 0 1 .86-.5h6.68a1 1 0 0 1 .86.5L17.3 7h2.2A1.5 1.5 0 0 1 21 8.5v9A1.5 1.5 0 0 1 19.5 19h-15A1.5 1.5 0 0 1 3 17.5z" />
+    <circle cx="12" cy="12.8" r="3.2" />
+  </Line>
+);
+
 export const ChevronDownIcon = ({ className }: IconProps) => (
   <Line className={className}>
     <path d="M6 9l6 6 6-6" />

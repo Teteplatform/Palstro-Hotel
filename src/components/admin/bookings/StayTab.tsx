@@ -83,11 +83,11 @@ interface StayTabProps {
   // wrong operating day.
   timezone: string;
   onChanged: () => Promise<void> | void;
-  // Take the user to the Folio tab. Passed in rather than reached for with
-  // useSearchParams here, because the tab is the PAGE's state (BookingDetailScreen
-  // owns ?tab=) and two components writing the same query param is how a
-  // back-button history gets shredded. Optional: this tab must still render if it
-  // is ever mounted somewhere without tabs.
+  // Bring the folio into view. The booking page has no tabs any more (2.txt §2),
+  // so this is now a scroll to the bill further down the SAME page rather than a
+  // tab switch — but it stays a callback because where the bill is remains the
+  // page's business, not this panel's. Optional: this panel must still render
+  // wherever it is mounted.
   onGoToFolio?: () => void;
 }
 

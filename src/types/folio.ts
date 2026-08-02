@@ -77,11 +77,20 @@ export interface TaxCharge {
   updated_by: string | null;
 }
 
+// A folio has exactly ONE owner (028 §1, folios_owner_check):
+//   booking_id set, guest_id null  -> the STAY folio (021's original, unchanged)
+//   booking_id null, guest_id set  -> the STANDALONE / non-resident folio, which
+//                                     holds a guest's charges and payments that
+//                                     belong to no stay. One per guest per
+//                                     property, opened by open_guest_folio.
+// Both kinds are charged and paid through the SAME unchanged post_charge /
+// record_payment, and folio_totals values them identically.
 export interface Folio {
   id: string;
   tenant_id: string;
   property_id: string;
-  booking_id: string;
+  booking_id: string | null;
+  guest_id: string | null;
   status: FolioStatus;
   opened_at: string;
   closed_at: string | null;

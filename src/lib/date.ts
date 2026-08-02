@@ -254,6 +254,37 @@ export function formatDisplayTime(value: string | null | undefined): string {
   return `${pad(hour)}:${pad(minute)}`;
 }
 
+// A 'YYYY-MM-DD' calendar date as the COMPACT 'DD-MM-YY' the stays table prints
+// ("01-08-26"). Used where a date range has to sit in one narrow column beside
+// six other columns and still fit at 360px, which "1 Aug 2026 → 2 Aug 2026"
+// does not.
+//
+// FIXED, NOT LOCALE-AWARE, and that is the deliberate difference from
+// formatDisplayDate. A compact all-numeric date is genuinely ambiguous across
+// locales (01-08-26 is 1 August in Lagos and 8 January in New York), so letting
+// Intl reorder it per browser would mean two staff reading the same screen
+// differently with nothing on the page to say so. Day-month-year is the order
+// this hotel writes dates in, it matches the long form used everywhere else on
+// the page, and the booking number sits beneath every range as the unambiguous
+// handle. Anywhere there is room, formatDisplayDate's "1 Aug 2026" is preferred
+// precisely because the month name cannot be misread.
+//
+// Returns '' for a missing or unparseable value — the CALLER supplies the dash,
+// as with every other display helper here (format.ts owns MISSING_VALUE).
+export function formatShortDate(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const [y, m, d] = (iso ?? '').split('-');
+  if (!y || !m || !d) return '';
+  const year = Number(y);
+  const month = Number(m);
+  const day = Number(d);
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) {
+    return '';
+  }
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${pad(day)}-${pad(month)}-${String(year).slice(-2)}`;
+}
+
 // Display a 'YYYY-MM-DD' calendar date in a readable, locale-aware form (e.g.
 // "5 Jan 2026"). Parsed at noon UTC so it never renders the day before near a
 // timezone boundary. Returns the raw input if unparseable (never throws).
