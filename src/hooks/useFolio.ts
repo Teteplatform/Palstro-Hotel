@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
+  fetchChargeReversals,
   fetchDiscountThreshold,
   fetchFolioCharges,
   fetchFolioChargeTaxes,
@@ -49,6 +50,11 @@ export interface UseFolioResult {
   // is the overwhelming majority — see the loader for why that case costs no
   // extra query.
   paymentReversals: Map<string, Reversal>;
+  // The same, for CHARGES (032), split by act and keyed by the ORIGINAL charge's
+  // id. Two maps because 'charge' and 'discount' are independent one-time acts
+  // against the same charge, so one map would silently drop one of them.
+  chargeReversals: Map<string, Reversal>;
+  discountReversals: Map<string, Reversal>;
   totals: FolioTotals | null;
   // The property's PIN-free discount ceiling (0 = every discount needs approval).
   discountThreshold: number;
@@ -72,6 +78,12 @@ export function useFolio(
   const [paymentReversals, setPaymentReversals] = useState<Map<string, Reversal>>(
     () => new Map(),
   );
+  const [chargeReversals, setChargeReversals] = useState<Map<string, Reversal>>(
+    () => new Map(),
+  );
+  const [discountReversals, setDiscountReversals] = useState<
+    Map<string, Reversal>
+  >(() => new Map());
   const [totals, setTotals] = useState<FolioTotals | null>(null);
   const [discountThreshold, setDiscountThreshold] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -93,6 +105,8 @@ export function useFolio(
         setPayments([]);
         setChargeTaxes([]);
         setPaymentReversals(new Map());
+        setChargeReversals(new Map());
+        setDiscountReversals(new Map());
         setTotals(null);
         setError(null);
         setLoading(false);
@@ -134,7 +148,7 @@ export function useFolio(
         setTotals(totalRow);
         setDiscountThreshold(threshold);
 
-        // A SIXTH READ, MADE ONLY WHEN IT CAN RETURN SOMETHING. A payment has
+        // TWO MORE READS, MADE ONLY WHEN THEY CAN RETURN SOMETHING. A payment has
         // been reversed if and only if a COUNTER-ENTRY exists on this folio
         // (reverse_payment writes both in one transaction — 031 §3.4), and a
         // counter-entry announces itself with reversal_of_payment_id. So the
@@ -147,12 +161,29 @@ export function useFolio(
         const reversedIds = paymentRows
           .map((p) => p.reversal_of_payment_id)
           .filter((id): id is string => id !== null);
-        const reversalMap =
+        // The same read for CHARGES (032), on exactly the same terms: a charge
+        // has been reversed — in full or in its discount — if and only if a
+        // counter-ENTRY exists on this folio, and a counter-entry announces
+        // itself with reversal_of_charge_id. So a folio with no reversals issues
+        // neither query, and the reads run together rather than in series.
+        const reversedChargeIds = chargeRows
+          .map((c) => c.reversal_of_charge_id)
+          .filter((id): id is string => id !== null);
+        const [reversalMap, chargeReversalMaps] = await Promise.all([
           reversedIds.length > 0
-            ? await fetchPaymentReversals(reversedIds, tenantId, propertyId)
-            : new Map<string, Reversal>();
+            ? fetchPaymentReversals(reversedIds, tenantId, propertyId)
+            : Promise.resolve(new Map<string, Reversal>()),
+          reversedChargeIds.length > 0
+            ? fetchChargeReversals(reversedChargeIds, tenantId, propertyId)
+            : Promise.resolve({
+                charge: new Map<string, Reversal>(),
+                discount: new Map<string, Reversal>(),
+              }),
+        ]);
         if (cancelled) return;
         setPaymentReversals(reversalMap);
+        setChargeReversals(chargeReversalMaps.charge);
+        setDiscountReversals(chargeReversalMaps.discount);
 
         setError(null);
       } catch (e) {
@@ -174,6 +205,8 @@ export function useFolio(
     payments,
     chargeTaxes,
     paymentReversals,
+    chargeReversals,
+    discountReversals,
     totals,
     discountThreshold,
     loading,

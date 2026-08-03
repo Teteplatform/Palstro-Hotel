@@ -76,6 +76,48 @@ import type {
 // tax_total, Σ printed payment lines = payments_total, and the printed balance
 // is charges_total − payments_total. The document adds up in the guest's hands.
 //
+// ---------------------------------------------------------------------------
+// A REVERSAL IS NOT A VOID, AND THE STATEMENT TREATS THEM OPPOSITELY
+// ---------------------------------------------------------------------------
+// The rule, in one line: A VOID IS HIDDEN FROM THE GUEST; A REVERSAL AND ITS
+// COUNTER-ENTRY ARE BOTH PRINTED. They answer different questions, and printing
+// them the same way would answer neither:
+//
+//   VOID     = "this should never have been recorded" — a keying mistake caught
+//              in the same breath. The guest was never told about it and has no
+//              reason to see it. The line is filtered out above; the void trail
+//              (reason, actor, struck-through figure) stays on the internal
+//              FolioBill, where an auditor can find it.
+//   REVERSAL = "this WAS recorded and WAS relied upon, and has now been undone."
+//              The guest may already hold a statement showing the original, or
+//              have been quoted the balance down the phone. BOTH halves are real
+//              financial history, so both print: the original line, and beneath
+//              it the counter-entry that takes it back off, carrying the reason
+//              in its own words ("Charge reversal — item never delivered",
+//              "Discount reversal — rate not agreed", "Payment reversal —
+//              transfer recalled"). A guest handed a document with a line
+//              silently missing has no way to tell a correction from an error.
+//
+// NOTHING IN THIS FILE HAD TO CHANGE FOR 032's CHARGE REVERSALS, and that is the
+// design working rather than an omission. A counter-entry is an ORDINARY
+// folio_charges row — not voided, in the original's category, with negative
+// money — so it flows through liveCharges, buildChargeGroups and the tax
+// aggregation with no special case, and it lands in the same Room/Extras group
+// as the charge it undoes, directly where a reader looks for it.
+//
+// The original is NOT additionally annotated "reversed" on the guest's copy —
+// unlike the internal bill, which marks it because staff need to know the line
+// is closed to further action. On the guest's document the counter-entry states
+// in plain words what it undoes and the two figures visibly cancel; a second
+// annotation would be bookkeeping vocabulary on a page meant to be read once.
+//
+// THE TOTALS STILL RECONCILE, for the same reason they do with voids:
+// folio_totals sums the very same non-voided rows, so Σ printed charge lines =
+// net_total including the counter's negative figure, and folio_charge_taxes
+// carries the counter's NEGATIVE tax line because 021 computes tax live from
+// each charge's net. A reversed charge therefore removes both itself and its VAT
+// from the printed total, and a reversed discount puts both back.
+//
 // INVARIANT (rule 9): this statement reconciles to folio_totals(folio_id) for
 // the folio it was built from, and that folio's balance is one term of the
 // guest ledger's own invariant (028: Σ folio balances = the guest's balance).

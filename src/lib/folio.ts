@@ -544,6 +544,129 @@ export async function fetchPaymentReversals(
 }
 
 // ---------------------------------------------------------------------------
+// Charge and discount reversal (032) — the same act, on the other side of the
+// bill
+// ---------------------------------------------------------------------------
+//
+// TWO DIFFERENT UNDOINGS, AND STAFF MUST NOT CONFUSE THEM:
+//
+//   REVERSE CHARGE   — the whole line comes off. The counter-entry mirrors
+//                      gross, discount AND net, so a DISCOUNTED charge returns
+//                      the balance to exactly what it was before the charge
+//                      existed. Tax reverses with it automatically, because 021
+//                      computes tax live from each charge's net: a negative net
+//                      produces a negative tax on the very next read.
+//   REVERSE DISCOUNT — the charge STAYS and goes back to full price. The
+//                      counter-entry is (gross 0, discount −X, net +X), so the
+//                      balance RISES by the discount plus its tax.
+//
+// Neither edits the original row. A counter-entry is chosen over an edit for the
+// discount too, because an edit would rewrite a business day that has already
+// been reported and would overwrite the record of what was given away with the
+// record of it being taken back (032 DECISION 2).
+//
+// A MANAGER PIN IS ALWAYS REQUIRED for both, with no threshold — applying a
+// discount needed approval, so un-applying it cannot need less, and removing a
+// charge that was already billed is worth as much to someone stealing as any
+// amount you could name.
+
+export interface ReverseChargeInput {
+  chargeId: string;
+  reason: string;
+  // Never stored, never logged, never put in an error message, and cleared from
+  // component state the moment the call returns.
+  managerPin: string;
+  idempotencyKey: string;
+}
+
+// Reverse a whole charge. Returns the permanent `reversals` audit row.
+//
+// IDEMPOTENT TWICE OVER (constraint): keyed on the passed key AND, independently,
+// refusing a charge that already has a 'charge' reversal — under a FOR UPDATE
+// lock on the original, so two terminals in the same second cannot post two
+// counter-charges. The counter-entry itself carries a DETERMINISTIC key
+// ('reversal:charge:<id>'), so even two different client keys cannot produce two
+// counter-charges. A re-run returns the FIRST reversal, before re-checking the
+// PIN, so a retry after a network drop does not send the desk to fetch a manager
+// twice.
+export async function reverseCharge(
+  input: ReverseChargeInput,
+): Promise<Reversal> {
+  const { data, error } = await supabase.rpc('reverse_charge', {
+    p_charge_id: input.chargeId,
+    p_reason: input.reason,
+    p_manager_pin: input.managerPin,
+    p_idempotency_key: input.idempotencyKey,
+  });
+  if (error) throw error;
+  return data as Reversal;
+}
+
+// Reverse the DISCOUNT on a charge, restoring it to full price. Same shape, same
+// guarantees, its own one-per-charge-ever guard: a discount is reversed once.
+export async function reverseDiscount(
+  input: ReverseChargeInput,
+): Promise<Reversal> {
+  const { data, error } = await supabase.rpc('reverse_discount', {
+    p_charge_id: input.chargeId,
+    p_reason: input.reason,
+    p_manager_pin: input.managerPin,
+    p_idempotency_key: input.idempotencyKey,
+  });
+  if (error) throw error;
+  return data as Reversal;
+}
+
+// Every reversal recorded against a folio's CHARGES, split by which act it was,
+// each keyed by the ORIGINAL charge's id.
+//
+// Two maps rather than one, because 'charge' and 'discount' are independent acts
+// against the SAME charge id (a discount reversed on Tuesday does not stop the
+// charge being reversed on Friday), so a single map keyed by target_id would
+// silently drop one of them.
+//
+// As with payments, the bill does not need this to render the arithmetic — a
+// counter-entry is recognisable from reversal_of_charge_id alone, and the reason
+// is copied onto its description — but "approved by whom" lives only here, and a
+// reversal that names nobody is the failure the whole subsystem exists to prevent.
+//
+// Rule 1a: paginated through fetchAllPaged; rule 19: scoped to the active tenant
+// and property on top of RLS.
+export async function fetchChargeReversals(
+  chargeIds: string[],
+  tenantId: string,
+  propertyId: string,
+): Promise<{ charge: Map<string, Reversal>; discount: Map<string, Reversal> }> {
+  const byCharge = new Map<string, Reversal>();
+  const byDiscount = new Map<string, Reversal>();
+  if (chargeIds.length === 0) return { charge: byCharge, discount: byDiscount };
+
+  // Chunked because `.in()` on an unbounded list is exactly what rule 1 forbids:
+  // a folio with hundreds of charges would otherwise build one enormous URL.
+  const CHUNK = 200;
+  for (let i = 0; i < chargeIds.length; i += CHUNK) {
+    const chunk = chargeIds.slice(i, i + CHUNK);
+    const rows = await fetchAllPaged<Reversal>((from, to) =>
+      supabase
+        .from('reversals')
+        .select('*')
+        .eq('tenant_id', tenantId) // rule 19
+        .eq('property_id', propertyId) // rule 19
+        .in('target_type', ['charge', 'discount'])
+        .in('target_id', chunk)
+        .order('reversed_at', { ascending: true })
+        .range(from, to)
+        .returns<Reversal[]>(),
+    );
+    for (const row of rows) {
+      if (row.target_type === 'charge') byCharge.set(row.target_id, row);
+      else if (row.target_type === 'discount') byDiscount.set(row.target_id, row);
+    }
+  }
+  return { charge: byCharge, discount: byDiscount };
+}
+
+// ---------------------------------------------------------------------------
 // Manager PIN (021 §7)
 // ---------------------------------------------------------------------------
 

@@ -101,6 +101,11 @@ export interface Folio {
   // NOTE: no `balance`. Call folio_balance()/folio_totals() — see the header.
 }
 
+// The two acts that can be reversed ON a charge (032). A subset of
+// ReversalTargetType, because a folio_charges counter-entry can only ever be one
+// of these two — keep in sync with folio_charges_reversal_pair_check.
+export type ChargeReversalTargetType = 'charge' | 'discount';
+
 // One charge line. The DISCOUNT-AS-ITS-OWN-LINE model: gross and discount are
 // separate visible figures so a bill reads rack -> discount -> net, and the hotel
 // can see what was given away and by whom.
@@ -122,7 +127,23 @@ export interface FolioCharge {
   discount_approved_by: string | null;
   net_amount: string;                 // always exactly gross - discount (DB CHECK)
   charge_date: string;                // 'YYYY-MM-DD' — the BUSINESS date (rules 8, 12)
-  source: string;                     // 'room' | 'manual' | 'fnb' | ... free text
+  source: string;                     // 'room' | 'manual' | 'fnb' | 'reversal' | ... free text
+  // Set ONLY on a REVERSAL COUNTER-ENTRY (032 §1): the id of the original charge
+  // this row reverses, and WHICH act it performs. NULL on every ordinary charge.
+  // Not cached figures (rule 6) — an identity and a kind, neither of which can
+  // drift.
+  //
+  // They are also what the DB's sign constraint keys on: ONLY a row that declares
+  // the charge it reverses may carry negative money, so a counter-entry is the
+  // one shape of folio_charges row whose amounts are negative.
+  //   'charge'   — the whole charge was reversed. The counter mirrors gross,
+  //                discount AND net, so the balance returns to exactly what it
+  //                was before the charge existed, tax included.
+  //   'discount' — only the discount was reversed. The counter is
+  //                (gross 0, discount −X, net +X): the charge goes back to full
+  //                price and the original keeps its discount trail intact.
+  reversal_of_charge_id: string | null;
+  reversal_target_type: ChargeReversalTargetType | null;
   is_voided: boolean;
   voided_at: string | null;
   voided_by: string | null;

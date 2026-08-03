@@ -19,6 +19,10 @@ import type {
 } from '../../../types/folio';
 import { AddChargeForm } from './AddChargeForm';
 import { DiscountForm } from './DiscountForm';
+import {
+  ReverseChargeForm,
+  type ChargeReversalMode,
+} from './ReverseChargeForm';
 import { ReversePaymentForm } from './ReversePaymentForm';
 import { TakePaymentForm } from './TakePaymentForm';
 import { VoidForm } from './VoidForm';
@@ -112,6 +116,12 @@ type ActionState =
   // line should never have been recorded; a reversal says it was recorded, was
   // relied upon, and is now being undone by a counter-entry a manager approved.
   | { kind: 'reverse-payment'; payment: FolioPayment }
+  // TWO separate charge-side reversals (032), never one action with a mode
+  // switch inside it: "Reverse charge" takes the whole line off, "Reverse
+  // discount" puts the price back up. They are opened by two differently-named
+  // menu items so the choice is made in the menu, where the staff member can
+  // still change their mind, rather than inside a dialog they have committed to.
+  | { kind: 'reverse-charge'; charge: FolioChargeWithCategory; mode: ChargeReversalMode }
   | null;
 
 // ONE ROW OF THE BILL — and one row of the future export.
@@ -153,9 +163,11 @@ const TOTALS_NOTE =
   'to each net line; total charges is subtotal plus tax; payments is every ' +
   'non-voided payment, net of refunds. Outstanding balance is total charges less ' +
   'payments. Voided charges and voided payments are shown but excluded. A ' +
-  'REVERSED payment is different: it is still included, because the money really ' +
-  'was received — its counter-entry is a separate payment line that takes the ' +
-  'same amount back out, so the two net to nothing and both stay visible. ' +
+  'REVERSED line is different: it is still included, because it really happened — ' +
+  'its counter-entry is a separate line that takes the same amount back out, so ' +
+  'the two net to nothing and both stay visible. A reversed CHARGE nets its ' +
+  'discount and its tax out with it; a reversed DISCOUNT puts the charge back to ' +
+  'full price and its tax with it. ' +
   'Nothing is stored or cached — these figures are recalculated on every read.';
 
 export function FolioBill({
@@ -173,6 +185,8 @@ export function FolioBill({
     payments,
     chargeTaxes,
     paymentReversals,
+    chargeReversals,
+    discountReversals,
     totals,
     discountThreshold,
     loading,
@@ -251,6 +265,8 @@ export function FolioBill({
 
   const chargeRows = buildChargeRows({
     charges,
+    chargeReversals,
+    discountReversals,
     currency,
     timezone,
     currentUserId,
@@ -259,6 +275,8 @@ export function FolioBill({
     folioClosed,
     onDiscount: (charge) => setAction({ kind: 'discount', charge }),
     onVoidCharge: (charge) => setAction({ kind: 'void-charge', charge }),
+    onReverseCharge: (charge, mode) =>
+      setAction({ kind: 'reverse-charge', charge, mode }),
   });
 
   const paymentRows = buildPaymentRows({
@@ -365,6 +383,15 @@ export function FolioBill({
               currency,
             )} · ${formatDisplayDate(action.payment.payment_date)}`,
           }}
+          onDone={afterMutation}
+          onCancel={() => setAction(null)}
+        />
+      ) : null}
+      {action?.kind === 'reverse-charge' ? (
+        <ReverseChargeForm
+          mode={action.mode}
+          charge={action.charge}
+          currency={currency}
           onDone={afterMutation}
           onCancel={() => setAction(null)}
         />
@@ -576,8 +603,29 @@ export function FolioBill({
 // charge_date, with created_at only as a stable tiebreak). Nothing is re-sorted
 // or re-grouped here — the Type column carries what the old Room/Extras split
 // carried, per category rather than per bucket.
+//
+// CHARGE REVERSALS (032) ARE RENDERED HERE AND NOWHERE ELSE, from the rows
+// already in hand. A counter-entry announces itself with reversal_of_charge_id
+// and names its act in reversal_target_type, so:
+//
+//   * the COUNTER-ENTRY reads as "Charge reversal — <reason>" or "Discount
+//     reversal — <reason>" (the reason the RPC copied onto its description), and
+//     its subline names the line it undoes and the manager who approved it;
+//   * the ORIGINAL is marked reversed — NOT struck through, because it is not
+//     voided and it still counts: the charge genuinely was billed, and the
+//     counter-entry below is what takes it back off;
+//   * a charge whose DISCOUNT was reversed keeps its discount trail (what was
+//     given away, by whom, why) AND gains a line saying it was put back, by
+//     whom, why. Both facts, because both happened;
+//   * none of them offers Discount, Void or Reverse any more. Every one of those
+//     is refused server-side too (032 §6, §7) — this only keeps the menu honest.
+//
+// Both lines always stay visible. That is the whole point: a reversal that hid
+// either half would be indistinguishable from a charge quietly disappearing.
 function buildChargeRows({
   charges,
+  chargeReversals,
+  discountReversals,
   currency,
   timezone,
   currentUserId,
@@ -586,8 +634,12 @@ function buildChargeRows({
   folioClosed,
   onDiscount,
   onVoidCharge,
+  onReverseCharge,
 }: {
   charges: FolioChargeWithCategory[];
+  // Both keyed by the ORIGINAL charge's id — who approved each reversal and why.
+  chargeReversals: Map<string, Reversal>;
+  discountReversals: Map<string, Reversal>;
   currency: string;
   timezone: string;
   currentUserId: string | null;
@@ -596,12 +648,48 @@ function buildChargeRows({
   folioClosed: boolean;
   onDiscount: (charge: FolioChargeWithCategory) => void;
   onVoidCharge: (charge: FolioChargeWithCategory) => void;
+  onReverseCharge: (
+    charge: FolioChargeWithCategory,
+    mode: ChargeReversalMode,
+  ) => void;
 }): BillRow[] {
+  // Which originals carry a counter-entry, and which original each counter
+  // undoes — both derived from the ONE list, because reverse_charge /
+  // reverse_discount write the counter-entry and its audit row in a single
+  // transaction (032 §3.6), so a counter-entry on this folio IS the proof its
+  // original was reversed.
+  const byId = new Map(charges.map((c) => [c.id, c] as const));
+  const counterByOriginal = new Map<string, FolioChargeWithCategory>();
+  for (const c of charges) {
+    if (c.reversal_of_charge_id && c.reversal_target_type === 'charge') {
+      counterByOriginal.set(c.reversal_of_charge_id, c);
+    }
+  }
+  const discountCounterByOriginal = new Map<string, FolioChargeWithCategory>();
+  for (const c of charges) {
+    if (c.reversal_of_charge_id && c.reversal_target_type === 'discount') {
+      discountCounterByOriginal.set(c.reversal_of_charge_id, c);
+    }
+  }
+
   return charges.map((charge) => {
     const voided = charge.is_voided === true;
     const quantity = parseNumeric(charge.quantity) ?? 1;
     const discount = parseNumeric(charge.discount_amount) ?? 0;
     const postedDate = isoDateInZone(charge.created_at, timezone);
+
+    // Which side of a reversal, if any, this line is.
+    const isCounterEntry = charge.reversal_of_charge_id !== null;
+    const original = isCounterEntry
+      ? (byId.get(charge.reversal_of_charge_id as string) ?? null)
+      : null;
+    const chargeReversal = chargeReversals.get(charge.id) ?? null;
+    const discountReversal = discountReversals.get(charge.id) ?? null;
+    const wasReversed =
+      counterByOriginal.get(charge.id) !== undefined || chargeReversal !== null;
+    const discountWasReversed =
+      discountCounterByOriginal.get(charge.id) !== undefined ||
+      discountReversal !== null;
 
     // THE COMPUTATION, QUIETENED. At quantity 1 it is dropped outright: "1 ×
     // ₦130,000" restates the amount in the next column and does nothing but
@@ -615,7 +703,9 @@ function buildChargeRows({
     }
     // The discount stays visible with its reason and the name it was approved
     // under — that accountability record is the reason the discount feature
-    // exists, and it is not clutter.
+    // exists, and it is not clutter. On a COUNTER-ENTRY the discount is negative
+    // (it mirrors the original's), and repeating it as "less −₦20,000 discount"
+    // would be noise: the counter's own subline already says what it reverses.
     if (discount > 0) {
       parts.push(
         `less ${formatMoney(discount, currency)} discount${
@@ -623,6 +713,63 @@ function buildChargeRows({
         } · approved by ${staffLabel(charge.discount_approved_by, currentUserId)}`,
       );
     }
+
+    if (isCounterEntry) {
+      // The subline of the counter-line: what it undoes, and on whose authority.
+      // The approving manager is named from the reversals row keyed by the
+      // ORIGINAL's id — that name is the accountability record the subsystem
+      // exists to create, so it is never omitted.
+      const source = original
+        ? charge.reversal_target_type === 'discount'
+          ? (discountReversals.get(original.id) ?? null)
+          : (chargeReversals.get(original.id) ?? null)
+        : null;
+      if (original) {
+        parts.push(
+          charge.reversal_target_type === 'discount'
+            ? `restores the ${formatMoney(original.discount_amount, currency)} discount on the ${
+                original.category?.name ?? 'charge'
+              } of ${formatDisplayDate(original.charge_date)}`
+            : `reverses the ${formatMoney(original.net_amount, currency)} ${(
+                original.category?.name ?? 'charge'
+              ).toLowerCase()} charge of ${formatDisplayDate(original.charge_date)}`,
+        );
+      } else {
+        parts.push('reverses an earlier charge');
+      }
+      if (source) {
+        parts.push(`approved by ${staffLabel(source.approved_by, currentUserId)}`);
+      }
+    } else {
+      // The sublines of the ORIGINAL: what was undone, when, why, by whose
+      // authority — and the plain statement that it still counts, because the
+      // counter-entry is what moves the money.
+      if (wasReversed) {
+        parts.push(
+          `Reversed${
+            chargeReversal ? ` on ${formatDisplayDate(chargeReversal.business_date)}` : ''
+          }${chargeReversal?.reason ? ` · ${chargeReversal.reason}` : ''}${
+            chargeReversal
+              ? ` · approved by ${staffLabel(chargeReversal.approved_by, currentUserId)}`
+              : ''
+          } · still counted here; the counter-entry takes it back off`,
+        );
+      }
+      if (discountWasReversed) {
+        parts.push(
+          `Discount reversed${
+            discountReversal
+              ? ` on ${formatDisplayDate(discountReversal.business_date)}`
+              : ''
+          }${discountReversal?.reason ? ` · ${discountReversal.reason}` : ''}${
+            discountReversal
+              ? ` · approved by ${staffLabel(discountReversal.approved_by, currentUserId)}`
+              : ''
+          } · this line is back at its full amount`,
+        );
+      }
+    }
+
     if (voided) {
       parts.push(
         `Voided${charge.void_reason ? ` · ${charge.void_reason}` : ''} · by ${staffLabel(
@@ -632,9 +779,31 @@ function buildChargeRows({
       );
     }
 
+    // WHAT MAY STILL BE DONE TO THIS LINE. Both halves of a completed reversal
+    // are closed to further action, and the RPCs enforce every one of these
+    // regardless (032 §3, §4, §6, §7).
+    //
+    // "Reverse discount" appears only on a line that HAS a live discount, and it
+    // is named apart from "Reverse charge" so the two undoings are chosen in the
+    // menu rather than discovered in a dialog. Both need a manager PIN; neither
+    // is reachable once the line has been reversed.
     const actions: { label: string; onClick: () => void }[] = [];
-    if (canAct && !voided) {
-      if (folioOpen) actions.push({ label: 'Discount', onClick: () => onDiscount(charge) });
+    if (canAct && !voided && !isCounterEntry && !wasReversed) {
+      if (folioOpen && !discountWasReversed) {
+        actions.push({ label: 'Discount', onClick: () => onDiscount(charge) });
+      }
+      if (folioOpen) {
+        actions.push({
+          label: 'Reverse charge',
+          onClick: () => onReverseCharge(charge, 'charge'),
+        });
+      }
+      if (folioOpen && discount > 0 && !discountWasReversed) {
+        actions.push({
+          label: 'Reverse discount',
+          onClick: () => onReverseCharge(charge, 'discount'),
+        });
+      }
       if (!folioClosed) actions.push({ label: 'Void', onClick: () => onVoidCharge(charge) });
     }
 
