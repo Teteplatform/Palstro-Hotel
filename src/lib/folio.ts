@@ -9,6 +9,7 @@ import type {
   FolioPayment,
   FolioTotals,
   PaymentMethod,
+  Reversal,
   TaxCharge,
 } from '../types/folio';
 
@@ -444,6 +445,102 @@ export async function voidPayment(
   });
   if (error) throw error;
   return data;
+}
+
+// ---------------------------------------------------------------------------
+// Reversal (031) — VOID and REVERSE are different acts
+// ---------------------------------------------------------------------------
+//
+//   VOID    = "this never should have been recorded" — a keying mistake caught
+//             in the same breath. The line drops out of the totals. No PIN.
+//   REVERSE = "this WAS recorded and WAS relied upon, and must now be undone" —
+//             a receipt was issued, a statement was emailed, a balance was
+//             quoted. The original keeps counting, because it happened, and the
+//             undoing is a SECOND visible line with a manager's name on it.
+//
+// A reversal NEVER deletes or edits the original. reverse_payment posts an equal
+// and opposite counter-payment through the SAME record_payment path, so
+// folio_totals and the 027 FIFO views need no change at all: payments are signed,
+// so the balance rises by the reversed amount and the guest-level FIFO
+// allocation re-runs on the next read. Nothing is cached (rule 6), so there is no
+// cache to keep in lockstep (rule 7).
+
+export interface ReversePaymentInput {
+  paymentId: string;
+  reason: string;
+  // ALWAYS required — unlike a discount there is no threshold below which a
+  // reversal is routine, because it is the RECORD being changed, not a price.
+  // Never stored, never logged, never put in an error message, and cleared from
+  // component state the moment this call returns.
+  managerPin: string;
+  idempotencyKey: string;
+}
+
+// Reverse a payment. Returns the permanent `reversals` audit row.
+//
+// IDEMPOTENT TWICE OVER, AND LOAD-BEARING (constraint): the RPC keys on the
+// passed key AND, independently, refuses a payment that already has a reversal —
+// under a FOR UPDATE lock on the original, so two terminals in the same second
+// cannot post two counter-payments. A re-run returns the FIRST reversal's
+// outcome unchanged, and does so BEFORE re-checking the PIN, so a retry after a
+// network drop does not send the desk to fetch a manager twice.
+//
+// EVERY GUARD IS THE SERVER'S (rule 19). The dialog requires a reason and a PIN
+// for a clean screen; reverse_payment requires them itself and rejects the call
+// with its own wording, which the caller shows verbatim through
+// folioErrorMessage.
+export async function reversePayment(
+  input: ReversePaymentInput,
+): Promise<Reversal> {
+  const { data, error } = await supabase.rpc('reverse_payment', {
+    p_payment_id: input.paymentId,
+    p_reason: input.reason,
+    p_manager_pin: input.managerPin,
+    p_idempotency_key: input.idempotencyKey,
+  });
+  if (error) throw error;
+  return data as Reversal;
+}
+
+// Every reversal recorded against a folio's payments, so the bill can name the
+// manager who approved each one. Keyed by the ORIGINAL payment id.
+//
+// The bill does not NEED this to render correctly — a counter-entry is
+// recognisable from folio_payments.reversal_of_payment_id alone, and the reason
+// is copied onto the counter-line's reference — but "approved by whom" lives
+// only here, and a reversal that names nobody is the failure the whole subsystem
+// exists to prevent.
+//
+// Rule 1a: paginated through fetchAllPaged; rule 19: scoped to the active tenant
+// and property on top of RLS.
+export async function fetchPaymentReversals(
+  paymentIds: string[],
+  tenantId: string,
+  propertyId: string,
+): Promise<Map<string, Reversal>> {
+  const byTarget = new Map<string, Reversal>();
+  if (paymentIds.length === 0) return byTarget;
+
+  // Chunked because `.in()` on an unbounded list is exactly what rule 1 forbids:
+  // a folio with hundreds of payments would otherwise build one enormous URL.
+  const CHUNK = 200;
+  for (let i = 0; i < paymentIds.length; i += CHUNK) {
+    const chunk = paymentIds.slice(i, i + CHUNK);
+    const rows = await fetchAllPaged<Reversal>((from, to) =>
+      supabase
+        .from('reversals')
+        .select('*')
+        .eq('tenant_id', tenantId) // rule 19
+        .eq('property_id', propertyId) // rule 19
+        .eq('target_type', 'payment')
+        .in('target_id', chunk)
+        .order('reversed_at', { ascending: true })
+        .range(from, to)
+        .returns<Reversal[]>(),
+    );
+    for (const row of rows) byTarget.set(row.target_id, row);
+  }
+  return byTarget;
 }
 
 // ---------------------------------------------------------------------------

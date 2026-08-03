@@ -1,11 +1,14 @@
 import { useCallback, useRef } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useActiveProperty } from '../../hooks/useActiveProperty';
+import { useTenantContext } from '../../hooks/useTenantContext';
 import { useSettingsData } from '../../hooks/useSettingsData';
 import { usePropertyMedia } from '../../hooks/usePropertyMedia';
 import { SETTINGS_TABS } from '../../lib/settings/tabs';
+import { canHoldManagerPin } from '../../lib/managerPin';
 import { SettingsForm } from '../../components/admin/settings/SettingsForm';
 import { OrphanCleanup } from '../../components/admin/settings/OrphanCleanup';
+import { ManagerPinPanel } from '../../components/admin/ManagerPinPanel';
 import { SiteIcon } from '../../components/ui/icons';
 import type { SettingsRows } from '../../lib/settings/values';
 
@@ -14,9 +17,21 @@ import type { SettingsRows } from '../../lib/settings/values';
 // a shared link returns to the same tab. Mobile-first: at 360px the tab strip
 // scrolls horizontally rather than wrapping into an unusable stack. Switching
 // tabs with unsaved changes warns first.
+//
+// THE MANAGER PIN TAB IS NOT A SETTINGS_TABS ENTRY, and that is deliberate.
+// SETTINGS_TABS drives the generic form engine: a list of FIELDS, loaded from and
+// saved to property_settings / tenant_settings rows. A PIN is none of those
+// things — it is write-only, it is per-USER rather than per-property, it never
+// loads a current value, and it is saved by a SECURITY DEFINER RPC that hashes
+// it. Modelling it as a field would mean teaching the form engine about a value
+// it must never read back, which is exactly the kind of exception that turns a
+// small engine into a large one. It is a tab in the STRIP and its own panel
+// underneath; nothing else about the engine changes.
+const MANAGER_PIN_TAB = { id: 'manager-pin', label: 'Manager PIN' } as const;
 
 export function SettingsPage() {
   const { property } = useActiveProperty();
+  const { memberships } = useTenantContext();
   const [searchParams, setSearchParams] = useSearchParams();
 
   // AdminLayout only renders this once `property` is resolved; guard anyway.
@@ -30,6 +45,11 @@ export function SettingsPage() {
       propertyId={property.id}
       tenantId={property.tenant_id}
       slug={property.slug}
+      // Owners and managers of the tenant that OWNS this property only. Front
+      // desk, housekeeping and kitchen accounts are not offered the tab, because
+      // set_manager_pin would refuse them anyway (rule 19: this hides a control,
+      // the RPC is the guard). Same test as the user menu — lib/managerPin.
+      showManagerPin={canHoldManagerPin(memberships, property.tenant_id)}
       searchParams={searchParams}
       setSearchParams={setSearchParams}
     />
@@ -40,12 +60,14 @@ function SettingsScreen({
   propertyId,
   tenantId,
   slug,
+  showManagerPin,
   searchParams,
   setSearchParams,
 }: {
   propertyId: string;
   tenantId: string;
   slug: string;
+  showManagerPin: boolean;
   searchParams: URLSearchParams;
   setSearchParams: ReturnType<typeof useSearchParams>[1];
 }) {
@@ -59,10 +81,22 @@ function SettingsScreen({
   const media = usePropertyMedia(propertyId, tenantId);
 
   // Resolve the active tab from the URL, falling back to the first for an
-  // absent/unknown value.
+  // absent/unknown value. The Manager PIN tab is resolved separately because it
+  // is not a form tab (see MANAGER_PIN_TAB) — and a user who is NOT an
+  // owner/manager falls back to the first form tab even if the URL names it, so
+  // a shared link cannot put a front-desk user in front of a control that would
+  // only ever reject them.
   const paramTab = searchParams.get('tab');
+  const pinTabActive = showManagerPin && paramTab === MANAGER_PIN_TAB.id;
   const activeTab =
     SETTINGS_TABS.find((t) => t.id === paramTab) ?? SETTINGS_TABS[0];
+  // What the tab strip highlights: the PIN tab when it is active, else the form
+  // tab. One value so the strip cannot show two selected tabs.
+  const activeTabId = pinTabActive ? MANAGER_PIN_TAB.id : activeTab.id;
+  const tabStrip: { id: string; label: string }[] = [
+    ...SETTINGS_TABS.map((t) => ({ id: t.id, label: t.label })),
+    ...(showManagerPin ? [MANAGER_PIN_TAB] : []),
+  ];
 
   // Latest dirty flag from the mounted form, read synchronously in the tab-switch
   // handler (a ref, so reporting it does not re-render the whole page).
@@ -77,7 +111,7 @@ function SettingsScreen({
   );
 
   function selectTab(id: string) {
-    if (id === activeTab.id) return;
+    if (id === activeTabId) return;
     if (
       dirtyRef.current &&
       !window.confirm(
@@ -125,8 +159,8 @@ function SettingsScreen({
         aria-label="Settings sections"
         className="-mx-4 mb-6 flex gap-1 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0"
       >
-        {SETTINGS_TABS.map((tab) => {
-          const active = tab.id === activeTab.id;
+        {tabStrip.map((tab) => {
+          const active = tab.id === activeTabId;
           return (
             <button
               key={tab.id}
@@ -146,7 +180,22 @@ function SettingsScreen({
         })}
       </div>
 
-      {loading ? (
+      {/* The Manager PIN tab renders on its own: it reads no settings rows and
+          writes none, so it is deliberately OUTSIDE the loading/error branch
+          below — a settings-load failure must not hide the control a manager
+          needs in order to approve a reversal at the desk. */}
+      {pinTabActive ? (
+        <section className="rounded-2xl border border-sand-border bg-white/60 p-4 sm:p-6">
+          <h2 className="text-lg font-bold tracking-tight text-charcoal">
+            Manager PIN
+          </h2>
+          <p className="mt-1 mb-4 text-sm text-charcoal-muted">
+            Your own approval PIN for this hotel group. It is personal to you —
+            nobody, including the owner, can set or read another person's PIN.
+          </p>
+          <ManagerPinPanel tenantId={tenantId} />
+        </section>
+      ) : loading ? (
         <LoadingState />
       ) : error ? (
         <ErrorState message={error.message} onRetry={reload} />

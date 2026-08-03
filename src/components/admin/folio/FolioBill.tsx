@@ -15,9 +15,11 @@ import { staffLabel } from '../../../lib/staffLabel';
 import type {
   FolioChargeWithCategory,
   FolioPayment,
+  Reversal,
 } from '../../../types/folio';
 import { AddChargeForm } from './AddChargeForm';
 import { DiscountForm } from './DiscountForm';
+import { ReversePaymentForm } from './ReversePaymentForm';
 import { TakePaymentForm } from './TakePaymentForm';
 import { VoidForm } from './VoidForm';
 //
@@ -106,6 +108,10 @@ type ActionState =
   | { kind: 'discount'; charge: FolioChargeWithCategory }
   | { kind: 'void-charge'; charge: FolioChargeWithCategory }
   | { kind: 'void-payment'; payment: FolioPayment }
+  // REVERSE is a separate action from VOID on purpose (031): a void says the
+  // line should never have been recorded; a reversal says it was recorded, was
+  // relied upon, and is now being undone by a counter-entry a manager approved.
+  | { kind: 'reverse-payment'; payment: FolioPayment }
   | null;
 
 // ONE ROW OF THE BILL — and one row of the future export.
@@ -146,8 +152,11 @@ const TOTALS_NOTE =
   'its discounts; tax is the property’s active taxes and service charges applied ' +
   'to each net line; total charges is subtotal plus tax; payments is every ' +
   'non-voided payment, net of refunds. Outstanding balance is total charges less ' +
-  'payments. Voided charges and voided payments are shown but excluded. Nothing ' +
-  'is stored or cached — these figures are recalculated on every read.';
+  'payments. Voided charges and voided payments are shown but excluded. A ' +
+  'REVERSED payment is different: it is still included, because the money really ' +
+  'was received — its counter-entry is a separate payment line that takes the ' +
+  'same amount back out, so the two net to nothing and both stay visible. ' +
+  'Nothing is stored or cached — these figures are recalculated on every read.';
 
 export function FolioBill({
   bookingId,
@@ -163,6 +172,7 @@ export function FolioBill({
     charges,
     payments,
     chargeTaxes,
+    paymentReversals,
     totals,
     discountThreshold,
     loading,
@@ -253,11 +263,15 @@ export function FolioBill({
 
   const paymentRows = buildPaymentRows({
     payments,
+    paymentReversals,
+    currency,
     timezone,
     currentUserId,
     canAct: action === null,
     folioClosed,
     onVoidPayment: (payment) => setAction({ kind: 'void-payment', payment }),
+    onReversePayment: (payment) =>
+      setAction({ kind: 'reverse-payment', payment }),
   });
 
   const isEmpty = chargeRows.length === 0 && paymentRows.length === 0;
@@ -351,6 +365,14 @@ export function FolioBill({
               currency,
             )} · ${formatDisplayDate(action.payment.payment_date)}`,
           }}
+          onDone={afterMutation}
+          onCancel={() => setAction(null)}
+        />
+      ) : null}
+      {action?.kind === 'reverse-payment' ? (
+        <ReversePaymentForm
+          payment={action.payment}
+          currency={currency}
           onDone={afterMutation}
           onCancel={() => setAction(null)}
         />
@@ -641,29 +663,105 @@ function buildChargeRows({
 // Payments, in the business-date order the query returned (rules 8, 12). Same
 // five columns as the charges above them, so the section reads as part of the
 // same sheet: the METHOD is the type, the reference is the detail.
+//
+// REVERSALS (031) ARE RENDERED HERE AND NOWHERE ELSE, from the rows already in
+// hand. A counter-entry announces itself with reversal_of_payment_id, so:
+//
+//   * the COUNTER-ENTRY reads as "Payment reversal — <reason>" (the reason the
+//     RPC copied onto its reference), not as an unexplained negative "Refund",
+//     and its subline names the line it reverses and the manager who approved;
+//   * the ORIGINAL is marked as reversed — NOT struck through, because it is not
+//     voided and it still counts: the money genuinely was received, and the
+//     counter-entry below is what takes it back out;
+//   * neither offers Void or Reverse any more. Voiding either one would break
+//     the arithmetic, which is why void_payment refuses both server-side too
+//     (031 §4) — this only keeps the menu honest.
+//
+// Both lines always stay visible. That is the whole point: a reversal that
+// hid either half would be indistinguishable from money quietly disappearing.
 function buildPaymentRows({
   payments,
+  paymentReversals,
+  currency,
   timezone,
   currentUserId,
   canAct,
   folioClosed,
   onVoidPayment,
+  onReversePayment,
 }: {
   payments: FolioPayment[];
+  // Keyed by the ORIGINAL payment's id — who approved the reversal and why.
+  paymentReversals: Map<string, Reversal>;
+  currency: string;
   timezone: string;
   currentUserId: string | null;
   canAct: boolean;
   folioClosed: boolean;
   onVoidPayment: (payment: FolioPayment) => void;
+  onReversePayment: (payment: FolioPayment) => void;
 }): BillRow[] {
+  // The originals that have been reversed, and the payment each counter-entry
+  // undoes — both derived from the one list, because reverse_payment writes the
+  // counter-entry and its audit row in a single transaction (031 §3.4), so a
+  // counter-entry on this folio IS the proof its original was reversed.
+  const byId = new Map(payments.map((p) => [p.id, p] as const));
+  const counterByOriginal = new Map<string, FolioPayment>();
+  for (const p of payments) {
+    if (p.reversal_of_payment_id) counterByOriginal.set(p.reversal_of_payment_id, p);
+  }
+
   return payments.map((payment) => {
     const voided = payment.is_voided === true;
     const amount = parseNumeric(payment.amount) ?? 0;
     const postedDate = isoDateInZone(payment.created_at, timezone);
 
+    // Which side of a reversal, if any, this line is.
+    const isCounterEntry = payment.reversal_of_payment_id !== null;
+    const original = isCounterEntry
+      ? (byId.get(payment.reversal_of_payment_id as string) ?? null)
+      : null;
+    const counter = counterByOriginal.get(payment.id) ?? null;
+    const reversal = paymentReversals.get(payment.id) ?? null;
+    const wasReversed = counter !== null || reversal !== null;
+
     const parts: ReactNode[] = [
       `received by ${staffLabel(payment.received_by, currentUserId)}`,
     ];
+
+    if (isCounterEntry) {
+      // The subline of the counter-line: what it undoes, and on whose authority.
+      // The approving manager is named from the reversals row keyed by the
+      // ORIGINAL's id — that name is the accountability record the subsystem
+      // exists to create, so it is never omitted.
+      const source = original
+        ? paymentReversals.get(original.id) ?? null
+        : null;
+      parts.push(
+        original
+          ? `reverses the ${formatMoney(original.amount, currency)} ${paymentMethodLabel(
+              original.method,
+            ).toLowerCase()} payment of ${formatDisplayDate(original.payment_date)}`
+          : 'reverses an earlier payment',
+      );
+      if (source) {
+        parts.push(`approved by ${staffLabel(source.approved_by, currentUserId)}`);
+      }
+    } else if (wasReversed) {
+      // The subline of the ORIGINAL: reversed, when, why, by whose authority —
+      // and the plain statement that it still counts, because the next line is
+      // what takes the money back out.
+      parts.push(
+        `Reversed${
+          reversal ? ` on ${formatDisplayDate(reversal.business_date)}` : ''
+        }${reversal?.reason ? ` · ${reversal.reason}` : ''}${
+          reversal
+            ? ` · approved by ${staffLabel(reversal.approved_by, currentUserId)}`
+            : ''
+        } · still counted here; the counter-entry below returns it`,
+      );
+    }
+
     if (voided) {
       parts.push(
         `Voided${payment.void_reason ? ` · ${payment.void_reason}` : ''} · by ${staffLabel(
@@ -674,11 +772,25 @@ function buildPaymentRows({
     }
 
     // A refund is a negative payment (021 DECISION 3) — the sign carries it, the
-    // word stops it being misread as money in.
-    const detail = [
-      amount < 0 ? 'Refund' : null,
-      payment.reference ? `ref ${payment.reference}` : null,
-    ].filter(Boolean);
+    // word stops it being misread as money in. A REVERSAL is also negative but
+    // is not a refund, and saying "Refund" over it would misdescribe why the
+    // money moved: the reference the RPC wrote already reads "Payment reversal
+    // — <reason>", so it stands alone as the description.
+    const detail = isCounterEntry
+      ? [payment.reference]
+      : [
+          amount < 0 ? 'Refund' : null,
+          payment.reference ? `ref ${payment.reference}` : null,
+        ];
+    const description = detail.filter(Boolean).join(' · ');
+
+    // WHAT MAY STILL BE DONE TO THIS LINE. Both halves of a completed reversal
+    // are closed to further action; the RPCs enforce it regardless (031 §3, §4).
+    const actions: { label: string; onClick: () => void }[] = [];
+    if (canAct && !voided && !folioClosed && !isCounterEntry && !wasReversed) {
+      actions.push({ label: 'Void', onClick: () => onVoidPayment(payment) });
+      actions.push({ label: 'Reverse', onClick: () => onReversePayment(payment) });
+    }
 
     return {
       key: `payment-${payment.id}`,
@@ -686,15 +798,12 @@ function buildPaymentRows({
       postedDate:
         postedDate && postedDate !== payment.payment_date ? postedDate : null,
       type: paymentMethodLabel(payment.method),
-      description: detail.length > 0 ? detail.join(' · ') : MISSING_VALUE,
+      description: description || MISSING_VALUE,
       meta: joinMeta(parts),
       amount: voided ? null : amount,
       figure: amount,
       voided,
-      actions:
-        canAct && !voided && !folioClosed
-          ? [{ label: 'Void', onClick: () => onVoidPayment(payment) }]
-          : [],
+      actions,
     } satisfies BillRow;
   });
 }

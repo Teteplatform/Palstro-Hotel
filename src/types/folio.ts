@@ -148,10 +148,63 @@ export interface FolioPayment {
   // Who TOOK the money (an operational claim). created_by remains the
   // non-forgeable audit truth of who KEYED the row; they differ on a hand-over.
   received_by: string | null;
+  // Set ONLY on a REVERSAL COUNTER-ENTRY (031 §2): the id of the original
+  // payment this row reverses. NULL on every ordinary payment, deposit and
+  // refund. Not a cached figure (rule 6) — the identity of another row, which
+  // cannot drift.
+  //
+  // It is what lets the bill and the statement print a counter-line as "Payment
+  // reversal — <reason>" rather than a mysterious negative "Refund", and lets
+  // the ORIGINAL line be marked as reversed, from ONE fetch of the folio's
+  // payments with no join to `reversals`.
+  reversal_of_payment_id: string | null;
   is_voided: boolean;
   voided_at: string | null;
   voided_by: string | null;
   void_reason: string | null;
+  created_at: string;
+  updated_at: string;
+  created_by: string | null;
+  updated_by: string | null;
+}
+
+// What may be reversed. 'payment' is live (031); the rest are declared in the
+// same DB CHECK constraint now so later parts of the reversal subsystem add an
+// RPC and not a migration that alters it. Keep in sync with
+// reversals_target_type_check.
+export type ReversalTargetType =
+  | 'payment'
+  | 'charge'
+  | 'discount'
+  | 'no_show'
+  | 'cancel'
+  | 'checkout';
+
+// One permanent reversal audit row (031 §1): which row was reversed, which
+// counter-entry undid it, which manager's PIN authorised it, who keyed it, when
+// and why.
+//
+// NEVER UPDATED AND NEVER DELETED — there is no update path in the app, no write
+// RLS policy on the table, and a change_log tripwire on the table if one ever
+// appeared. Treat every field here as immutable history.
+export interface Reversal {
+  id: string;
+  tenant_id: string;
+  property_id: string;
+  reversed_at: string;
+  // The staff member at the keyboard (non-forgeable — set from auth.uid()).
+  reversed_by: string;
+  // The manager whose PIN verified. May equal reversed_by when a manager
+  // reverses their own posting; that is recorded, not suppressed.
+  approved_by: string;
+  reason: string;
+  target_type: ReversalTargetType;
+  // The ORIGINAL row reversed, and the counter-entry produced. Polymorphic over
+  // target_type, which is why neither carries a foreign key in the DB.
+  target_id: string;
+  counter_entry_id: string | null;
+  business_date: string;              // 'YYYY-MM-DD' — the BUSINESS date (rules 8, 12)
+  idempotency_key: string | null;
   created_at: string;
   updated_at: string;
   created_by: string | null;

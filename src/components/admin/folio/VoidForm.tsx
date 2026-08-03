@@ -72,6 +72,18 @@ export function VoidForm({ target, onDone, onCancel }: VoidFormProps) {
           {isCharge
             ? 'The line stays on the bill, marked as voided, and drops out of the totals. It is never deleted.'
             : 'The payment stays on the bill, marked as voided, and stops counting towards what has been paid. It is never deleted.'}
+          {!isCharge ? (
+            <>
+              <br />
+              <strong>Void is for a mistake caught now</strong> — mistyped,
+              wrong folio, transfer never cleared. If this payment was real and
+              was relied upon (a receipt issued, a statement sent, a balance
+              quoted) and the money is going back, close this and use{' '}
+              <strong>Reverse</strong> instead: that posts a visible
+              counter-entry a manager approves, and leaves both lines on the
+              record.
+            </>
+          ) : null}
         </>
       }
       submitLabel={isCharge ? 'Void charge' : 'Void payment'}

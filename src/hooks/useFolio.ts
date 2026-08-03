@@ -6,6 +6,7 @@ import {
   fetchFolioForBooking,
   fetchFolioPayments,
   fetchFolioTotals,
+  fetchPaymentReversals,
 } from '../lib/folio';
 import type {
   Folio,
@@ -13,6 +14,7 @@ import type {
   FolioChargeWithCategory,
   FolioPayment,
   FolioTotals,
+  Reversal,
 } from '../types/folio';
 
 // The folio of one booking, loaded as a single consistent snapshot for the panel
@@ -42,6 +44,11 @@ export interface UseFolioResult {
   payments: FolioPayment[];
   // Every charge's tax lines for the whole folio, one row per (charge, tax).
   chargeTaxes: FolioChargeTaxRow[];
+  // The reversal audit row of each REVERSED payment, keyed by the ORIGINAL
+  // payment's id (031). Empty on a folio where nothing has been reversed, which
+  // is the overwhelming majority — see the loader for why that case costs no
+  // extra query.
+  paymentReversals: Map<string, Reversal>;
   totals: FolioTotals | null;
   // The property's PIN-free discount ceiling (0 = every discount needs approval).
   discountThreshold: number;
@@ -62,6 +69,9 @@ export function useFolio(
   const [charges, setCharges] = useState<FolioChargeWithCategory[]>([]);
   const [payments, setPayments] = useState<FolioPayment[]>([]);
   const [chargeTaxes, setChargeTaxes] = useState<FolioChargeTaxRow[]>([]);
+  const [paymentReversals, setPaymentReversals] = useState<Map<string, Reversal>>(
+    () => new Map(),
+  );
   const [totals, setTotals] = useState<FolioTotals | null>(null);
   const [discountThreshold, setDiscountThreshold] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -82,6 +92,7 @@ export function useFolio(
         setCharges([]);
         setPayments([]);
         setChargeTaxes([]);
+        setPaymentReversals(new Map());
         setTotals(null);
         setError(null);
         setLoading(false);
@@ -101,6 +112,7 @@ export function useFolio(
           setCharges([]);
           setPayments([]);
           setChargeTaxes([]);
+          setPaymentReversals(new Map());
           setTotals(null);
           setError(null);
           return;
@@ -121,6 +133,27 @@ export function useFolio(
         setChargeTaxes(taxRows);
         setTotals(totalRow);
         setDiscountThreshold(threshold);
+
+        // A SIXTH READ, MADE ONLY WHEN IT CAN RETURN SOMETHING. A payment has
+        // been reversed if and only if a COUNTER-ENTRY exists on this folio
+        // (reverse_payment writes both in one transaction — 031 §3.4), and a
+        // counter-entry announces itself with reversal_of_payment_id. So the
+        // originals are already known from the rows in hand, and a folio with no
+        // reversals — the overwhelming majority — issues no query at all.
+        //
+        // What the extra read buys is the one fact the payments rows do NOT
+        // carry: WHICH MANAGER APPROVED. A reversal that names nobody is the
+        // failure this whole subsystem exists to prevent, so the bill fetches it.
+        const reversedIds = paymentRows
+          .map((p) => p.reversal_of_payment_id)
+          .filter((id): id is string => id !== null);
+        const reversalMap =
+          reversedIds.length > 0
+            ? await fetchPaymentReversals(reversedIds, tenantId, propertyId)
+            : new Map<string, Reversal>();
+        if (cancelled) return;
+        setPaymentReversals(reversalMap);
+
         setError(null);
       } catch (e) {
         if (cancelled) return;
@@ -140,6 +173,7 @@ export function useFolio(
     charges,
     payments,
     chargeTaxes,
+    paymentReversals,
     totals,
     discountThreshold,
     loading,

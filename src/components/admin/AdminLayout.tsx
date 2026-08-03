@@ -10,7 +10,7 @@ import { PropertySwitcher } from './PropertySwitcher';
 import { UserMenu } from './UserMenu';
 import { ChevronDownIcon, CloseIcon, MenuIcon } from '../ui/icons';
 import { MISSING_VALUE } from '../../lib/format';
-import { ADMIN_ROLES } from '../../types/auth';
+import { canHoldManagerPin } from '../../lib/managerPin';
 
 // The admin shell (3.txt §2): persistent sidebar on desktop, slide-over drawer
 // on mobile, a header carrying the tenant name / property switcher / user menu,
@@ -84,8 +84,9 @@ export function AdminLayout() {
     memberships.find((m) => m.tenant_id === property.tenant_id) ?? null;
   const owningTenantName =
     owningMembership?.tenant?.name ?? tenantName ?? MISSING_VALUE;
-  const canHoldManagerPin =
-    owningMembership !== null && ADMIN_ROLES.includes(owningMembership.role);
+  // The same test the Settings screen's Manager PIN tab uses — shared so the two
+  // surfaces can never disagree about who is offered the setting (lib/managerPin).
+  const showManagerPin = canHoldManagerPin(memberships, property.tenant_id);
 
   return (
     <div className="min-h-screen bg-cream">
@@ -144,7 +145,7 @@ export function AdminLayout() {
 
           <UserMenu
             tenantId={property.tenant_id}
-            canHoldManagerPin={canHoldManagerPin}
+            canHoldManagerPin={showManagerPin}
           />
         </header>
 

@@ -290,12 +290,22 @@ export function assembleStatement(source: StatementSource): StatementData {
     type: paymentMethodLabel(payment.method),
     // A refund is a negative payment (021 DECISION 3) — the sign carries it,
     // the word stops a guest reading money out as money in.
-    description: [
-      (parseNumeric(payment.amount) ?? 0) < 0 ? 'Refund' : null,
-      payment.reference ? `ref ${payment.reference}` : null,
-    ]
-      .filter(Boolean)
-      .join(' · '),
+    //
+    // A REVERSAL COUNTER-ENTRY (031) is negative too, but it is not a refund and
+    // must not be labelled one: the guest is entitled to read WHY the money came
+    // back off their statement. reverse_payment writes that sentence onto the
+    // counter-entry's reference ("Payment reversal — <reason>"), so the line
+    // stands on its own words, and the payment it reverses stays printed above
+    // it. Both halves visible, on the document the guest keeps.
+    description:
+      payment.reversal_of_payment_id !== null
+        ? (payment.reference?.trim() || 'Payment reversal')
+        : [
+            (parseNumeric(payment.amount) ?? 0) < 0 ? 'Refund' : null,
+            payment.reference ? `ref ${payment.reference}` : null,
+          ]
+            .filter(Boolean)
+            .join(' · '),
     amount: parseNumeric(payment.amount) ?? 0,
   }));
 
