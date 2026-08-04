@@ -27,6 +27,7 @@ import { NewBookingPage } from './pages/admin/NewBookingPage';
 import { BookingDetailPage } from './pages/admin/BookingDetailPage';
 import { GuestDetailPage } from './pages/admin/GuestDetailPage';
 import { StatementPage } from './pages/admin/StatementPage';
+import { HelpPage } from './pages/admin/HelpPage';
 import { ModuleNotAvailablePage } from './pages/admin/ModuleNotAvailablePage';
 
 /**
@@ -220,6 +221,12 @@ const router = createBrowserRouter([
                   </ModuleGuard>
                 ),
               },
+              // THE STAFF GUIDE — the only content route with NO ModuleGuard.
+              // The guide is documentation, not a module a tenant buys; it reads
+              // no tenant data, and the moment somebody opens it is the moment
+              // something else is not working, which is the worst possible time
+              // for a gate. Same reason the sidebar link is not module-filtered.
+              { path: 'help', element: <HelpPage /> },
               // Not-yet-built (and disabled) modules render inside AdminLayout so
               // the sidebar stays visible and the user can navigate away — never
               // react-router's raw 404 (§1).

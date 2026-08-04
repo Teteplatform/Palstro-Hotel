@@ -8,7 +8,7 @@ import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { ADMIN_NAV, ADMIN_NAV_GROUPS, type AdminNavItem } from './adminNav';
 import { PropertySwitcher } from './PropertySwitcher';
 import { UserMenu } from './UserMenu';
-import { ChevronDownIcon, CloseIcon, MenuIcon } from '../ui/icons';
+import { ChevronDownIcon, CloseIcon, HelpIcon, MenuIcon } from '../ui/icons';
 import { MISSING_VALUE } from '../../lib/format';
 import { canHoldManagerPin } from '../../lib/managerPin';
 
@@ -268,6 +268,13 @@ function NavList({
 
   return (
     <nav aria-label="Admin" className="flex-1 overflow-y-auto px-3 py-4">
+      {/* THE STAFF GUIDE, BELOW THE GROUPS AND OUTSIDE THE MODULE FILTER.
+          Deliberately not an ADMIN_NAV entry: every item in that array carries a
+          `module` and is hidden when the tenant has not enabled it, and the guide
+          is not something a hotel buys. It must be reachable from every screen,
+          on every plan, at the moment somebody is stuck — which is precisely when
+          a module flag would hide it. Rendered here, in the shared NavList, so
+          the desktop sidebar and the mobile drawer get it from one place. */}
       {groups.map((g) => (
         <details
           key={g.group}
@@ -287,6 +294,21 @@ function NavList({
           </ul>
         </details>
       ))}
+
+      <div className="mt-3 border-t border-sand-border pt-3">
+        <NavLink
+          to={`/admin/${slug}/help`}
+          onClick={onNavigate}
+          className={({ isActive }) =>
+            `flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-cream ${
+              isActive ? 'bg-primary text-white' : 'text-charcoal hover:bg-sand'
+            }`
+          }
+        >
+          <HelpIcon className="h-5 w-5 shrink-0" />
+          <span>Help &amp; guide</span>
+        </NavLink>
+      </div>
     </nav>
   );
 }

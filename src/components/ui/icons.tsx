@@ -415,6 +415,25 @@ export const DownloadIcon = ({ className }: IconProps) => (
   </Line>
 );
 
+// A question mark in a circle — the staff guide. Deliberately the universal
+// "help" mark rather than a book or a lifebuoy: it is the one shape a person
+// looks for when they are stuck, which is the only moment this link matters.
+export const HelpIcon = ({ className }: IconProps) => (
+  <Line className={className}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M9.5 9.5a2.5 2.5 0 1 1 3.2 2.4c-.6.2-.95.7-.95 1.3v.55" />
+    <path d="M11.75 16.75h.01" />
+  </Line>
+);
+
+// A magnifier, for the guide's search box.
+export const SearchIcon = ({ className }: IconProps) => (
+  <Line className={className}>
+    <circle cx="11" cy="11" r="6" />
+    <path d="m15.5 15.5 4 4" />
+  </Line>
+);
+
 /* --- Social --------------------------------------------------------------- */
 
 export const FacebookIcon = ({ className }: IconProps) => (
