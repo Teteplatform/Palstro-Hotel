@@ -34,6 +34,7 @@ import { staffLabel } from '../../../lib/staffLabel';
 import type { BookingDetail } from '../../../types/booking';
 import type { Reversal } from '../../../types/folio';
 import { ReverseBookingStatusForm } from './ReverseBookingStatusForm';
+import { ReverseCheckoutForm } from './ReverseCheckoutForm';
 
 // The Stay tab (build A §2): what was reserved, what was agreed, and the
 // lifecycle actions — which live HERE because checking in, checking out, marking
@@ -110,7 +111,11 @@ type Panel =
   // states they undo, and each re-takes the room, so each is PIN-gated and
   // availability-checked by its RPC.
   | 'reverse-noshow'
-  | 'reverse-cancel';
+  | 'reverse-cancel'
+  // The third (migration 034): un-checkout, which REOPENS the stay. Gated to
+  // checked_out. PIN-gated like the others, but with no availability check —
+  // a checked-out stay never released its room, so nothing is re-taken.
+  | 'reverse-checkout';
 
 export function StayTab({
   detail,
@@ -135,7 +140,11 @@ export function StayTab({
   // these can appear (the parent re-fetches the booking after any action, so a
   // new `detail` with a new status arrives here and this effect fires).
   const [statusReversals, setStatusReversals] =
-    useState<BookingStatusReversals>({ noShow: null, cancel: null });
+    useState<BookingStatusReversals>({
+      noShow: null,
+      cancel: null,
+      checkout: null,
+    });
   const [reversalsError, setReversalsError] = useState<string | null>(null);
 
   const bookingId = detail.id;
@@ -479,6 +488,17 @@ export function StayTab({
           detail="The booking went back to confirmed and the room is held for it again. The cancellation itself, and its reason, stay on the record below."
         />
       ) : null}
+      {/* THE CHECKOUT REVERSAL (034). It stays on the page after the guest has
+          been checked out a second time — the notice is a fact about an act
+          that happened, not a badge on the current status. */}
+      {statusReversals.checkout ? (
+        <RestoreNotice
+          reversal={statusReversals.checkout}
+          currentUserId={user?.id ?? null}
+          title="Checkout reversed — this stay was reopened"
+          detail="The stay went back to checked in and its folio was reopened. The room charges already posted were not reversed: those nights were slept, and they remain on the bill."
+        />
+      ) : null}
       {reversalsError ? (
         // Rule 11: the stay still renders; this says plainly that ONE part of it
         // could not be read, rather than silently omitting a restore notice.
@@ -819,6 +839,28 @@ export function StayTab({
         />
       ) : null}
 
+      {/* THE CHECKOUT REVERSAL (034). Its own component, not a third `kind` on
+          the form above: that one's copy is entirely about re-taking a room and
+          restoring to confirmed, and neither is true here. */}
+      {panel === 'reverse-checkout' ? (
+        <ReverseCheckoutForm
+          bookingId={detail.id}
+          bookingNumber={detail.booking_number}
+          checkIn={detail.check_in}
+          checkOut={detail.check_out}
+          roomTypeName={detail.room_type?.name ?? null}
+          onDone={async () => {
+            closePanel();
+            // Clears the checkout receipt card: it describes a departure that
+            // has just been undone, and leaving it above a checked-in stay
+            // would be the one contradiction on this page.
+            setCheckOutSummary(null);
+            await onChanged();
+          }}
+          onCancel={closePanel}
+        />
+      ) : null}
+
       {panel === 'none' ? (
         <div className="flex flex-wrap items-center gap-2">
           {/* A booking is born confirmed (create_booking), so there is no
@@ -868,6 +910,21 @@ export function StayTab({
               Reverse cancellation
             </SecondaryButton>
           ) : null}
+          {/* REVERSE CHECKOUT (034) — offered only on a checked-out stay that
+              has not already been reopened once. Unlike the two above it does
+              not re-take a room (a checked-out stay never released one), but it
+              is gated the same way for the same reason: a checkout is reversed
+              once, ever, so the button goes away rather than leading to a
+              refusal. A stay reopened and then checked out again therefore has
+              no button here — which is correct, and the notice above says why. */}
+          {status === 'checked_out' && statusReversals.checkout === null ? (
+            <SecondaryButton
+              busy={busy}
+              onClick={() => setPanel('reverse-checkout')}
+            >
+              Reverse checkout
+            </SecondaryButton>
+          ) : null}
           {status === 'confirmed' && !arrivalDayHasPassed ? (
             // Why the no-show action is absent, rather than a disabled button
             // with no explanation: the guest can still walk in today.
@@ -884,7 +941,8 @@ export function StayTab({
           {status !== 'confirmed' &&
           status !== 'checked_in' &&
           !(status === 'no_show' && statusReversals.noShow === null) &&
-          !(status === 'cancelled' && statusReversals.cancel === null) ? (
+          !(status === 'cancelled' && statusReversals.cancel === null) &&
+          !(status === 'checked_out' && statusReversals.checkout === null) ? (
             <p className="text-xs text-charcoal-muted">
               No further stay actions are available for a {status.replace('_', ' ')}{' '}
               booking.

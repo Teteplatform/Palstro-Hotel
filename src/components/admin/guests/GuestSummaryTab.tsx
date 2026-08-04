@@ -10,6 +10,7 @@ import { FollowUpNotices } from '../FollowUpNotices';
 import { GuestStaysTable, type StayAction } from './GuestStaysTable';
 import { CancelPanel, CheckInPanel, CheckOutPanel } from './StayConfirmPanels';
 import { ReverseBookingStatusForm } from '../bookings/ReverseBookingStatusForm';
+import { ReverseCheckoutForm } from '../bookings/ReverseCheckoutForm';
 import { StandaloneEntryPanel } from './StandaloneEntryPanel';
 import { SendStatementEmailDialog } from '../statement/SendStatementEmailDialog';
 import type { StatementData } from '../../../lib/statement';
@@ -92,6 +93,10 @@ type PanelState =
   // availability-checked by its RPC.
   | { kind: 'reverse-noshow'; row: GuestStayRow }
   | { kind: 'reverse-cancel'; row: GuestStayRow }
+  // The CHECKOUT reversal (034), which reopens a stay the guest has not left.
+  // PIN-gated like the two above, but it re-takes nothing: a checked-out stay
+  // never released its room, so there is no availability check to fail.
+  | { kind: 'reverse-checkout'; row: GuestStayRow }
   | { kind: 'standalone' }
   | null;
 
@@ -276,6 +281,19 @@ export function GuestSummaryTab({
         label: 'Reverse cancellation',
         tone: 'destructive',
         onSelect: () => setPanel({ kind: 'reverse-cancel', row }),
+      });
+    }
+    // REVERSE CHECKOUT (034) — the guest has not actually left. Offered from the
+    // row's status alone, exactly as the two above are: a stay already reopened
+    // once is refused by its RPC in its own words, which the panel shows
+    // verbatim. The stay page, which reads one booking, is where the "already
+    // reopened" notice lives and where the action disappears.
+    if (row.status === 'checked_out') {
+      actions.push({
+        key: 'reverse-checkout',
+        label: 'Reverse checkout',
+        tone: 'destructive',
+        onSelect: () => setPanel({ kind: 'reverse-checkout', row }),
       });
     }
     return actions;
@@ -502,6 +520,22 @@ export function GuestSummaryTab({
             checkOut={panel.row.check_out}
             roomTypeName={panel.row.room_type_name}
             propertyToday={todayIsoInZone(timezone)}
+            onDone={afterMutation}
+            onCancel={() => setPanel(null)}
+          />
+        ) : null}
+        {/* Reopening a stay. The same component the stay page mounts, so the
+            act asks for the same things and reads the same way wherever it is
+            done. No propertyToday is needed: nothing about this panel depends
+            on the date — it re-takes no room and can be refused for no
+            availability reason. */}
+        {panel?.kind === 'reverse-checkout' ? (
+          <ReverseCheckoutForm
+            bookingId={panel.row.booking_id}
+            bookingNumber={panel.row.booking_number}
+            checkIn={panel.row.check_in}
+            checkOut={panel.row.check_out}
+            roomTypeName={panel.row.room_type_name}
             onDone={afterMutation}
             onCancel={() => setPanel(null)}
           />

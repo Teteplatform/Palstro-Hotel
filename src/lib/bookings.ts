@@ -767,16 +767,71 @@ export async function reverseCancel(
   return data as Reversal;
 }
 
+// ---------------------------------------------------------------------------
+// Checkout reversal (migration 034) — reopening a stay the guest has not left
+// ---------------------------------------------------------------------------
+//
+// WHAT IT MEANS, and it is narrower than the other two status reversals: THE
+// GUEST HAS NOT ACTUALLY LEFT. A checkout keyed at 09:00 for a guest who is
+// still at breakfast and staying another night; a departure recorded on the
+// wrong booking of a group. The stay reopens — status back to checked_in, and
+// the folio back to open if anything had closed it — so charges and payments can
+// be posted against it again.
+//
+// THE ROOM CHARGES STAY, and that is the decision the whole act turns on. Those
+// nights were slept; reopening the stay says the guest has not gone, not that
+// they were never here. A night that genuinely has to come off the bill is a
+// separate reverse_charge on the folio, with its own PIN, reason and audit row.
+//
+// NO AVAILABILITY RE-CHECK, unlike un-cancel and un-no-show — and that is a
+// verified property of count_available, not an optimisation: 'checked_in' and
+// 'checked_out' are BOTH in its occupancy list (029 §2), so a checked-out stay
+// still holds its room and this transition frees and re-takes nothing. There is
+// no night on which reopening can overbook.
+//
+// THE ARRIVAL IS NOT RE-STAMPED. checked_in_at / actual_check_in still record
+// the real arrival, so the nights the folio bills are exactly the nights it
+// billed before — reopening never re-prices a stay.
+//
+// AFTERWARDS the desk checks the guest out again in the ordinary way when they
+// really do leave. check_out_booking posts each night under the deterministic
+// 'room:<booking>:<date>' key, so every night already on the bill no-ops and
+// only nights the stay genuinely gained (an extended check_out) post.
+
+// Reverse a checkout: the stay returns to CHECKED-IN and its folio is reopened.
+// Returns the permanent `reversals` audit row.
+//
+// IDEMPOTENT BY KEY AND BY STATE, under a FOR UPDATE lock on the booking. One
+// case is deliberately NOT idempotent, and here it is the ORDINARY ending rather
+// than an edge case: a stay that was reopened and then CHECKED OUT AGAIN is
+// refused rather than reported reopened — a checkout is reversed once, ever
+// (reversals_target_uniq), and silently returning the first reversal would tell
+// the desk a departed guest was back in the room.
+export async function reverseCheckout(
+  input: ReverseBookingStatusInput,
+): Promise<Reversal> {
+  const { data, error } = await supabase.rpc('reverse_checkout', {
+    p_booking_id: input.bookingId,
+    p_reason: input.reason,
+    p_manager_pin: input.managerPin,
+    p_idempotency_key: input.idempotencyKey,
+  });
+  if (error) throw error;
+  return data as Reversal;
+}
+
 // The status reversals recorded against ONE booking, if any: at most one of
 // each kind, because reversals_target_uniq allows exactly one reversal per
 // (tenant, target_type, target) forever.
 //
-// Two fields rather than one row, because a booking can carry BOTH over its
-// life — no-showed and restored in August, cancelled and restored in September —
-// and a single "the reversal" would silently drop one of them.
+// Three fields rather than one row, because a booking can carry ALL of them over
+// its life — no-showed and restored in August, cancelled and restored in
+// September, checked out prematurely and reopened in October — and a single "the
+// reversal" would silently drop the others.
 export interface BookingStatusReversals {
   noShow: Reversal | null;
   cancel: Reversal | null;
+  checkout: Reversal | null;
 }
 
 // Read them for the screens that must say a restored booking WAS restored, by
@@ -786,7 +841,7 @@ export interface BookingStatusReversals {
 // an act, not a flag on a record.
 //
 // Rule 19: scoped to the active tenant and property on top of RLS. Bounded by
-// construction — one booking has at most two of these rows — so no pager.
+// construction — one booking has at most three of these rows — so no pager.
 export async function fetchBookingStatusReversals(
   bookingId: string,
   tenantId: string,
@@ -798,7 +853,7 @@ export async function fetchBookingStatusReversals(
     .eq('tenant_id', tenantId) // rule 19
     .eq('property_id', propertyId) // rule 19
     .eq('target_id', bookingId)
-    .in('target_type', ['no_show', 'cancel'])
+    .in('target_type', ['no_show', 'cancel', 'checkout'])
     .order('reversed_at', { ascending: true });
 
   if (error) throw error;
@@ -807,5 +862,6 @@ export async function fetchBookingStatusReversals(
   return {
     noShow: rows.find((r) => r.target_type === 'no_show') ?? null,
     cancel: rows.find((r) => r.target_type === 'cancel') ?? null,
+    checkout: rows.find((r) => r.target_type === 'checkout') ?? null,
   };
 }
