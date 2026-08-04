@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { FactTable, type Fact } from '../../ui/FactTable';
 import { DateField, TextArea, TimeField } from '../../ui/form';
 import { useToast } from '../../ui/Toast';
-import { humanizeError } from '../../../lib/errors';
+import { useAuth } from '../../../hooks/useAuth';
+import { describeError, humanizeError } from '../../../lib/errors';
 import {
   formatCurrency,
   formatMoney,
@@ -23,11 +24,16 @@ import {
   cancelBooking,
   checkInBooking,
   checkOutBooking,
+  fetchBookingStatusReversals,
   markNoShow,
+  type BookingStatusReversals,
   type CheckOutSummary,
 } from '../../../lib/bookings';
 import { rateSourceLabel } from '../../../lib/bookingLabels';
+import { staffLabel } from '../../../lib/staffLabel';
 import type { BookingDetail } from '../../../types/booking';
+import type { Reversal } from '../../../types/folio';
+import { ReverseBookingStatusForm } from './ReverseBookingStatusForm';
 
 // The Stay tab (build A §2): what was reserved, what was agreed, and the
 // lifecycle actions — which live HERE because checking in, checking out, marking
@@ -94,7 +100,17 @@ interface StayTabProps {
 // Which confirmation panel is open. One at a time: each is a decision that
 // deserves the screen's full attention, and two open panels invite pressing the
 // wrong confirm.
-type Panel = 'none' | 'checkin' | 'checkout' | 'cancel' | 'noshow';
+type Panel =
+  | 'none'
+  | 'checkin'
+  | 'checkout'
+  | 'cancel'
+  | 'noshow'
+  // The two REVERSALS (migration 033): un-no-show and un-cancel. Gated to the
+  // states they undo, and each re-takes the room, so each is PIN-gated and
+  // availability-checked by its RPC.
+  | 'reverse-noshow'
+  | 'reverse-cancel';
 
 export function StayTab({
   detail,
@@ -104,9 +120,52 @@ export function StayTab({
   onGoToFolio,
 }: StayTabProps) {
   const toast = useToast();
+  const { user } = useAuth();
   const [busy, setBusy] = useState(false);
   const [panel, setPanel] = useState<Panel>('none');
   const [reason, setReason] = useState('');
+
+  // THE PERMANENT RECORD OF A RESTORE. A booking carries no "was restored"
+  // column, deliberately (rule 6 and the reversal subsystem's founding rule): a
+  // reversal is a fact about an ACT, and it lives in the reversals table, which
+  // no client can write and nothing can edit. So the notice below is READ from
+  // there rather than derived from the booking row.
+  //
+  // Re-read whenever the booking's status changes, which is exactly when one of
+  // these can appear (the parent re-fetches the booking after any action, so a
+  // new `detail` with a new status arrives here and this effect fires).
+  const [statusReversals, setStatusReversals] =
+    useState<BookingStatusReversals>({ noShow: null, cancel: null });
+  const [reversalsError, setReversalsError] = useState<string | null>(null);
+
+  const bookingId = detail.id;
+  const tenantId = detail.tenant_id;
+  const propertyId = detail.property_id;
+  const status = detail.status;
+
+  const loadReversals = useCallback(async () => {
+    try {
+      setStatusReversals(
+        await fetchBookingStatusReversals(bookingId, tenantId, propertyId),
+      );
+      setReversalsError(null);
+    } catch (e) {
+      // Rule 11: not swallowed. The stay itself still renders — this read only
+      // adds the restore notice — so the failure is reported in place rather
+      // than taking the panel down with it.
+      setReversalsError(describeError(e));
+    }
+  }, [bookingId, tenantId, propertyId]);
+
+  useEffect(() => {
+    // Wrapped exactly as the booking page's own load is: the read is async, so
+    // nothing is set during the effect itself.
+    void (async () => {
+      await loadReversals();
+    })();
+    // `status` is a dependency on purpose: a restore changes it, and that is the
+    // moment a new reversals row exists to show.
+  }, [loadReversals, status]);
 
   // THE CHECKOUT ACKNOWLEDGEMENT. Deliberately NOT defaulted to true and
   // deliberately not a "don't ask again": the whole point is that a person
@@ -135,7 +194,6 @@ export function StayTab({
   // beside it rather than replaced: it is what the guest agreed to and what a
   // dispute is argued from.
   const stay = describeStayNights(detail);
-  const status = detail.status;
 
   // BILLABLE NIGHTS ONLY. The rate table lists the nights the folio will actually
   // charge — [chargeFrom, check_out) — so a late arrival's reserved-but-empty
@@ -400,6 +458,35 @@ export function StayTab({
   return (
     <div className="space-y-4">
       <h2 className="text-lg font-bold tracking-tight text-charcoal">Stay</h2>
+
+      {/* WAS THIS BOOKING RESTORED? Read from the permanent reversals rows, so
+          the answer is the audit trail itself and not a flag somebody could set.
+          Both can be present over a booking's life — no-showed and restored in
+          August, cancelled and restored in September — so both are shown. */}
+      {statusReversals.noShow ? (
+        <RestoreNotice
+          reversal={statusReversals.noShow}
+          currentUserId={user?.id ?? null}
+          title="No-show reversed — this booking was restored"
+          detail="The booking went back to confirmed and the room is held for it again. Any no-show charge was credited back by a counter-entry on the folio."
+        />
+      ) : null}
+      {statusReversals.cancel ? (
+        <RestoreNotice
+          reversal={statusReversals.cancel}
+          currentUserId={user?.id ?? null}
+          title="Cancellation reversed — this booking was restored"
+          detail="The booking went back to confirmed and the room is held for it again. The cancellation itself, and its reason, stay on the record below."
+        />
+      ) : null}
+      {reversalsError ? (
+        // Rule 11: the stay still renders; this says plainly that ONE part of it
+        // could not be read, rather than silently omitting a restore notice.
+        <p className="text-xs text-charcoal-muted">
+          The reversal history for this booking could not be read.{' '}
+          {reversalsError}
+        </p>
+      ) : null}
 
       {/* THE CHECKOUT RECEIPT — what the departure did to the bill, and whether
           money is still owed. Shown here, at the top, because at 02:00 the guest
@@ -690,6 +777,48 @@ export function StayTab({
         </ActionPanel>
       ) : null}
 
+      {/* THE TWO REVERSALS (migration 033). They use the folio action card
+          rather than this file's ActionPanel because they carry what a folio
+          reversal carries — a mandatory reason and an always-required manager
+          PIN — and a reversal must look the same wherever it is performed. */}
+      {panel === 'reverse-noshow' ? (
+        <ReverseBookingStatusForm
+          kind="no_show"
+          bookingId={detail.id}
+          bookingNumber={detail.booking_number}
+          checkIn={detail.check_in}
+          checkOut={detail.check_out}
+          roomTypeName={detail.room_type?.name ?? null}
+          // Known here, so the panel can state exactly what happens to the
+          // money rather than covering both cases. The server decides either
+          // way — this only chooses the sentence.
+          guaranteed={guaranteed}
+          propertyToday={propertyToday}
+          onDone={async () => {
+            closePanel();
+            await onChanged();
+          }}
+          onCancel={closePanel}
+        />
+      ) : null}
+
+      {panel === 'reverse-cancel' ? (
+        <ReverseBookingStatusForm
+          kind="cancel"
+          bookingId={detail.id}
+          bookingNumber={detail.booking_number}
+          checkIn={detail.check_in}
+          checkOut={detail.check_out}
+          roomTypeName={detail.room_type?.name ?? null}
+          propertyToday={propertyToday}
+          onDone={async () => {
+            closePanel();
+            await onChanged();
+          }}
+          onCancel={closePanel}
+        />
+      ) : null}
+
       {panel === 'none' ? (
         <div className="flex flex-wrap items-center gap-2">
           {/* A booking is born confirmed (create_booking), so there is no
@@ -716,6 +845,29 @@ export function StayTab({
               Cancel booking
             </SecondaryButton>
           ) : null}
+          {/* THE TWO REVERSALS (033), each offered ONLY on the state it undoes
+              and only while it has not already been undone. Both re-take the
+              room, so both are PIN-gated and availability-checked by their RPC;
+              this only decides what to OFFER (rule 19 — the database is the
+              guard). A booking already restored once cannot be restored again:
+              a reversal is recorded once per act, ever, so the button goes away
+              rather than leading to a refusal. */}
+          {status === 'no_show' && statusReversals.noShow === null ? (
+            <SecondaryButton
+              busy={busy}
+              onClick={() => setPanel('reverse-noshow')}
+            >
+              Reverse no-show
+            </SecondaryButton>
+          ) : null}
+          {status === 'cancelled' && statusReversals.cancel === null ? (
+            <SecondaryButton
+              busy={busy}
+              onClick={() => setPanel('reverse-cancel')}
+            >
+              Reverse cancellation
+            </SecondaryButton>
+          ) : null}
           {status === 'confirmed' && !arrivalDayHasPassed ? (
             // Why the no-show action is absent, rather than a disabled button
             // with no explanation: the guest can still walk in today.
@@ -724,7 +876,15 @@ export function StayTab({
               passed at the property.
             </p>
           ) : null}
-          {status !== 'confirmed' && status !== 'checked_in' ? (
+          {/* The "nothing more to do here" line, now excluding the two states
+              that DO have an action: a cancelled or no-showed booking can be
+              restored, so telling the reader otherwise would hide it. It also
+              stays away once a restore has been used up, because the notice
+              above already explains what happened. */}
+          {status !== 'confirmed' &&
+          status !== 'checked_in' &&
+          !(status === 'no_show' && statusReversals.noShow === null) &&
+          !(status === 'cancelled' && statusReversals.cancel === null) ? (
             <p className="text-xs text-charcoal-muted">
               No further stay actions are available for a {status.replace('_', ' ')}{' '}
               booking.
@@ -733,6 +893,69 @@ export function StayTab({
         </div>
       ) : null}
     </div>
+  );
+}
+
+// THE RESTORE NOTICE (migration 033). A booking that was put back needs to say
+// so on its own page, permanently and with a name attached — that is the whole
+// point of the reversals row, and a restore nobody is answerable for is exactly
+// the shape of act this subsystem exists to make impossible.
+//
+// EVERY FIELD IS THE DATABASE'S: the business date the reversal was recorded on
+// (rules 8 and 12 — the property's operating day, never the browser's clock),
+// the reason as it was typed, the staff member who keyed it and the MANAGER
+// whose PIN authorised it. Nothing here is derived and nothing can be edited:
+// the reversals table has no update path in the app, no write RLS policy, and a
+// change_log tripwire if one ever appeared.
+//
+// role="status", not alert: it reports something that already happened rather
+// than demanding an action.
+function RestoreNotice({
+  reversal,
+  currentUserId,
+  title,
+  detail,
+}: {
+  reversal: Reversal;
+  currentUserId: string | null;
+  title: string;
+  detail: string;
+}) {
+  return (
+    <section
+      role="status"
+      className="rounded-2xl border border-sand-border bg-white/70 px-4 py-3"
+    >
+      <h3 className="text-sm font-bold text-charcoal">{title}</h3>
+      <p className="mt-1 text-xs text-charcoal">{detail}</p>
+      {/* At 360px these stack; from sm they sit in a row. */}
+      <dl className="mt-3 grid gap-3 sm:grid-cols-3">
+        <div className="sm:col-span-3">
+          <dt className="text-xs text-charcoal-muted">Reason</dt>
+          <dd className="text-sm font-semibold text-charcoal">
+            {reversal.reason}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-xs text-charcoal-muted">On</dt>
+          <dd className="text-sm font-semibold tabular-nums text-charcoal">
+            {formatDisplayDate(reversal.business_date) || MISSING_VALUE}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-xs text-charcoal-muted">Recorded by</dt>
+          <dd className="text-sm font-semibold text-charcoal">
+            {staffLabel(reversal.reversed_by, currentUserId)}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-xs text-charcoal-muted">Approved by</dt>
+          <dd className="text-sm font-semibold text-charcoal">
+            {staffLabel(reversal.approved_by, currentUserId)}
+          </dd>
+        </div>
+      </dl>
+    </section>
   );
 }
 

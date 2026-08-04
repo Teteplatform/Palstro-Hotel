@@ -3,12 +3,13 @@ import { useActiveProperty } from '../../../hooks/useActiveProperty';
 import { useStatementExport } from '../../../hooks/useStatementExport';
 import { Pagination } from '../../ui/Pagination';
 import { formatMoney, MISSING_VALUE } from '../../../lib/format';
-import { formatDisplayDate } from '../../../lib/date';
+import { formatDisplayDate, todayIsoInZone } from '../../../lib/date';
 import { AddChargeForm } from '../folio/AddChargeForm';
 import { TakePaymentForm } from '../folio/TakePaymentForm';
 import { FollowUpNotices } from '../FollowUpNotices';
 import { GuestStaysTable, type StayAction } from './GuestStaysTable';
 import { CancelPanel, CheckInPanel, CheckOutPanel } from './StayConfirmPanels';
+import { ReverseBookingStatusForm } from '../bookings/ReverseBookingStatusForm';
 import { StandaloneEntryPanel } from './StandaloneEntryPanel';
 import { SendStatementEmailDialog } from '../statement/SendStatementEmailDialog';
 import type { StatementData } from '../../../lib/statement';
@@ -86,6 +87,11 @@ type PanelState =
   | { kind: 'checkin'; row: GuestStayRow }
   | { kind: 'checkout'; row: GuestStayRow }
   | { kind: 'cancel'; row: GuestStayRow }
+  // The two STATUS REVERSALS (033): un-no-show and un-cancel. Each restores the
+  // booking to confirmed, and each re-takes the room — so each is PIN-gated and
+  // availability-checked by its RPC.
+  | { kind: 'reverse-noshow'; row: GuestStayRow }
+  | { kind: 'reverse-cancel'; row: GuestStayRow }
   | { kind: 'standalone' }
   | null;
 
@@ -244,6 +250,32 @@ export function GuestSummaryTab({
         label: 'Cancel',
         tone: 'destructive',
         onSelect: () => setPanel({ kind: 'cancel', row }),
+      });
+    }
+    // THE TWO REVERSALS (033), each offered only on the state it undoes. They
+    // are the desk's way back from a stay that was resolved wrongly — the guest
+    // who arrived at 01:00 and was already recorded as a no-show, the booking
+    // cancelled on the wrong row — and this menu is where the desk works.
+    //
+    // Offered here from the row's status alone, without reading the reversals
+    // table for every stay on the page: a booking already restored once is
+    // refused by its RPC in its own words, which the panel shows verbatim. The
+    // stay page, which reads one booking, is where the "already restored"
+    // notice lives and where the action disappears.
+    if (row.status === 'no_show') {
+      actions.push({
+        key: 'reverse-noshow',
+        label: 'Reverse no-show',
+        tone: 'destructive',
+        onSelect: () => setPanel({ kind: 'reverse-noshow', row }),
+      });
+    }
+    if (row.status === 'cancelled') {
+      actions.push({
+        key: 'reverse-cancel',
+        label: 'Reverse cancellation',
+        tone: 'destructive',
+        onSelect: () => setPanel({ kind: 'reverse-cancel', row }),
       });
     }
     return actions;
@@ -437,6 +469,39 @@ export function GuestSummaryTab({
         {panel?.kind === 'cancel' ? (
           <CancelPanel
             row={panel.row}
+            onDone={afterMutation}
+            onCancel={() => setPanel(null)}
+          />
+        ) : null}
+        {/* The restore panels. Same component the stay page mounts, so a
+            reversal asks for the same things and reads the same way wherever it
+            is done. The room type is on the row; the property's today drives the
+            "this arrival date has passed" warning. */}
+        {panel?.kind === 'reverse-noshow' ? (
+          <ReverseBookingStatusForm
+            kind="no_show"
+            bookingId={panel.row.booking_id}
+            bookingNumber={panel.row.booking_number}
+            checkIn={panel.row.check_in}
+            checkOut={panel.row.check_out}
+            roomTypeName={panel.row.room_type_name}
+            // guaranteed is deliberately NOT passed: guest_stays carries no
+            // company, and the panel's copy covers both cases without guessing.
+            // The server decides what happens to the money either way.
+            propertyToday={todayIsoInZone(timezone)}
+            onDone={afterMutation}
+            onCancel={() => setPanel(null)}
+          />
+        ) : null}
+        {panel?.kind === 'reverse-cancel' ? (
+          <ReverseBookingStatusForm
+            kind="cancel"
+            bookingId={panel.row.booking_id}
+            bookingNumber={panel.row.booking_number}
+            checkIn={panel.row.check_in}
+            checkOut={panel.row.check_out}
+            roomTypeName={panel.row.room_type_name}
+            propertyToday={todayIsoInZone(timezone)}
             onDone={afterMutation}
             onCancel={() => setPanel(null)}
           />

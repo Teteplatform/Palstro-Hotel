@@ -7,6 +7,7 @@ import type {
   BookingListRow,
   BookingStatus,
 } from '../types/booking';
+import type { Reversal } from '../types/folio';
 
 // Data layer for the booking screen (build 6b, §3).
 //
@@ -685,5 +686,126 @@ export async function checkOutBooking(
     nightsUnbilled: toCount(row.nights_unbilled),
     amountPosted: toCount(row.amount_posted),
     balance: parseNumeric(row.balance as string | number | null),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Status reversal (migration 033) — the accountable un-doing of a no-show or a
+// cancellation
+// ---------------------------------------------------------------------------
+//
+// PARTS 1 AND 2 REVERSED MONEY; THIS PART REVERSES A STATUS, and a status is
+// what holds a room. So the guard that matters here is not the PIN (inherited,
+// always required, no threshold) but THE AVAILABILITY RE-CHECK:
+//
+//   A cancel FREED the room (015 RULE 4) and a no-show freed it too (029 §2), so
+//   between the act and its reversal ANOTHER BOOKING MAY HOLD THAT ROOM. Both
+//   RPCs therefore lock the room_types row and count availability under that
+//   lock for EVERY night of the stay — the same discipline create_booking uses —
+//   and REJECT, naming the nights that are full, rather than overbooking.
+//
+// THE REJECTION MUST REACH THE DESK VERBATIM. It names the dates and how many of
+// the stay's nights are gone, and its hint says what to do instead; that is the
+// whole value of it. Callers surface it with folioErrorMessage (lib/folio),
+// which prefers the server's own message and appends its hint — never
+// humanizeError, which would replace the PIN rejection (42501) with soft copy
+// and drop the hint from the availability rejection.
+//
+// NEITHER TOUCHES MONEY BY ITSELF. reverse_cancel posts nothing at all (a
+// cancelled booking had no room charges, and a deposit stays exactly where it
+// is). reverse_no_show credits back the retention night — if one was posted —
+// by calling reverse_charge on it, so the counter-entry, its tax and its audit
+// row all flow through the engine parts 1 and 2 built.
+
+export interface ReverseBookingStatusInput {
+  bookingId: string;
+  reason: string;
+  // ALWAYS required, with no threshold: restoring a booking re-takes a room the
+  // hotel may have re-sold and un-bills a night already invoiced. Never stored,
+  // never logged, never put in an error message, and cleared from component
+  // state the moment the call returns.
+  managerPin: string;
+  idempotencyKey: string;
+}
+
+// Reverse a no-show: the booking returns to CONFIRMED (never straight to
+// checked_in — the desk runs the ordinary check-in so the arrival instant is
+// captured) and any retention charge is credited back in the same transaction.
+// Returns the permanent `reversals` audit row.
+export async function reverseNoShow(
+  input: ReverseBookingStatusInput,
+): Promise<Reversal> {
+  const { data, error } = await supabase.rpc('reverse_no_show', {
+    p_booking_id: input.bookingId,
+    p_reason: input.reason,
+    p_manager_pin: input.managerPin,
+    p_idempotency_key: input.idempotencyKey,
+  });
+  if (error) throw error;
+  return data as Reversal;
+}
+
+// Reverse a cancellation: the booking returns to CONFIRMED, but only if every
+// night is still available. Returns the permanent `reversals` audit row.
+//
+// IDEMPOTENT BY KEY AND BY STATE, under a FOR UPDATE lock on the booking. One
+// case is deliberately NOT idempotent and it is worth knowing about: a booking
+// that was restored and then CANCELLED AGAIN is refused rather than reported
+// restored — a cancellation is reversed once, ever (reversals_target_uniq), and
+// silently returning the first reversal would tell the desk a guest had a room
+// when they do not.
+export async function reverseCancel(
+  input: ReverseBookingStatusInput,
+): Promise<Reversal> {
+  const { data, error } = await supabase.rpc('reverse_cancel', {
+    p_booking_id: input.bookingId,
+    p_reason: input.reason,
+    p_manager_pin: input.managerPin,
+    p_idempotency_key: input.idempotencyKey,
+  });
+  if (error) throw error;
+  return data as Reversal;
+}
+
+// The status reversals recorded against ONE booking, if any: at most one of
+// each kind, because reversals_target_uniq allows exactly one reversal per
+// (tenant, target_type, target) forever.
+//
+// Two fields rather than one row, because a booking can carry BOTH over its
+// life — no-showed and restored in August, cancelled and restored in September —
+// and a single "the reversal" would silently drop one of them.
+export interface BookingStatusReversals {
+  noShow: Reversal | null;
+  cancel: Reversal | null;
+}
+
+// Read them for the screens that must say a restored booking WAS restored, by
+// whom and why. The `reversals` table is member-readable and writable by nobody
+// (031 §5), so this is the only place that history lives — the booking row
+// itself carries no "restored" column, deliberately: a reversal is a fact about
+// an act, not a flag on a record.
+//
+// Rule 19: scoped to the active tenant and property on top of RLS. Bounded by
+// construction — one booking has at most two of these rows — so no pager.
+export async function fetchBookingStatusReversals(
+  bookingId: string,
+  tenantId: string,
+  propertyId: string,
+): Promise<BookingStatusReversals> {
+  const { data, error } = await supabase
+    .from('reversals')
+    .select('*')
+    .eq('tenant_id', tenantId) // rule 19
+    .eq('property_id', propertyId) // rule 19
+    .eq('target_id', bookingId)
+    .in('target_type', ['no_show', 'cancel'])
+    .order('reversed_at', { ascending: true });
+
+  if (error) throw error;
+
+  const rows = (data ?? []) as Reversal[];
+  return {
+    noShow: rows.find((r) => r.target_type === 'no_show') ?? null,
+    cancel: rows.find((r) => r.target_type === 'cancel') ?? null,
   };
 }
