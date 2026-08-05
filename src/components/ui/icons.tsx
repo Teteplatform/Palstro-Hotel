@@ -209,6 +209,26 @@ export const CompaniesIcon = ({ className }: IconProps) => (
   </Line>
 );
 
+// Inventory items — a product tag. The CATALOGUE (what a thing IS), distinct
+// from the Store crate (where stock SITS) and the Stock Counts grid (how much
+// there is).
+export const ItemsIcon = ({ className }: IconProps) => (
+  <Line className={className}>
+    <path d="M20.5 12.5 12 21a2 2 0 0 1-2.83 0L3 14.83a2 2 0 0 1 0-2.83L11.5 3.5H20a.5.5 0 0 1 .5.5v8.5Z" />
+    <circle cx="16.6" cy="7.4" r="1.2" />
+  </Line>
+);
+
+// Locations — a shelving rack: the boxes that HOLD stock (main store, kitchen,
+// each bar, housekeeping), as opposed to the items sitting on them.
+export const LocationsIcon = ({ className }: IconProps) => (
+  <Line className={className}>
+    <rect x="3" y="4" width="18" height="16" rx="2" />
+    <path d="M3 9.5h18M3 14.5h18" />
+    <path d="M8 4v5.5M15 9.5V14.5" />
+  </Line>
+);
+
 // Requisitions — a clipboard form (request, then approve).
 export const RequisitionsIcon = ({ className }: IconProps) => (
   <Line className={className}>

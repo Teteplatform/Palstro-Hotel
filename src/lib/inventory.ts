@@ -1,0 +1,392 @@
+import { supabase } from './supabase';
+import { fetchAllPaged } from './fetchAllPaged';
+import type {
+  InventoryCategory,
+  InventoryItem,
+  ItemType,
+  StockLocation,
+  LocationKind,
+  UnitOfMeasure,
+} from '../types/inventory';
+
+// The data layer for the inventory catalogue and locations (F&B/Inventory part
+// 1, migration 035). Same compliance contract as roomTypes.ts / companies.ts:
+//
+//   - Rule 19: RLS is the floor, never the ceiling. Every read AND write is
+//     ADDITIONALLY scoped in code — items/units/categories to the active TENANT,
+//     locations to the active TENANT and PROPERTY — so a multi-tenant user's own
+//     tenants can never blend on screen.
+//   - Rule 5: deleted_at is NULL-safe; "live" is `deleted_at IS NULL`.
+//   - Rule 11: every call is awaited and throws; the calling component surfaces
+//     the error and never swallows it.
+//   - Rule 1a: any read whose whole result is consumed goes through
+//     fetchAllPaged — never a bare unbounded select.
+//   - Rule 1b: the items list pages SERVER-SIDE via .range() with an exact
+//     count, and its filters are applied server-side, so paging a filtered set
+//     is correct rather than paging-then-filtering.
+//   - §6: numeric columns arrive as STRINGS (reorder_level); parse with
+//     parseNumeric before any arithmetic. This module writes numbers and reads
+//     strings, deliberately.
+//
+// WRITES GO DIRECT TO THE TABLES, NOT THROUGH RPCs — matching roomTypes.ts and
+// companies.ts, and for the same reason. These are ADMIN-GATED CONFIGURATION
+// MASTER DATA: 035's is_tenant_admin() insert/update policies are the real
+// enforcement, there is no money and nothing to double-post, so rule 2's
+// idempotency-key machinery does not apply (it exists to stop duplicate
+// bookings, charges and payments). An RPC would add a hop and a second place for
+// the scoping to drift without buying a guarantee the policy does not already
+// give. Where the codebase DOES use an RPC — create_booking's overbooking lock,
+// the folio posting path — it is because the server must hold a lock or stamp an
+// actor under SECURITY DEFINER. Neither applies to naming a store.
+//
+// REMOVAL IS ALWAYS A SOFT DELETE. There is no hard-delete function in this file
+// and no DELETE policy in 035, so the destructive path does not exist at either
+// layer. The stronger guards — a location holding stock, an item used by a
+// recipe — belong to part 2/3 and are recorded in 035 §7.
+
+// ===========================================================================
+// Units of measure (tenant-level reference)
+// ===========================================================================
+
+// Every live unit for a tenant. The WHOLE set is consumed at once (it is the
+// base-unit picker), so this is fetchAllPaged (rule 1a), not a paged surface.
+// Inactive units are included: an item created before a unit was retired still
+// has to render its unit, and the form filters to active ones for NEW choices.
+export async function fetchAllUnits(
+  tenantId: string,
+): Promise<UnitOfMeasure[]> {
+  return fetchAllPaged<UnitOfMeasure>((from, to) =>
+    supabase
+      .from('units_of_measure')
+      .select('*')
+      .eq('tenant_id', tenantId) // rule 19
+      .is('deleted_at', null) // rule 5
+      .order('display_order', { ascending: true })
+      .order('unit_code', { ascending: true }) // stable tiebreak
+      .range(from, to),
+  );
+}
+
+// ===========================================================================
+// Categories (tenant-level reference)
+// ===========================================================================
+
+export async function fetchAllCategories(
+  tenantId: string,
+): Promise<InventoryCategory[]> {
+  return fetchAllPaged<InventoryCategory>((from, to) =>
+    supabase
+      .from('inventory_categories')
+      .select('*')
+      .eq('tenant_id', tenantId) // rule 19
+      .is('deleted_at', null) // rule 5
+      .order('display_order', { ascending: true })
+      .order('name', { ascending: true })
+      .range(from, to),
+  );
+}
+
+export interface CategoryWrite {
+  name?: string;
+  is_active?: boolean;
+  display_order?: number;
+}
+
+export async function createCategory(
+  tenantId: string,
+  values: CategoryWrite & { name: string; display_order: number },
+): Promise<InventoryCategory> {
+  const { data, error } = await supabase
+    .from('inventory_categories')
+    .insert({ tenant_id: tenantId, ...values })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data as InventoryCategory;
+}
+
+export async function updateCategory(
+  id: string,
+  tenantId: string,
+  patch: CategoryWrite,
+): Promise<InventoryCategory> {
+  const { data, error } = await supabase
+    .from('inventory_categories')
+    .update(patch)
+    .eq('id', id)
+    .eq('tenant_id', tenantId) // rule 19
+    .is('deleted_at', null) // rule 5: only patch a live row
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data as InventoryCategory;
+}
+
+// Soft-delete a category. Items filed under it KEEP their category_id — the FK
+// is deliberately NO ACTION (035 §3), so removing a category never removes or
+// silently re-files its items; they simply show as uncategorised until re-filed.
+export async function softDeleteCategory(
+  id: string,
+  tenantId: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from('inventory_categories')
+    .update({ deleted_at: new Date().toISOString() })
+    .eq('id', id)
+    .eq('tenant_id', tenantId) // rule 19
+    .is('deleted_at', null); // idempotent: a retry after success is a no-op
+
+  if (error) throw error;
+}
+
+// ===========================================================================
+// Items (THE tenant-level catalogue)
+// ===========================================================================
+
+export interface ItemFilters {
+  // Free-text search over name and code, applied server-side.
+  search: string;
+  // '' means "any" for both. Never encoded as null, so the caller's select
+  // element has a real value to hold.
+  itemType: ItemType | '';
+  categoryId: string;
+}
+
+export const EMPTY_ITEM_FILTERS: ItemFilters = {
+  search: '',
+  itemType: '',
+  categoryId: '',
+};
+
+export interface InventoryItemsPage {
+  rows: InventoryItem[];
+  count: number; // exact total for the FILTER (rules 1b/20), not the page length
+}
+
+// One SERVER-PAGINATED page of the tenant's live catalogue items (rule 1b —
+// never a client-side slice of a capped fetch). `page` is 1-based.
+//
+// ORDERED BY NAME, not display_order, deliberately: a catalogue is looked up
+// alphabetically ("where is Rice?"), and a hotel with three hundred items would
+// find a curated order useless. display_order exists on the row for later
+// curated groupings (a menu's order) and is not exposed in part 1.
+//
+// EVERY FILTER IS APPLIED SERVER-SIDE so the count, the page and the filter all
+// describe the same set (rules 1b/20). A client-side filter over a fetched page
+// would make "of N" a lie.
+export async function fetchInventoryItemsPage(
+  tenantId: string,
+  page: number,
+  pageSize: number,
+  filters: ItemFilters = EMPTY_ITEM_FILTERS,
+): Promise<InventoryItemsPage> {
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+
+  let q = supabase
+    .from('inventory_items')
+    .select('*', { count: 'exact' })
+    .eq('tenant_id', tenantId) // rule 19
+    .is('deleted_at', null) // rule 5
+    .order('name', { ascending: true })
+    .order('created_at', { ascending: true }); // stable tiebreak
+
+  const search = filters.search.trim();
+  if (search.length > 0) {
+    // PostgREST's or() takes a comma-separated filter list, so commas and
+    // parens in the term would be read as syntax. Strip them (matching
+    // fetchCompaniesPage) rather than trying to escape them.
+    const safe = search.replace(/[,()*]/g, ' ').trim();
+    if (safe.length > 0) {
+      q = q.or(`name.ilike.%${safe}%,code.ilike.%${safe}%`);
+    }
+  }
+
+  if (filters.itemType) q = q.eq('item_type', filters.itemType);
+  if (filters.categoryId) q = q.eq('category_id', filters.categoryId);
+
+  const { data, error, count } = await q.range(from, to);
+  if (error) throw error;
+  return { rows: (data ?? []) as InventoryItem[], count: count ?? 0 };
+}
+
+// The whole live catalogue for a tenant — for later parts that need every item
+// at once (a recipe picker, a stock count sheet). Bounded via fetchAllPaged
+// (rule 1a), never a bare select.
+export async function fetchAllInventoryItems(
+  tenantId: string,
+  activeOnly = false,
+): Promise<InventoryItem[]> {
+  return fetchAllPaged<InventoryItem>((from, to) => {
+    let q = supabase
+      .from('inventory_items')
+      .select('*')
+      .eq('tenant_id', tenantId) // rule 19
+      .is('deleted_at', null); // rule 5
+    if (activeOnly) q = q.eq('is_active', true);
+    return q.order('name', { ascending: true }).range(from, to);
+  });
+}
+
+export interface InventoryItemWrite {
+  name?: string;
+  code?: string | null;
+  item_type?: ItemType;
+  base_unit?: string;
+  category_id?: string | null;
+  is_perishable?: boolean;
+  // A JS number or null here; the column is numeric(14,4) and comes BACK as a
+  // string (§6). Null means "not monitored", never 0 — a zero threshold is a
+  // real setting that means something different.
+  reorder_level?: number | null;
+  is_active?: boolean;
+  display_order?: number;
+}
+
+export async function createInventoryItem(
+  tenantId: string,
+  values: InventoryItemWrite & {
+    name: string;
+    item_type: ItemType;
+    base_unit: string;
+  },
+): Promise<InventoryItem> {
+  const { data, error } = await supabase
+    .from('inventory_items')
+    .insert({ tenant_id: tenantId, ...values })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data as InventoryItem;
+}
+
+export async function updateInventoryItem(
+  id: string,
+  tenantId: string,
+  patch: InventoryItemWrite,
+): Promise<InventoryItem> {
+  const { data, error } = await supabase
+    .from('inventory_items')
+    .update(patch)
+    .eq('id', id)
+    .eq('tenant_id', tenantId) // rule 19
+    .is('deleted_at', null) // rule 5
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data as InventoryItem;
+}
+
+// Soft-delete an item (§6: master data is never hard-deleted, and 035 ships no
+// DELETE policy so the hard path does not exist). Part 2/3 will additionally
+// refuse when the item holds stock or a live recipe references it (035 §7).
+export async function softDeleteInventoryItem(
+  id: string,
+  tenantId: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from('inventory_items')
+    .update({ deleted_at: new Date().toISOString() })
+    .eq('id', id)
+    .eq('tenant_id', tenantId) // rule 19
+    .is('deleted_at', null); // idempotent
+
+  if (error) throw error;
+}
+
+// ===========================================================================
+// Locations (property-level)
+// ===========================================================================
+
+// Every live location for a property. NOT a paged surface, and that is a
+// deliberate reading of rule 1b rather than an omission: the rule forbids a
+// CAPPED list with no way to reach the rest, and fetchAllPaged returns the
+// COMPLETE set (rule 1a) — nothing is unreachable. A property has a handful of
+// locations, and reordering them requires the whole ordered list in hand, which
+// paging would break across a page boundary.
+export async function fetchLocations(
+  propertyId: string,
+  tenantId: string,
+): Promise<StockLocation[]> {
+  return fetchAllPaged<StockLocation>((from, to) =>
+    supabase
+      .from('locations')
+      .select('*')
+      .eq('tenant_id', tenantId) // rule 19
+      .eq('property_id', propertyId) // rule 19: active property
+      .is('deleted_at', null) // rule 5
+      .order('display_order', { ascending: true })
+      .order('name', { ascending: true })
+      .order('created_at', { ascending: true }) // stable final tiebreak
+      .range(from, to),
+  );
+}
+
+export interface LocationWrite {
+  name?: string;
+  kind?: LocationKind;
+  is_active?: boolean;
+  display_order?: number;
+}
+
+export async function createLocation(
+  tenantId: string,
+  propertyId: string,
+  values: LocationWrite & {
+    name: string;
+    kind: LocationKind;
+    display_order: number;
+  },
+): Promise<StockLocation> {
+  const { data, error } = await supabase
+    .from('locations')
+    .insert({ tenant_id: tenantId, property_id: propertyId, ...values })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data as StockLocation;
+}
+
+export async function updateLocation(
+  id: string,
+  tenantId: string,
+  propertyId: string,
+  patch: LocationWrite,
+): Promise<StockLocation> {
+  const { data, error } = await supabase
+    .from('locations')
+    .update(patch)
+    .eq('id', id)
+    .eq('tenant_id', tenantId) // rule 19
+    .eq('property_id', propertyId) // rule 19
+    .is('deleted_at', null) // rule 5
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data as StockLocation;
+}
+
+// Soft-delete a location. Part 2 will refuse this outright while the location
+// still holds stock (035 §7) — removing a box that still has things in it
+// strands that stock in the ledger where no screen can ever reconcile it.
+export async function softDeleteLocation(
+  id: string,
+  tenantId: string,
+  propertyId: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from('locations')
+    .update({ deleted_at: new Date().toISOString() })
+    .eq('id', id)
+    .eq('tenant_id', tenantId) // rule 19
+    .eq('property_id', propertyId) // rule 19
+    .is('deleted_at', null); // idempotent
+
+  if (error) throw error;
+}

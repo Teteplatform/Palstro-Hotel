@@ -22,6 +22,8 @@ import { SettingsPage } from './pages/admin/SettingsPage';
 import { SiteEditorPage } from './pages/admin/SiteEditorPage';
 import { RoomTypesPage } from './pages/admin/RoomTypesPage';
 import { CompaniesPage } from './pages/admin/CompaniesPage';
+import { InventoryItemsPage } from './pages/admin/InventoryItemsPage';
+import { LocationsPage } from './pages/admin/LocationsPage';
 import { BookingsPage } from './pages/admin/BookingsPage';
 import { NewBookingPage } from './pages/admin/NewBookingPage';
 import { BookingDetailPage } from './pages/admin/BookingDetailPage';
@@ -139,6 +141,27 @@ const router = createBrowserRouter([
                 element: (
                   <ModuleGuard module="settings">
                     <CompaniesPage />
+                  </ModuleGuard>
+                ),
+              },
+              // Inventory part 1 — the shared item catalogue (tenant-level) and
+              // the stock locations (property-level). Both ride the 'store'
+              // module: a tenant without it sees the "not available" page, and
+              // cannot reach either screen by typing the URL. RLS still guards
+              // the data regardless (rule 19) — the module flag is UX only.
+              {
+                path: 'inventory-items',
+                element: (
+                  <ModuleGuard module="store">
+                    <InventoryItemsPage />
+                  </ModuleGuard>
+                ),
+              },
+              {
+                path: 'locations',
+                element: (
+                  <ModuleGuard module="store">
+                    <LocationsPage />
                   </ModuleGuard>
                 ),
               },

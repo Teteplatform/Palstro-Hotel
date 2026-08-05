@@ -14,6 +14,8 @@ import {
   StaffIcon,
   AccountingIcon,
   StoreIcon,
+  ItemsIcon,
+  LocationsIcon,
   RequisitionsIcon,
   PurchasesIcon,
   SuppliersIcon,
@@ -178,6 +180,35 @@ export const ADMIN_NAV: AdminNavItem[] = [
   // both consume it (a recipe deduction and an amenity issue are stock
   // movements). Distinct from Revenue above: this is stock control, not a sales
   // channel.
+  // Items and Locations (inventory part 1) are the FOUNDATION of this group and
+  // the two screens that exist today, so they lead it. Both ride the 'store'
+  // module rather than getting flags of their own: a hotel that has not bought
+  // stock control has no use for either, and splitting them across three flags
+  // would let a tenant end up with a catalogue and nowhere to put it.
+  //
+  // Items is the TENANT-wide catalogue (what a thing is, its unit, its
+  // category); Locations is PROPERTY-level (which boxes hold stock here). The
+  // nav must not blur that — the same distinction as room types vs the room
+  // board above.
+  {
+    label: 'Items',
+    icon: ItemsIcon,
+    segment: 'inventory-items',
+    module: 'store',
+    group: 'inventory',
+    status: 'ready',
+  },
+  {
+    label: 'Locations',
+    icon: LocationsIcon,
+    segment: 'locations',
+    module: 'store',
+    group: 'inventory',
+    status: 'ready',
+  },
+  // Store is the STOCK ON HAND per location — quantities and valuation, which
+  // arrive with the movement ledger in part 2. It stays coming_soon: the
+  // catalogue above defines items, it does not count them.
   {
     label: 'Store',
     icon: StoreIcon,

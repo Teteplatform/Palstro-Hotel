@@ -42,6 +42,7 @@ Three kinds of staff use the admin.
 | Edit the guest record (name, phone, email, preference) | No | Yes | Yes |
 | Set **your own** approval PIN | No | Yes | Yes |
 | Room types, rates, companies, settings, site editor | No | Yes | Yes |
+| Inventory items and stock locations | No | Yes | Yes |
 
 **Two things to know about this table.**
 
@@ -778,6 +779,80 @@ Corporate accounts that book rooms on their own account.
 When a booking is billed to a company, its price comes from these rates and the
 folio is billed to the company. Company pricing is never shown on the guest site.
 
+### Inventory items
+
+**Where:** sidebar → *Inventory* → **Items**.
+
+Everything you hold, use or sell, defined **once for the whole company** — the
+same *Rice* in every hotel you run. This screen defines items; it does not count
+them. Quantities come with the store screens.
+
+Each item has:
+
+- **A name**, and optionally a **code** for bin cards and stock sheets. Neither
+  can repeat — *Rice* and *rice* are the same item.
+- **A type**, and this is the one worth reading twice:
+
+  | Type | What it means |
+  | --- | --- |
+  | **Ingredient** | Used up by recipes only. Never sold on its own. Rice, cooking oil, soap. |
+  | **Sold as-is** | Sold exactly as it is. One sale takes one off the shelf. Bottled water, biscuits. |
+  | **Both** | Sold on its own *and* used in recipes — a 50cl Coke sold at the bar and poured into a cocktail. |
+
+  Pick **Both** whenever a thing is sold over the counter *and* goes into
+  something else. Marked as *Sold as-is* only, its cocktail use would never come
+  off your stock and the bar would run dry with stock showing on hand.
+
+- **A base unit** — the smallest unit you actually measure: kg, litre, piece,
+  bottle. **Everything is entered in this unit.** There is no "cartons of 12" to
+  set up and get wrong; a delivery of 5 cartons is entered as the number of
+  pieces it really is.
+- **A category** — how your stock reports are grouped. Manage the list with
+  **Categories** at the top of the screen. Removing a category keeps its items;
+  they simply become uncategorised.
+- **A reorder level** — the amount below which you want warning. Optional; the
+  low-stock report comes later.
+- **Perishable** and **In use** switches. *In use* off keeps an item on file but
+  out of new entries.
+
+Search by name or code, and filter by type or category. The count under the list
+is the whole filtered set, not the page you can see.
+
+**Removing an item** takes it out of the catalogue but keeps its history, so it
+can come back later.
+
+![screenshot: the inventory items list with the type filter open](/help/inventory-items.png)
+
+### Stock locations
+
+**Where:** sidebar → *Inventory* → **Locations**.
+
+The places that hold stock **in this hotel** — unlike items, these are per
+property, because stock is physical.
+
+Every property starts with **Main Store, Kitchen, Bar** and **Housekeeping**.
+Rename them to whatever you call them, add as many as you have, remove the ones
+you do not use. A restaurant with no rooms simply removes Housekeeping.
+
+**You can have two of the same kind.** A Poolside Bar and an Executive Lounge Bar
+are two separate bars, each keeping its own stock and its own figures.
+
+The **kind** decides what a location will do once stock movements exist:
+
+| Kind | What it does |
+| --- | --- |
+| **Store** | Holds bulk stock and issues it out. Deliveries are received in here. |
+| **Kitchen** | Uses up stock through recipes — a plated dish takes its ingredients out of this kitchen. |
+| **Bar** | Sells drinks straight off the shelf and pours recipes for cocktails. |
+| **Housekeeping** | Stocks the rooms. Issuing an amenity kit while cleaning takes it off this location. |
+| **Other** | Anything else that holds stock — a maintenance cupboard, laundry chemicals. |
+
+Use the arrows to order the list. Removing a location takes it off the list;
+once stock movements exist, a location still holding stock will not be removable
+at all — move the stock out first.
+
+![screenshot: the stock locations list](/help/stock-locations.png)
+
 ### The night audit
 
 **What it is:** a job that runs once a night, on its own, for every property.
@@ -831,7 +906,8 @@ depends on them.
 - Front desk board and the physical room / housekeeping board
 - Rates and availability calendar
 - Food & Beverage and Laundry as their own modules (post them as charges for now)
-- Store, requisitions, purchases, suppliers, stock counts
+- Store (stock quantities and their value), requisitions, purchases, suppliers,
+  stock counts. **Items** and **Locations** *are* built — see the Owner section.
 - Maintenance, staff, reports, accounting
 - A guests list screen (reach a guest through their booking)
 - Guest profile photos
