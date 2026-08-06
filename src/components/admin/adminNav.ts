@@ -206,16 +206,21 @@ export const ADMIN_NAV: AdminNavItem[] = [
     group: 'inventory',
     status: 'ready',
   },
-  // Store is the STOCK ON HAND per location — quantities and valuation, which
-  // arrive with the movement ledger in part 2. It stays coming_soon: the
-  // catalogue above defines items, it does not count them.
+  // Store is the STOCK ON HAND per location — quantities and valuation, from
+  // the movement ledger (inventory part 2a, migration 036). Now READY: the
+  // catalogue above defines items, Locations says where stock lives, and this
+  // is what is actually in each of them and what it is worth.
+  //
+  // SEGMENT NOTE: the route is 'stock', not 'store'. The nav LABEL stays
+  // "Store" because that is what a hotel calls the room; the URL says what the
+  // screen shows, and /stock/import hangs off it as the day-one bulk load.
   {
     label: 'Store',
     icon: StoreIcon,
-    segment: 'store',
+    segment: 'stock',
     module: 'store',
     group: 'inventory',
-    status: 'coming_soon',
+    status: 'ready',
   },
   {
     label: 'Requisitions',

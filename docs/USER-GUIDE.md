@@ -43,6 +43,8 @@ Three kinds of staff use the admin.
 | Set **your own** approval PIN | No | Yes | Yes |
 | Room types, rates, companies, settings, site editor | No | Yes | Yes |
 | Inventory items and stock locations | No | Yes | Yes |
+| Record an opening balance or a stock adjustment | Yes — recorded against you | Yes | Yes |
+| Load opening stock from a spreadsheet | Yes — recorded against you | Yes | Yes |
 
 **Two things to know about this table.**
 
@@ -847,11 +849,109 @@ The **kind** decides what a location will do once stock movements exist:
 | **Housekeeping** | Stocks the rooms. Issuing an amenity kit while cleaning takes it off this location. |
 | **Other** | Anything else that holds stock — a maintenance cupboard, laundry chemicals. |
 
-Use the arrows to order the list. Removing a location takes it off the list;
-once stock movements exist, a location still holding stock will not be removable
-at all — move the stock out first.
+Use the arrows to order the list. Removing a location takes it off the list —
+**but a location still holding stock cannot be removed at all**. Move the stock
+out, or write it off with an adjustment, first. (The same applies to an item:
+one with stock on hand anywhere cannot be removed from the catalogue.)
 
 ![screenshot: the stock locations list](/help/stock-locations.png)
+
+### Stock on hand
+
+**Where:** sidebar → *Inventory* → **Store**.
+
+What one location is holding right now, what it cost, and what it is worth. Pick
+the location at the top of the page — stock is physical, so the Main Store and
+the Kitchen hold separate quantities of the same item and are looked at
+separately.
+
+> This section sits under Owner because it belongs with the rest of Inventory,
+> but **recording stock is store work**: anyone with an account can post an
+> opening balance or an adjustment, and it is recorded against their name.
+> Defining the *items* and the *locations* stays with the owner.
+
+Each row shows the quantity **in the item's own unit**, its **average cost** per
+unit, and the **value** of what is there. The figure above the table is the total
+value of everything matching your current filters, across every page — not just
+the rows you can see.
+
+**Nothing here is stored.** Every quantity is added up from the movements
+recorded against that item in that location, every time you open the screen. That
+is why the numbers can never quietly drift away from the movements behind them —
+and why you can always open a row and see exactly where a figure came from.
+
+**Opening a row** shows every movement, oldest first, with what the stock stood
+at after each one. This is the place to check a cost you do not recognise.
+
+#### What "average cost" means
+
+Every time stock comes in at a new price, the cost of what you already had and
+the cost of what just arrived are **blended in proportion to their quantities**.
+
+> 100 kg of rice at ₦1,500 and then 50 kg at ₦1,700 gives you 150 kg at
+> ₦1,566.67 each — not ₦1,600, because there is twice as much of the cheaper
+> rice.
+
+**Taking stock out never changes it.** Stock leaves at whatever the average
+already is, so cooking with the rice cannot change what the rice still in the
+store is worth. Only buying more at a different price moves it.
+
+#### Adding or correcting stock
+
+**Add or correct stock** offers two things:
+
+- **Opening balance** — what was already on the shelf when you started using the
+  system. **Once per item per location.** You will not be offered an item that
+  already has one.
+- **Adjustment** — a correction afterwards. Choose **Add stock** or **Remove
+  stock** (never type a minus sign), and give a **reason**.
+
+**A reason is required on every adjustment, and it cannot be edited or deleted
+afterwards.** An adjustment moves stock with no purchase and no sale behind it,
+so the reason and your name stay against it permanently. A mistake is fixed by
+posting *another* adjustment, so the whole story stays visible — the same rule as
+the folio.
+
+When you add stock, leaving the cost blank keeps the current average, which is
+right for "I found two more bags of the same thing". Typing a different cost is
+allowed and will move the average, because that is what it means.
+
+If a correction would leave **less than nothing** on hand, the system stops and
+tells you what it would come to. You can still record it — and sometimes you
+should, because a negative figure is real information: it means stock left
+without a movement behind it. It is never quietly rounded up to zero.
+
+![screenshot: stock on hand for the main store](/help/stock-on-hand.png)
+
+### Loading your opening stock from a spreadsheet
+
+**Where:** *Inventory* → **Store** → **Load from a spreadsheet**.
+
+For the day you start. Instead of typing three hundred items one at a time:
+
+1. **Choose the location and the count date.** The date is the day you counted —
+   not the day you upload.
+2. **Download the template.** It already lists every item in your catalogue with
+   **the unit it is tracked in**, so you never have to remember whether rice is
+   counted in kilograms or in bags. Type a quantity and a unit cost beside the
+   things you actually have; leave the rest blank. Use a full stop for decimals.
+3. **Upload it back** (.xlsx or .csv).
+4. **Check the preview.** Every row is checked *before anything is saved* —
+   which rows will import, which are already loaded, and exactly what is wrong
+   with any that cannot be. **Nothing is written until you press Import.**
+
+Rows with a problem do not hold up the rest: import the good ones now and fix
+the others in the file.
+
+**Uploading the same file twice is safe.** Rows that already loaded are
+recognised and left alone — the stock is not doubled. And because an item can
+only ever have one opening balance in a location, even a re-saved copy of the
+file cannot double-load it.
+
+**This is for opening stock only.** Ongoing deliveries are recorded as purchases
+when that screen arrives — not by uploading this sheet again with bigger numbers.
+
+![screenshot: the import preview with good and bad rows](/help/stock-import.png)
 
 ### The night audit
 
@@ -895,6 +995,10 @@ at all — move the stock out first.
 | **Counter-entry** | The opposite line a reversal posts. |
 | **Walk-in** | A booking the guest pays for themselves, as opposed to one billed to a company. |
 | **Non-resident** | A charge or payment that belongs to a person but to no stay. |
+| **Movement** | One recorded change of stock in one location — an opening balance, an adjustment, later a delivery or an issue. Permanent: corrected by another movement, never edited. |
+| **On hand** | What a location is holding, added up from its movements. Never a stored number. |
+| **Average cost** | What one unit of an item is worth in that location, blended across everything that has come in. Taking stock out does not change it. |
+| **Opening balance** | What was already on the shelf when you started using the system. Once per item per location. |
 
 ---
 
@@ -906,8 +1010,10 @@ depends on them.
 - Front desk board and the physical room / housekeeping board
 - Rates and availability calendar
 - Food & Beverage and Laundry as their own modules (post them as charges for now)
-- Store (stock quantities and their value), requisitions, purchases, suppliers,
-  stock counts. **Items** and **Locations** *are* built — see the Owner section.
+- Requisitions and transfers between locations, purchases and suppliers, stock
+  counts. **Items**, **Locations** and **Store** (stock on hand, opening
+  balances, adjustments and the spreadsheet load) *are* built — see the Owner
+  section.
 - Maintenance, staff, reports, accounting
 - A guests list screen (reach a guest through their booking)
 - Guest profile photos

@@ -24,6 +24,8 @@ import { RoomTypesPage } from './pages/admin/RoomTypesPage';
 import { CompaniesPage } from './pages/admin/CompaniesPage';
 import { InventoryItemsPage } from './pages/admin/InventoryItemsPage';
 import { LocationsPage } from './pages/admin/LocationsPage';
+import { StockPage } from './pages/admin/StockPage';
+import { StockImportPage } from './pages/admin/StockImportPage';
 import { BookingsPage } from './pages/admin/BookingsPage';
 import { NewBookingPage } from './pages/admin/NewBookingPage';
 import { BookingDetailPage } from './pages/admin/BookingDetailPage';
@@ -162,6 +164,33 @@ const router = createBrowserRouter([
                 element: (
                   <ModuleGuard module="store">
                     <LocationsPage />
+                  </ModuleGuard>
+                ),
+              },
+              // Inventory part 2a — STOCK ON HAND per location, valued at
+              // moving average cost. Part 1's two screens defined items and
+              // places; this is the first one with quantities on it. Same
+              // 'store' module guard as both, since a hotel without stock
+              // control has no use for any of the three. RLS still guards the
+              // data regardless (rule 19) — the module flag is UX only.
+              {
+                path: 'stock',
+                element: (
+                  <ModuleGuard module="store">
+                    <StockPage />
+                  </ModuleGuard>
+                ),
+              },
+              // The day-one spreadsheet load, as its own route rather than a
+              // modal: it is a multi-step job with a preview a person reads
+              // carefully, it survives a refresh, and it can be linked to.
+              // Declared BEFORE nothing dynamic, so no ranking concern — but
+              // kept beside its parent so the pair reads as one feature.
+              {
+                path: 'stock/import',
+                element: (
+                  <ModuleGuard module="store">
+                    <StockImportPage />
                   </ModuleGuard>
                 ),
               },

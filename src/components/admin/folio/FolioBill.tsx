@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { CalculationNote } from '../../ui/CalculationNote';
 import { useAuth } from '../../../hooks/useAuth';
 import { useFolio } from '../../../hooks/useFolio';
 import { describeError } from '../../../lib/errors';
@@ -1195,19 +1196,9 @@ function BalanceRow({
 //
 // Same affordance as the bookings summary: the full text is the title AND the
 // accessible name, so it is reachable by pointer, keyboard and screen reader.
-function CalculationNote({ note }: { note: string }) {
-  return (
-    <span
-      className="inline-flex h-5 w-5 cursor-help items-center justify-center rounded-full border border-sand-border bg-white/70 text-[11px] leading-none text-charcoal-muted"
-      tabIndex={0}
-      role="note"
-      aria-label={`How this is calculated: ${note}`}
-      title={note}
-    >
-      <span aria-hidden="true">i</span>
-    </span>
-  );
-}
+// CalculationNote used to live here. It is shared from
+// src/components/ui/CalculationNote.tsx now that the stock screens need the same
+// rule-16 affordance — one implementation, not one per screen.
 
 // THE PER-LINE TOOLS, OUT OF THE READ.
 //
