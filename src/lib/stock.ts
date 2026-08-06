@@ -6,7 +6,12 @@ import { parseNumeric } from './format';
 // intent" convention to drift from, and rules 2/3 are the last thing that should
 // have two implementations.
 import { newIdempotencyKey } from './folio';
-import type { StockLedgerRow, StockMovement, StockOnHandRow } from '../types/stock';
+import type {
+  MovementType,
+  StockLedgerRow,
+  StockMovement,
+  StockOnHandRow,
+} from '../types/stock';
 
 export { newIdempotencyKey };
 
@@ -424,6 +429,125 @@ export async function postStockAdjustment(
 
   if (error) throw error;
   return data as StockMovement;
+}
+
+// ---------------------------------------------------------------------------
+// Movement lists (the Adjustments and Import History tabs)
+// ---------------------------------------------------------------------------
+
+// What a movement list can be narrowed by. Every one is a server-side predicate
+// on a real stock_movements column, so the page, the count and the filter always
+// describe the same set (rule 1b).
+//
+// THERE IS DELIBERATELY NO FREE-TEXT SEARCH HERE. stock_movements carries no
+// item name — the name lives in the catalogue — and PostgREST cannot filter a
+// list on a column it is not selecting from. A client-side name search over a
+// fetched page would make "of N" a lie, so the item is chosen from a picker
+// instead, which filters on inventory_item_id and is exact.
+export interface MovementFilters {
+  locationId: string;
+  inventoryItemId: string;
+  // Business dates (rules 8/12) — the operating day the movement belongs to,
+  // never created_at.
+  fromDate: string;
+  toDate: string;
+  // '' = either way. Adjustments go in both directions and which one matters:
+  // stock written OFF is the direction worth watching.
+  direction: '' | 'in' | 'out';
+}
+
+export const EMPTY_MOVEMENT_FILTERS: MovementFilters = {
+  locationId: '',
+  inventoryItemId: '',
+  fromDate: '',
+  toDate: '',
+  direction: '',
+};
+
+export function hasMovementFilters(f: MovementFilters): boolean {
+  return (
+    Boolean(f.locationId) ||
+    Boolean(f.inventoryItemId) ||
+    Boolean(f.fromDate) ||
+    Boolean(f.toDate) ||
+    Boolean(f.direction)
+  );
+}
+
+export interface MovementsPage {
+  rows: StockMovement[];
+  count: number; // exact total for the FILTER, not the page length
+}
+
+// One SERVER-PAGINATED page of movements of one type. `page` is 1-based.
+//
+// ORDERED BY BUSINESS DATE, DESCENDING (rule 8): the operating day the movement
+// belongs to, most recent first, because a correction posted today for last
+// Tuesday belongs where it happened. `seq` breaks the tie in real insertion
+// order — the same total order the valuation folds in (036 §1), and the only one
+// that is stable across reads.
+export async function fetchMovementsPage(
+  tenantId: string,
+  propertyId: string,
+  movementType: MovementType,
+  page: number,
+  pageSize: number,
+  filters: MovementFilters = EMPTY_MOVEMENT_FILTERS,
+): Promise<MovementsPage> {
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+
+  let q = supabase
+    .from('stock_movements')
+    .select('*', { count: 'exact' })
+    .eq('tenant_id', tenantId) // rule 19
+    .eq('property_id', propertyId) // rule 19
+    .eq('movement_type', movementType);
+
+  if (filters.locationId) q = q.eq('location_id', filters.locationId);
+  if (filters.inventoryItemId) q = q.eq('inventory_item_id', filters.inventoryItemId);
+  if (filters.fromDate) q = q.gte('business_date', filters.fromDate);
+  if (filters.toDate) q = q.lte('business_date', filters.toDate);
+  if (filters.direction === 'in') q = q.gt('quantity', 0);
+  if (filters.direction === 'out') q = q.lt('quantity', 0);
+
+  const { data, error, count } = await q
+    .order('business_date', { ascending: false }) // rule 8
+    .order('seq', { ascending: false }) // the fold's own tiebreak
+    .range(from, to);
+
+  if (error) throw error;
+  return { rows: (data ?? []) as StockMovement[], count: count ?? 0 };
+}
+
+// Every movement matching the filter, across all pages — what Export writes
+// (rule 20: filters apply, pagination does not).
+export async function fetchMovementsForExport(
+  tenantId: string,
+  propertyId: string,
+  movementType: MovementType,
+  filters: MovementFilters = EMPTY_MOVEMENT_FILTERS,
+): Promise<StockMovement[]> {
+  return fetchAllPaged<StockMovement>((from, to) => {
+    let q = supabase
+      .from('stock_movements')
+      .select('*')
+      .eq('tenant_id', tenantId) // rule 19
+      .eq('property_id', propertyId) // rule 19
+      .eq('movement_type', movementType);
+
+    if (filters.locationId) q = q.eq('location_id', filters.locationId);
+    if (filters.inventoryItemId) q = q.eq('inventory_item_id', filters.inventoryItemId);
+    if (filters.fromDate) q = q.gte('business_date', filters.fromDate);
+    if (filters.toDate) q = q.lte('business_date', filters.toDate);
+    if (filters.direction === 'in') q = q.gt('quantity', 0);
+    if (filters.direction === 'out') q = q.lt('quantity', 0);
+
+    return q
+      .order('business_date', { ascending: false })
+      .order('seq', { ascending: false }) // unique → stable range pagination
+      .range(from, to);
+  });
 }
 
 // ---------------------------------------------------------------------------

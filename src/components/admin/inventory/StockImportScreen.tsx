@@ -244,10 +244,10 @@ export function StockImportScreen({
           will happen first.
         </p>
         <Link
-          to={`/admin/${propertySlug}/stock`}
+          to={`/admin/${propertySlug}/inventory`}
           className="mt-2 inline-block text-sm font-semibold text-primary underline underline-offset-2"
         >
-          ← Back to stock on hand
+          ← Back to inventory
         </Link>
       </header>
 
@@ -266,10 +266,10 @@ export function StockImportScreen({
           <p className="mx-auto mt-1 max-w-md text-sm text-charcoal-muted">
             Add at least one under{' '}
             <Link
-              to={`/admin/${propertySlug}/locations`}
+              to={`/admin/${propertySlug}/inventory`}
               className="font-semibold text-primary underline underline-offset-2"
             >
-              Locations
+              Inventory → Manage locations
             </Link>{' '}
             before loading stock into it.
           </p>
@@ -571,7 +571,7 @@ function PreviewPanel({
         {result ? (
           <>
             <Link
-              to={`/admin/${propertySlug}/stock`}
+              to={`/admin/${propertySlug}/inventory`}
               className="rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
             >
               See the stock

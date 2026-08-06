@@ -38,9 +38,18 @@ import { LocationCard } from './LocationCard';
 interface LocationsScreenProps {
   propertyId: string;
   tenantId: string;
+  // Rendered inside the inventory page's "Manage locations" panel rather than as
+  // a route of its own. The panel supplies the heading and the width, so this
+  // drops both — two headings stacked on one dialog reads as a mistake, and a
+  // centred max-width inside an already-narrow panel wastes the space.
+  embedded?: boolean;
 }
 
-export function LocationsScreen({ propertyId, tenantId }: LocationsScreenProps) {
+export function LocationsScreen({
+  propertyId,
+  tenantId,
+  embedded = false,
+}: LocationsScreenProps) {
   const toast = useToast();
   const list = useLocations(propertyId, tenantId);
 
@@ -138,12 +147,14 @@ export function LocationsScreen({ propertyId, tenantId }: LocationsScreenProps) 
   }));
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <div className={embedded ? undefined : 'mx-auto max-w-3xl'}>
       <header className="mb-6">
-        <h1 className="text-2xl font-bold tracking-tight text-charcoal">
-          Stock locations
-        </h1>
-        <p className="mt-1 text-sm text-charcoal-muted">
+        {embedded ? null : (
+          <h1 className="text-2xl font-bold tracking-tight text-charcoal">
+            Stock locations
+          </h1>
+        )}
+        <p className={embedded ? 'text-sm text-charcoal-muted' : 'mt-1 text-sm text-charcoal-muted'}>
           The places that hold stock in this hotel — your store, the kitchen,
           each bar, housekeeping. Rename them to whatever you call them, and add
           as many as you have: two bars each keep their own stock.

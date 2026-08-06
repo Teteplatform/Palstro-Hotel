@@ -22,9 +22,7 @@ import { SettingsPage } from './pages/admin/SettingsPage';
 import { SiteEditorPage } from './pages/admin/SiteEditorPage';
 import { RoomTypesPage } from './pages/admin/RoomTypesPage';
 import { CompaniesPage } from './pages/admin/CompaniesPage';
-import { InventoryItemsPage } from './pages/admin/InventoryItemsPage';
-import { LocationsPage } from './pages/admin/LocationsPage';
-import { StockPage } from './pages/admin/StockPage';
+import { InventoryPage } from './pages/admin/InventoryPage';
 import { StockImportPage } from './pages/admin/StockImportPage';
 import { BookingsPage } from './pages/admin/BookingsPage';
 import { NewBookingPage } from './pages/admin/NewBookingPage';
@@ -146,41 +144,32 @@ const router = createBrowserRouter([
                   </ModuleGuard>
                 ),
               },
-              // Inventory part 1 — the shared item catalogue (tenant-level) and
-              // the stock locations (property-level). Both ride the 'store'
-              // module: a tenant without it sees the "not available" page, and
-              // cannot reach either screen by typing the URL. RLS still guards
-              // the data regardless (rule 19) — the module flag is UX only.
+              // THE INVENTORY MODULE, on one page: the shared item catalogue
+              // (tenant-level), the stock locations and their quantities
+              // (property-level), corrections, counts and opening loads. It
+              // rides the 'store' module — a tenant without it sees the "not
+              // available" page and cannot reach the screen by typing the URL.
+              // RLS still guards the data regardless (rule 19); the module flag
+              // is UX only.
+              {
+                path: 'inventory',
+                element: (
+                  <ModuleGuard module="store">
+                    <InventoryPage />
+                  </ModuleGuard>
+                ),
+              },
+              // The three routes this page absorbed. They REDIRECT rather than
+              // 404: they were the only inventory URLs for two tranches, so they
+              // are in browser histories, in the staff guide and quite possibly
+              // written on a card by the front desk. A dead link there reads as
+              // the feature being gone.
               {
                 path: 'inventory-items',
-                element: (
-                  <ModuleGuard module="store">
-                    <InventoryItemsPage />
-                  </ModuleGuard>
-                ),
+                element: <Navigate to="../inventory" replace />,
               },
-              {
-                path: 'locations',
-                element: (
-                  <ModuleGuard module="store">
-                    <LocationsPage />
-                  </ModuleGuard>
-                ),
-              },
-              // Inventory part 2a — STOCK ON HAND per location, valued at
-              // moving average cost. Part 1's two screens defined items and
-              // places; this is the first one with quantities on it. Same
-              // 'store' module guard as both, since a hotel without stock
-              // control has no use for any of the three. RLS still guards the
-              // data regardless (rule 19) — the module flag is UX only.
-              {
-                path: 'stock',
-                element: (
-                  <ModuleGuard module="store">
-                    <StockPage />
-                  </ModuleGuard>
-                ),
-              },
+              { path: 'locations', element: <Navigate to="../inventory" replace /> },
+              { path: 'stock', element: <Navigate to="../inventory" replace /> },
               // The day-one spreadsheet load, as its own route rather than a
               // modal: it is a multi-step job with a preview a person reads
               // carefully, it survives a refresh, and it can be linked to.

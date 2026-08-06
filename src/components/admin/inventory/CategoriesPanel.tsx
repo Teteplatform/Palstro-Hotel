@@ -28,15 +28,20 @@ interface CategoriesPanelProps {
   // Re-pulls the reference data so the item form's picker and the filter bar
   // stay in step with what was just changed here.
   onChanged: () => void;
+  // On its own TAB there is nothing to compete with, so the collapse is noise:
+  // the panel opens straight into the list. Inline beside a catalogue it stays
+  // collapsed by default, which is what the prop defaults to.
+  alwaysOpen?: boolean;
 }
 
 export function CategoriesPanel({
   tenantId,
   categories,
   onChanged,
+  alwaysOpen = false,
 }: CategoriesPanelProps) {
   const toast = useToast();
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(alwaysOpen);
   const [busy, setBusy] = useState(false);
   const [newName, setNewName] = useState('');
 
@@ -116,29 +121,40 @@ export function CategoriesPanel({
 
   return (
     <div className="rounded-2xl border border-sand-border bg-white/60">
-      <button
-        type="button"
-        onClick={() => setExpanded((v) => !v)}
-        aria-expanded={expanded}
-        className="flex w-full items-center gap-3 rounded-2xl p-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
-      >
-        <ChevronDownIcon
-          className={`h-5 w-5 shrink-0 text-charcoal-muted transition-transform ${expanded ? 'rotate-180' : ''}`}
-        />
-        <span className="min-w-0">
-          <span className="block text-sm font-semibold text-charcoal">
-            Categories
-          </span>
-          <span className="block text-xs text-charcoal-muted">
+      {alwaysOpen ? (
+        <div className="p-4 pb-0">
+          <p className="text-sm font-semibold text-charcoal">Categories</p>
+          <p className="text-xs text-charcoal-muted">
             {categories.length === 0
               ? 'None yet — add the groups you want your reports broken down by.'
               : `${categories.length} ${categories.length === 1 ? 'category' : 'categories'} · how your stock reports are grouped`}
+          </p>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          aria-expanded={expanded}
+          className="flex w-full items-center gap-3 rounded-2xl p-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
+        >
+          <ChevronDownIcon
+            className={`h-5 w-5 shrink-0 text-charcoal-muted transition-transform ${expanded ? 'rotate-180' : ''}`}
+          />
+          <span className="min-w-0">
+            <span className="block text-sm font-semibold text-charcoal">
+              Categories
+            </span>
+            <span className="block text-xs text-charcoal-muted">
+              {categories.length === 0
+                ? 'None yet — add the groups you want your reports broken down by.'
+                : `${categories.length} ${categories.length === 1 ? 'category' : 'categories'} · how your stock reports are grouped`}
+            </span>
           </span>
-        </span>
-      </button>
+        </button>
+      )}
 
       {expanded ? (
-        <div className="border-t border-sand-border p-4">
+        <div className={alwaysOpen ? 'p-4' : 'border-t border-sand-border p-4'}>
           <ul className="space-y-2">
             {categories.map((category, index) => (
               <CategoryRow

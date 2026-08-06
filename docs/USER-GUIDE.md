@@ -43,7 +43,7 @@ Three kinds of staff use the admin.
 | Set **your own** approval PIN | No | Yes | Yes |
 | Room types, rates, companies, settings, site editor | No | Yes | Yes |
 | Inventory items and stock locations | No | Yes | Yes |
-| Record an opening balance or a stock adjustment | Yes — recorded against you | Yes | Yes |
+| Record an opening balance, an adjustment or a stock take | Yes — recorded against you | Yes | Yes |
 | Load opening stock from a spreadsheet | Yes — recorded against you | Yes | Yes |
 
 **Two things to know about this table.**
@@ -781,13 +781,59 @@ Corporate accounts that book rooms on their own account.
 When a booking is billed to a company, its price comes from these rates and the
 folio is billed to the company. Company pricing is never shown on the guest site.
 
-### Inventory items
+### Inventory
 
-**Where:** sidebar → *Inventory* → **Items**.
+**Where:** sidebar → *Inventory*.
+
+One page for the whole of stock control. It used to be three — *Items*,
+*Locations* and *Store* — and every real job crossed at least two of them, so
+they are now one screen with a **location picker** at the top and a **row of
+tabs** underneath. The old menu entries are gone; anything pointing at them lands
+here.
+
+**View stock at** decides what every figure on the page describes:
+
+- **All locations** — the whole hotel rolled up. Each item's row shows where its
+  stock actually is (*Main Store: 62 · Kitchen: 1*).
+- **A single location** — that store, kitchen or bar on its own, with its own
+  quantities and its own average cost.
+
+> Everyone who can open this page sees every location. Restricting a barman to
+> the Bar needs staff logins and roles, which are not built yet.
+
+**Manage locations** sits beside the picker rather than in the tabs — naming your
+stores is setup you do once.
+
+The tabs:
+
+| Tab | What it does |
+| --- | --- |
+| **Products** | The main list: every item, with what you hold of it and what it is worth. |
+| **Categories** | The groups your stock reports are broken down by. |
+| **Adjustments** | Every correction ever posted, and the form that posts one. |
+| **Stock Take** | Count a location and record the differences. |
+| **Import History** | Every opening balance loaded, with who loaded it and when. |
+| **Stock Transfers**, **Price Update**, **Requisitions** | Marked **SOON**. Each says what it will do and what has to exist first. |
+
+### Products — the item list
 
 Everything you hold, use or sell, defined **once for the whole company** — the
-same *Rice* in every hotel you run. This screen defines items; it does not count
-them. Quantities come with the store screens.
+same *Rice* in every hotel you run — with this hotel's stock beside it.
+
+The card above the table gives **total items**, **items with stock**, **total
+units** and the **stock value**, each across everything matching your filters and
+every page, never just what you can see. The small **i** beside each one says
+exactly what it counts. (Total units adds kilograms to bottles, so it is a rough
+sense of scale; the value is the figure that really adds up.)
+
+Search by name or code, and filter by category, type or stock. Narrowing by
+**stock** — *at or below reorder level*, *less than nothing* — lists one line per
+location, because that is a question about a shelf rather than about an item.
+
+**Export** writes every row matching your filters, across all pages. **Import**
+opens the spreadsheet load. Opening a row shows the movements behind its figures
+when you are looking at one location, or where the stock is when you are looking
+at all of them.
 
 Each item has:
 
@@ -809,25 +855,38 @@ Each item has:
   bottle. **Everything is entered in this unit.** There is no "cartons of 12" to
   set up and get wrong; a delivery of 5 cartons is entered as the number of
   pieces it really is.
-- **A category** — how your stock reports are grouped. Manage the list with
-  **Categories** at the top of the screen. Removing a category keeps its items;
-  they simply become uncategorised.
-- **A reorder level** — the amount below which you want warning. Optional; the
-  low-stock report comes later.
+- **A category** — how your stock reports are grouped. Manage the list on the
+  **Categories** tab. Removing a category keeps its items; they simply become
+  uncategorised.
+- **A reorder level** — the amount below which you want warning. Optional. Items
+  at or below it are flagged on the row and counted on the card above.
 - **Perishable** and **In use** switches. *In use* off keeps an item on file but
-  out of new entries.
-
-Search by name or code, and filter by type or category. The count under the list
-is the whole filtered set, not the page you can see.
+  out of new entries, and out of this list unless you ask for it in the filters.
 
 **Removing an item** takes it out of the catalogue but keeps its history, so it
-can come back later.
+can come back later. An item still holding stock anywhere cannot be removed at
+all — write it down to zero first.
 
-![screenshot: the inventory items list with the type filter open](/help/inventory-items.png)
+![screenshot: the Products tab at All locations, with the summary card and the Locations column](/help/inventory-products.png)
+
+#### Adding a product
+
+**Add product** asks for the item *and*, if you know it, **what is already on the
+shelf**: a location, a quantity, what one unit cost, and the day it was counted.
+Fill that in and the opening balance is recorded in the same pass; leave it blank
+and only the item is created.
+
+It is worth filling in. Recording it later is the step people forget, and a
+catalogue the system believes is empty is worse than no catalogue.
+
+The two are saved one after the other, not together, so if the item is created
+and the balance is refused — usually because that item already has one in that
+location — the screen says exactly that. The item is real; only the stock is
+missing, and you can record it from the item's row.
 
 ### Stock locations
 
-**Where:** sidebar → *Inventory* → **Locations**.
+**Where:** *Inventory* → **Manage locations**.
 
 The places that hold stock **in this hotel** — unlike items, these are per
 property, because stock is physical.
@@ -854,26 +913,17 @@ Use the arrows to order the list. Removing a location takes it off the list —
 out, or write it off with an adjustment, first. (The same applies to an item:
 one with stock on hand anywhere cannot be removed from the catalogue.)
 
-![screenshot: the stock locations list](/help/stock-locations.png)
+![screenshot: the Manage locations panel over the inventory page](/help/stock-locations.png)
 
-### Stock on hand
-
-**Where:** sidebar → *Inventory* → **Store**.
-
-What one location is holding right now, what it cost, and what it is worth. Pick
-the location at the top of the page — stock is physical, so the Main Store and
-the Kitchen hold separate quantities of the same item and are looked at
-separately.
+### What the stock figures mean
 
 > This section sits under Owner because it belongs with the rest of Inventory,
 > but **recording stock is store work**: anyone with an account can post an
-> opening balance or an adjustment, and it is recorded against their name.
-> Defining the *items* and the *locations* stays with the owner.
+> opening balance, an adjustment or a count, and it is recorded against their
+> name. Defining the *items* and the *locations* stays with the owner.
 
 Each row shows the quantity **in the item's own unit**, its **average cost** per
-unit, and the **value** of what is there. The figure above the table is the total
-value of everything matching your current filters, across every page — not just
-the rows you can see.
+unit, and the **value** of what is there.
 
 **Nothing here is stored.** Every quantity is added up from the movements
 recorded against that item in that location, every time you open the screen. That
@@ -881,7 +931,10 @@ is why the numbers can never quietly drift away from the movements behind them �
 and why you can always open a row and see exactly where a figure came from.
 
 **Opening a row** shows every movement, oldest first, with what the stock stood
-at after each one. This is the place to check a cost you do not recognise.
+at after each one. This is the place to check a cost you do not recognise. Viewing
+all locations at once, it shows *where* the stock is instead — pick a location to
+see the movements, because two locations keep two separate averages and blending
+them would give a figure that is true of neither.
 
 #### What "average cost" means
 
@@ -896,9 +949,11 @@ the cost of what just arrived are **blended in proportion to their quantities**.
 already is, so cooking with the rice cannot change what the rice still in the
 store is worth. Only buying more at a different price moves it.
 
-#### Adding or correcting stock
+### Adding or correcting stock
 
-**Add or correct stock** offers two things:
+**Where:** the **Adjustments** tab, or **Add or correct stock** on any item's row.
+
+The form offers two things:
 
 - **Opening balance** — what was already on the shelf when you started using the
   system. **Once per item per location.** You will not be offered an item that
@@ -921,11 +976,40 @@ tells you what it would come to. You can still record it — and sometimes you
 should, because a negative figure is real information: it means stock left
 without a movement behind it. It is never quietly rounded up to zero.
 
-![screenshot: stock on hand for the main store](/help/stock-on-hand.png)
+The **Adjustments** tab lists every correction ever posted — what changed, where,
+why, and in whose name — filtered by location, item, date range, or direction.
+Nothing on that list can be edited, by anyone.
+
+![screenshot: the Adjustments tab, with a correction being recorded above the list of past ones](/help/stock-adjustments.png)
+
+### Counting a location
+
+**Where:** the **Stock Take** tab.
+
+Pick the location and the day you counted, then walk the store keying what is
+actually on each shelf beside what the system believes. Nothing is pre-filled —
+a counted quantity copied from the system is the system agreeing with itself,
+which is the exact check a count exists to break.
+
+The sheet **keeps what you have keyed as you page through**, and **Record the
+differences** posts all of it, not the page you are on. Only items whose count
+differs produce anything; counting a shelf and finding it right records nothing,
+which is correct.
+
+Each difference is recorded as a normal **adjustment**, with the count and its
+date as the reason — permanent, and in your name. A line that fails stays on your
+sheet with the reason beside it, so you can fix it and post again without any
+risk of recording it twice.
+
+Only items that have moved in that location can be counted: an item with no
+history there has no cost to value a count against. Give it an opening balance
+first.
+
+![screenshot: a stock take part-counted, with three differences ready to record](/help/stock-take.png)
 
 ### Loading your opening stock from a spreadsheet
 
-**Where:** *Inventory* → **Store** → **Load from a spreadsheet**.
+**Where:** *Inventory* → **Products** → **Import**.
 
 For the day you start. Instead of typing three hundred items one at a time:
 
@@ -950,6 +1034,11 @@ file cannot double-load it.
 
 **This is for opening stock only.** Ongoing deliveries are recorded as purchases
 when that screen arrives — not by uploading this sheet again with bigger numbers.
+
+The **Import History** tab lists every opening balance on file, newest first,
+with its location, quantity, cost and who loaded it. It does not list *files* —
+a record of "this spreadsheet, these rows, these failures" needs a log of its own
+and arrives with purchasing.
 
 ![screenshot: the import preview with good and bad rows](/help/stock-import.png)
 
@@ -1010,10 +1099,11 @@ depends on them.
 - Front desk board and the physical room / housekeeping board
 - Rates and availability calendar
 - Food & Beverage and Laundry as their own modules (post them as charges for now)
-- Requisitions and transfers between locations, purchases and suppliers, stock
-  counts. **Items**, **Locations** and **Store** (stock on hand, opening
-  balances, adjustments and the spreadsheet load) *are* built — see the Owner
-  section.
+- Requisitions and transfers between locations, purchases and suppliers, and
+  selling prices. These appear as tabs inside **Inventory**, each marked *soon*
+  and each saying what it needs first. The rest of **Inventory** — the product
+  list, categories, adjustments, stock takes, opening balances and the
+  spreadsheet load — *is* built; see the Owner section.
 - Maintenance, staff, reports, accounting
 - A guests list screen (reach a guest through their booking)
 - Guest profile photos

@@ -230,6 +230,31 @@ export async function fetchAllInventoryItems(
   });
 }
 
+// The catalogue rows behind a page of something else — the movement lists name
+// their item this way, because stock_movements carries an item id and no name.
+//
+// The `.in()` is over the ids of ONE page and is therefore a BOUNDED list, which
+// is what rule 1a requires (it forbids a bare `.in()` over an unbounded one); the
+// caller must not hand this the whole catalogue. fetchAllPaged wraps it anyway so
+// the read cannot silently truncate. Soft-deleted items are INCLUDED on purpose:
+// a movement against an item that has since been retired still has to render its
+// name, or the ledger reads as a row about nothing.
+export async function fetchInventoryItemsByIds(
+  tenantId: string,
+  ids: string[],
+): Promise<InventoryItem[]> {
+  if (ids.length === 0) return [];
+  return fetchAllPaged<InventoryItem>((from, to) =>
+    supabase
+      .from('inventory_items')
+      .select('*')
+      .eq('tenant_id', tenantId) // rule 19
+      .in('id', ids)
+      .order('id', { ascending: true }) // unique → stable range pagination
+      .range(from, to),
+  );
+}
+
 export interface InventoryItemWrite {
   name?: string;
   code?: string | null;

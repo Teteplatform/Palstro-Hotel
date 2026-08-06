@@ -14,8 +14,6 @@ import {
   StaffIcon,
   AccountingIcon,
   StoreIcon,
-  ItemsIcon,
-  LocationsIcon,
   RequisitionsIcon,
   PurchasesIcon,
   SuppliersIcon,
@@ -180,44 +178,21 @@ export const ADMIN_NAV: AdminNavItem[] = [
   // both consume it (a recipe deduction and an amenity issue are stock
   // movements). Distinct from Revenue above: this is stock control, not a sales
   // channel.
-  // Items and Locations (inventory part 1) are the FOUNDATION of this group and
-  // the two screens that exist today, so they lead it. Both ride the 'store'
-  // module rather than getting flags of their own: a hotel that has not bought
-  // stock control has no use for either, and splitting them across three flags
-  // would let a tenant end up with a catalogue and nowhere to put it.
+  // ONE ENTRY FOR THE WHOLE MODULE. This was three — Items, Locations and Store
+  // — and every real job crossed at least two of them: you cannot add an item
+  // without saying what is on its shelf, and you cannot read a quantity without
+  // knowing which box it is in. They are now one page with a location selector
+  // and a tab row (the ERP's proven inventory layout), so the sidebar says so
+  // too. The three old segments redirect here rather than 404ing (see App.tsx).
   //
-  // Items is the TENANT-wide catalogue (what a thing is, its unit, its
-  // category); Locations is PROPERTY-level (which boxes hold stock here). The
-  // nav must not blur that — the same distinction as room types vs the room
-  // board above.
+  // The distinction the old entries drew still holds INSIDE the page and must
+  // not be blurred anywhere: the catalogue is TENANT-wide (what a thing is, its
+  // unit, its category), while locations and their quantities are PROPERTY-level
+  // (which boxes hold stock in THIS hotel).
   {
-    label: 'Items',
-    icon: ItemsIcon,
-    segment: 'inventory-items',
-    module: 'store',
-    group: 'inventory',
-    status: 'ready',
-  },
-  {
-    label: 'Locations',
-    icon: LocationsIcon,
-    segment: 'locations',
-    module: 'store',
-    group: 'inventory',
-    status: 'ready',
-  },
-  // Store is the STOCK ON HAND per location — quantities and valuation, from
-  // the movement ledger (inventory part 2a, migration 036). Now READY: the
-  // catalogue above defines items, Locations says where stock lives, and this
-  // is what is actually in each of them and what it is worth.
-  //
-  // SEGMENT NOTE: the route is 'stock', not 'store'. The nav LABEL stays
-  // "Store" because that is what a hotel calls the room; the URL says what the
-  // screen shows, and /stock/import hangs off it as the day-one bulk load.
-  {
-    label: 'Store',
+    label: 'Inventory',
     icon: StoreIcon,
-    segment: 'stock',
+    segment: 'inventory',
     module: 'store',
     group: 'inventory',
     status: 'ready',
