@@ -813,7 +813,11 @@ The tabs:
 | **Adjustments** | Every correction ever posted, and the form that posts one. |
 | **Stock Take** | Count a location and record the differences. |
 | **Import History** | Every opening balance loaded, with who loaded it and when. |
-| **Stock Transfers**, **Price Update**, **Requisitions** | Marked **SOON**. Each says what it will do and what has to exist first. |
+| **Price Update** | Marked **SOON** — selling prices arrive with the menu. The tab says what it needs first and what to use meanwhile. |
+
+Every other tab works. **Requisitions** and **stock transfers** used to sit in
+this row and have moved out to their own menu entry, **Requisitions**, directly
+below Inventory — see below.
 
 ### Products — the item list
 
@@ -1015,10 +1019,23 @@ For the day you start. Instead of typing three hundred items one at a time:
 
 1. **Choose the location and the count date.** The date is the day you counted —
    not the day you upload.
-2. **Download the template.** It already lists every item in your catalogue with
-   **the unit it is tracked in**, so you never have to remember whether rice is
-   counted in kilograms or in bags. Type a quantity and a unit cost beside the
-   things you actually have; leave the rest blank. Use a full stop for decimals.
+2. **Download the template**, as **Excel** or as **CSV** — the two hold exactly
+   the same thing. It already lists every item in your catalogue with **the unit
+   it is tracked in**, so you never have to remember whether rice is counted in
+   kilograms or in bags. Type a quantity and a unit cost beside the things you
+   actually have; leave the rest blank. Use a full stop for decimals.
+
+   The Excel file has a second tab, **How to fill this in**, with a worked
+   example row and the rules in full. The CSV carries the same notes above its
+   header — you can delete them or leave them, the import steps over them either
+   way.
+
+   > **If Excel opens the file read-only and will not let you type in it, take
+   > the CSV instead.** That is your office computer's document policy rather
+   > than the file: many company laptops are set to open any spreadsheet that
+   > has not been given a company label read-only, whoever created it. The CSV
+   > is not affected, opens and edits normally in Excel, and imports back
+   > exactly the same way.
 3. **Upload it back** (.xlsx or .csv).
 4. **Check the preview.** Every row is checked *before anything is saved* —
    which rows will import, which are already loaded, and exactly what is wrong
@@ -1041,6 +1058,40 @@ a record of "this spreadsheet, these rows, these failures" needs a log of its ow
 and arrives with purchasing.
 
 ![screenshot: the import preview with good and bad rows](/help/stock-import.png)
+
+### Requisitions
+
+**Where:** sidebar → **Requisitions**, directly under *Inventory*.
+
+**Not built yet** — the page opens and explains itself rather than doing
+anything. It is listed here because it is where two things you may be looking
+for will live: **requisitions** (the kitchen asking the store for what it needs)
+and **transfers** (moving stock from one location to another). Both used to be
+tabs inside Inventory.
+
+The flow it will provide, in three steps:
+
+1. **Raise** — the kitchen, bar or housekeeping asks the store for items and
+   quantities, in each item's own base unit.
+2. **The store sends** — the storekeeper issues what they are actually sending,
+   which is not always what was asked for. Both figures are kept.
+3. **The requester confirms** — whoever asked confirms what turned up. Only then
+   is the movement complete.
+
+**Why both sides confirm.** With one signature, the store records ten kilograms
+out, the kitchen receives eight, and the two are never compared — the shortfall
+surfaces months later as an unexplained variance. Two-sided confirmation puts
+the gap on the record the day it happens, with both names against it.
+
+It waits on **staff logins and roles**: a requisition has to know who may
+request, who may approve, and for which location, and there is no way to say
+"this person runs the Kitchen" yet.
+
+**Until then, move stock between locations as two adjustments** — remove it from
+where it left, add it to where it went, with the same reason on both. Be aware
+of what that does not give you: the two entries are not linked, so nothing
+checks that what left equals what arrived, and nothing records that anybody
+asked.
 
 ### The night audit
 
@@ -1099,11 +1150,14 @@ depends on them.
 - Front desk board and the physical room / housekeeping board
 - Rates and availability calendar
 - Food & Beverage and Laundry as their own modules (post them as charges for now)
-- Requisitions and transfers between locations, purchases and suppliers, and
-  selling prices. These appear as tabs inside **Inventory**, each marked *soon*
-  and each saying what it needs first. The rest of **Inventory** — the product
-  list, categories, adjustments, stock takes, opening balances and the
-  spreadsheet load — *is* built; see the Owner section.
+- **Requisitions** — its own menu entry, below Inventory. The page opens and
+  explains the flow it will provide (raise → the store sends → the requester
+  confirms) and what it waits on. Transfers between locations come with it.
+- Purchases and suppliers.
+- Selling prices — the **Price Update** tab inside Inventory, marked *soon*, with
+  what it needs first. Everything else in **Inventory** — the product list,
+  categories, adjustments, stock takes, opening balances and the spreadsheet
+  load — *is* built; see the Owner section.
 - Maintenance, staff, reports, accounting
 - A guests list screen (reach a guest through their booking)
 - Guest profile photos

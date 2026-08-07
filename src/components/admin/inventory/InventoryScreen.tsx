@@ -217,11 +217,6 @@ export function InventoryScreen({
                     soon
                   </span>
                 ) : null}
-                {/* The requisition badge's SPOT, reserved and deliberately
-                    empty: the count of requests waiting on you needs the staff
-                    and roles layer to know whose approval is pending, and a
-                    number invented in the meantime would be worse than none. */}
-                {t.reservesBadge ? <span className="ml-1.5 inline-block" /> : null}
               </button>
             );
           })}
@@ -299,6 +294,8 @@ export function InventoryScreen({
             title={tab.label}
             summary={tab.soonSummary ?? ''}
             detail={tab.soonDetail ?? ''}
+            needs={tab.soonNeeds}
+            meanwhile={tab.soonMeanwhile}
           />
         ) : null}
       </div>

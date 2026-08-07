@@ -83,6 +83,13 @@ export interface AdminNavItem {
   // "soon" affordance, so the owner sees the shape of the finished product
   // without a dead link.
   status: 'ready' | 'coming_soon';
+  // Reserves the spot for a count badge on the nav item — today only
+  // Requisitions, whose badge is "requests waiting on you". The SPOT is reserved
+  // and the badge is deliberately not rendered: knowing whose approval is
+  // pending needs the staff and roles layer, and a number invented in the
+  // meantime would be worse than none. Settling the layout now means the badge
+  // arrives as a value, not as a reflow of the sidebar.
+  reservesBadge?: boolean;
 }
 
 export const ADMIN_NAV: AdminNavItem[] = [
@@ -197,13 +204,24 @@ export const ADMIN_NAV: AdminNavItem[] = [
     group: 'inventory',
     status: 'ready',
   },
+  // A FIRST-CLASS MODULE, not a tab inside Inventory — which is where it used to
+  // live. A requisition is a conversation between two locations with an approval
+  // in the middle (the kitchen asks, the store sends, the kitchen confirms what
+  // actually arrived), so it needs its own screens, its own queue and its own
+  // pending count; a tab on the stock list could carry none of those. Stock
+  // TRANSFERS come with it, being the second half of the same movement.
+  //
+  // 'ready' because the route exists and opens a page that explains the flow and
+  // what it waits on — an honest page beats a disabled span, which cannot say
+  // anything at all. The engine itself is the part-3 build.
   {
     label: 'Requisitions',
     icon: RequisitionsIcon,
     segment: 'requisitions',
     module: 'requisitions',
     group: 'inventory',
-    status: 'coming_soon',
+    status: 'ready',
+    reservesBadge: true,
   },
   {
     label: 'Purchases',

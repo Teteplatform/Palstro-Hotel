@@ -88,6 +88,7 @@ export function StockImportScreen({
   const [reading, setReading] = useState(false);
   const [readError, setReadError] = useState<string | null>(null);
 
+  const [downloading, setDownloading] = useState<'xlsx' | 'csv' | null>(null);
   const [committing, setCommitting] = useState(false);
   const [progress, setProgress] = useState({ done: 0, total: 0 });
   const [result, setResult] = useState<CommitResult | null>(null);
@@ -121,25 +122,65 @@ export function StockImportScreen({
     label: l.is_active ? l.name : `${l.name} (closed)`,
   }));
 
-  async function handleDownloadTemplate() {
-    if (!location) return;
+  // WHY THE BUTTONS CAN BE UNAVAILABLE, said out loud rather than left as a
+  // dead control. A disabled button with no explanation is indistinguishable
+  // from a broken one — the user clicks, nothing happens, and they report that
+  // the download does not work. Null means "go ahead".
+  const templateBlockedReason: string | null = locations.loading
+    ? 'Loading this hotel’s stock locations…'
+    : !location
+      ? 'Choose a location above first — the template is filled in for one place.'
+      : loadError
+        ? 'The item catalogue could not load, so there is nothing to put in the template. Reload the page and try again.'
+        : items.length === 0
+          ? 'Your catalogue has no items in use yet, and the template is a list of your items. Add your products first, then come back — this screen is for loading what is already on their shelves.'
+          : null;
+
+  async function handleDownloadTemplate(format: 'xlsx' | 'csv') {
+    // Belt and braces: the buttons are disabled for these cases and say why, but
+    // a handler that silently returns is exactly the failure this screen is
+    // being fixed for, so it reports instead (rule 11).
+    if (templateBlockedReason || !location) {
+      toast.error(
+        templateBlockedReason ?? 'Choose a location above before downloading.',
+      );
+      return;
+    }
+    setDownloading(format);
     try {
       // Loaded on demand — the OOXML writer is only needed by someone actually
       // downloading a template, so it stays out of the main bundle.
-      const [{ buildOpeningTemplate }, { downloadBytes, XLSX_MIME }] =
-        await Promise.all([
-          import('../../../lib/import/openingTemplate'),
-          import('../../../lib/export/download'),
-        ]);
-      const bytes = buildOpeningTemplate(items, location.name, currency, today);
+      const [template, download] = await Promise.all([
+        import('../../../lib/import/openingTemplate'),
+        import('../../../lib/export/download'),
+      ]);
       const safeName = location.name.replace(/[^a-z0-9]+/gi, '-').toLowerCase();
-      downloadBytes(
-        bytes,
-        `opening-balances-${safeName}-${today}.xlsx`,
-        XLSX_MIME,
-      );
+      const base = `opening-balances-${safeName}-${today}`;
+
+      if (format === 'csv') {
+        download.downloadBlob(
+          new Blob([template.buildOpeningTemplateCsv(items, location.name)], {
+            type: download.CSV_MIME,
+          }),
+          `${base}.csv`,
+        );
+      } else {
+        download.downloadBytes(
+          template.buildOpeningTemplateXlsx(
+            items,
+            location.name,
+            currency,
+            today,
+          ),
+          `${base}.xlsx`,
+          download.XLSX_MIME,
+        );
+      }
     } catch (e) {
+      // Rule 11: a template that failed to build must say so, never fail silent.
       toast.error(describeError(e));
+    } finally {
+      setDownloading(null);
     }
   }
 
@@ -323,17 +364,71 @@ export function StockImportScreen({
               — so you never have to remember whether rice is counted in
               kilograms or in bags. Type a quantity and a unit cost beside the
               things you actually have and leave the rest blank; blank rows are
-              skipped, not treated as zero. Use a full stop for decimals.
+              skipped, not treated as zero. Use a full stop for decimals. The
+              Excel file carries a second tab,{' '}
+              <em className="not-italic font-semibold text-charcoal">
+                How to fill this in
+              </em>
+              , with a worked example.
             </p>
-            <button
-              type="button"
-              onClick={() => void handleDownloadTemplate()}
-              disabled={!location || items.length === 0}
-              className="mt-3 inline-flex items-center gap-2 rounded-full border border-sand-border bg-white/70 px-4 py-2 text-sm font-semibold text-charcoal transition-colors hover:bg-sand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-cream disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <DownloadIcon className="h-4 w-4" />
-              Download the template ({items.length} items)
-            </button>
+
+            {/* Two formats, at 360px wrapping to two rows. */}
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => void handleDownloadTemplate('xlsx')}
+                disabled={templateBlockedReason !== null || downloading !== null}
+                className="inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-cream disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <DownloadIcon className="h-4 w-4" />
+                {downloading === 'xlsx'
+                  ? 'Preparing…'
+                  : `Excel template (${items.length} ${items.length === 1 ? 'item' : 'items'})`}
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleDownloadTemplate('csv')}
+                disabled={templateBlockedReason !== null || downloading !== null}
+                className="inline-flex items-center gap-2 rounded-full border border-sand-border bg-white/70 px-4 py-2 text-sm font-semibold text-charcoal transition-colors hover:bg-sand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-cream disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <DownloadIcon className="h-4 w-4" />
+                {downloading === 'csv' ? 'Preparing…' : 'CSV template'}
+              </button>
+            </div>
+
+            {/* Never a dead button: when it cannot be used, it says why. */}
+            {templateBlockedReason ? (
+              <p
+                className="mt-2 text-sm text-charcoal"
+                role="status"
+                aria-live="polite"
+              >
+                {templateBlockedReason}
+                {items.length === 0 && !loadError && location ? (
+                  <>
+                    {' '}
+                    <Link
+                      to={`/admin/${propertySlug}/inventory`}
+                      className="font-semibold text-primary underline underline-offset-2"
+                    >
+                      Add products
+                    </Link>
+                  </>
+                ) : null}
+              </p>
+            ) : (
+              // The one thing people hit that is NOT our file: a managed work
+              // laptop can be set to open every unlabelled .xlsx read-only, so
+              // the workbook opens fine and refuses to be typed into. Said here,
+              // with the way out beside it, rather than left to be discovered.
+              <p className="mt-2 text-sm text-charcoal-muted">
+                If your computer opens the Excel file{' '}
+                <strong className="font-semibold text-charcoal">read-only</strong>{' '}
+                and will not let you type in it, that is your office IT policy
+                rather than the file — take the CSV instead. It opens and edits
+                normally in Excel and imports back exactly the same way.
+              </p>
+            )}
           </section>
 
           {/* Step 3 — upload and preview. */}

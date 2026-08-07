@@ -24,6 +24,7 @@ import { RoomTypesPage } from './pages/admin/RoomTypesPage';
 import { CompaniesPage } from './pages/admin/CompaniesPage';
 import { InventoryPage } from './pages/admin/InventoryPage';
 import { StockImportPage } from './pages/admin/StockImportPage';
+import { RequisitionsPage } from './pages/admin/RequisitionsPage';
 import { BookingsPage } from './pages/admin/BookingsPage';
 import { NewBookingPage } from './pages/admin/NewBookingPage';
 import { BookingDetailPage } from './pages/admin/BookingDetailPage';
@@ -180,6 +181,22 @@ const router = createBrowserRouter([
                 element: (
                   <ModuleGuard module="store">
                     <StockImportPage />
+                  </ModuleGuard>
+                ),
+              },
+              // Requisitions (F&B/Inventory part 3): its own module and its own
+              // route, a sibling of Inventory rather than a tab inside it — a
+              // requisition is a two-sided conversation with an approval in the
+              // middle, and it needs its own screens and its own pending queue.
+              // Its own 'requisitions' module flag (007 already ships it in the
+              // default set), so a tenant without it sees the "not available"
+              // page. The page explains the flow and what it waits on; the
+              // engine is the part-3 build and lands behind this same URL.
+              {
+                path: 'requisitions',
+                element: (
+                  <ModuleGuard module="requisitions">
+                    <RequisitionsPage />
                   </ModuleGuard>
                 ),
               },

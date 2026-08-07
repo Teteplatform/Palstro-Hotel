@@ -15,6 +15,11 @@ export const XLSX_MIME =
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 export const DOCX_MIME =
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+// charset=utf-8 is load-bearing, not decoration: the .csv we write starts with a
+// BOM so Excel reads it as UTF-8, and declaring the charset here keeps a browser
+// that previews the file instead of saving it from guessing a codepage and
+// showing "Chef’s sauce" as mojibake.
+export const CSV_MIME = 'text/csv;charset=utf-8';
 
 // Save a blob under a chosen name.
 //

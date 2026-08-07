@@ -354,7 +354,17 @@ function NavItemLink({
       }
     >
       <Icon className="h-5 w-5 shrink-0" />
-      <span>{item.label}</span>
+      <span className="flex-1">{item.label}</span>
+      {/* THE COUNT BADGE'S SPOT, reserved and deliberately carrying no number.
+          Requisitions will show how many requests are waiting on you, in the
+          red that means "somebody is blocked on this" — but knowing whose
+          approval is pending needs the staff and roles layer, and a number
+          invented before that exists would be worse than none. The empty span
+          holds the width so the badge appears in place rather than reflowing
+          the sidebar the day it becomes real. */}
+      {item.reservesBadge ? (
+        <span aria-hidden="true" className="ml-1.5 inline-block min-w-[1.25rem]" />
+      ) : null}
     </NavLink>
   );
 }

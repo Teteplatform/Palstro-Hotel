@@ -40,9 +40,19 @@ export interface SheetColumn {
   width: number;
 }
 
-export interface SheetSpec {
+// ONE TAB of a workbook.
+export interface SheetTab {
   // Sheet tab name. Excel refuses > 31 chars and the characters below, so it is
   // sanitised rather than trusted — a tenant's location name can reach this.
+  name: string;
+  columns: SheetColumn[];
+  rows: SheetCell[][];
+  // Freeze the header row (default true). A guidance tab is read top to bottom
+  // and has nothing to scroll past, so it turns this off.
+  freezeHeader?: boolean;
+}
+
+export interface SheetSpec {
   sheetName: string;
   columns: SheetColumn[];
   rows: SheetCell[][];
@@ -54,7 +64,16 @@ export interface SheetSpec {
   issueDate: string;
 }
 
-const SHEET_PATH = 'xl/worksheets/sheet1.xml';
+export interface WorkbookSpec {
+  // At least one tab. THE FIRST TAB IS THE DATA — lib/import/readSheet resolves
+  // the first sheet in workbook order and imports that grid, so a guidance tab
+  // must never be placed ahead of the grid a user fills in.
+  sheets: SheetTab[];
+  currency: string;
+  issueDate: string;
+}
+
+const sheetPath = (index: number) => `xl/worksheets/sheet${index + 1}.xml`;
 
 // Style indexes into cellXfs below, named so the builder reads as intent.
 const STYLE = {
@@ -64,31 +83,59 @@ const STYLE = {
   quantity: 3,
 } as const;
 
+// The single-tab form, which is what every EXPORT wants: one grid, no guidance.
 export function buildSheetXlsx(spec: SheetSpec): Uint8Array {
-  return zipOoxml(
-    {
-      '[Content_Types].xml': contentTypes(),
-      '_rels/.rels': relationshipsPart([
-        { id: 'rId1', type: OFFICE_DOCUMENT_REL, target: 'xl/workbook.xml' },
-      ]),
-      'xl/workbook.xml': workbook(spec.sheetName),
-      'xl/_rels/workbook.xml.rels': relationshipsPart([
-        {
-          id: 'rId1',
-          type: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet',
-          target: 'worksheets/sheet1.xml',
-        },
-        {
-          id: 'rId2',
-          type: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles',
-          target: 'styles.xml',
-        },
-      ]),
-      'xl/styles.xml': styles(spec.currency),
-      [SHEET_PATH]: sheet(spec),
-    },
-    spec.issueDate,
-  );
+  return buildWorkbookXlsx({
+    sheets: [
+      { name: spec.sheetName, columns: spec.columns, rows: spec.rows },
+    ],
+    currency: spec.currency,
+    issueDate: spec.issueDate,
+  });
+}
+
+// The multi-tab form, which is what the IMPORT TEMPLATE wants: the grid to fill
+// in, plus a tab explaining how to fill it in. Two tabs rather than guidance
+// rows above the grid, because anything sitting above the header is something a
+// storekeeper can delete, overtype or push the header past — and the importer
+// then has to guess. A second tab cannot be typed into by accident and is never
+// read by the importer at all.
+export function buildWorkbookXlsx(spec: WorkbookSpec): Uint8Array {
+  const tabs = spec.sheets.length > 0 ? spec.sheets : [emptyTab()];
+  const names = uniqueSheetNames(tabs.map((t) => t.name));
+
+  const parts: Record<string, string> = {
+    '[Content_Types].xml': contentTypes(tabs.length),
+    '_rels/.rels': relationshipsPart([
+      { id: 'rId1', type: OFFICE_DOCUMENT_REL, target: 'xl/workbook.xml' },
+    ]),
+    'xl/workbook.xml': workbook(names),
+    'xl/_rels/workbook.xml.rels': relationshipsPart([
+      ...tabs.map((_, i) => ({
+        id: `rId${i + 1}`,
+        type: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet',
+        target: `worksheets/sheet${i + 1}.xml`,
+      })),
+      {
+        // Styles takes the id AFTER the sheets, so adding a tab cannot collide
+        // with it.
+        id: `rId${tabs.length + 1}`,
+        type: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles',
+        target: 'styles.xml',
+      },
+    ]),
+    'xl/styles.xml': styles(spec.currency),
+  };
+
+  tabs.forEach((tab, i) => {
+    parts[sheetPath(i)] = sheet(tab);
+  });
+
+  return zipOoxml(parts, spec.issueDate);
+}
+
+function emptyTab(): SheetTab {
+  return { name: 'Sheet', columns: [], rows: [] };
 }
 
 // Excel rejects these outright in a sheet name, and silently truncates past 31
@@ -99,25 +146,59 @@ function sanitiseSheetName(name: string): string {
   return (cleaned || 'Sheet').slice(0, 31);
 }
 
-function contentTypes(): string {
+// Excel also refuses a workbook with two tabs of the same name — and two tabs
+// CAN collide after sanitising and truncating even when the inputs differed.
+// Deduplicated here rather than left to the caller, since the caller is passing
+// a tenant's location name and cannot know what it truncates to.
+function uniqueSheetNames(names: string[]): string[] {
+  const used = new Set<string>();
+  return names.map((raw) => {
+    const base = sanitiseSheetName(raw);
+    if (!used.has(base.toLowerCase())) {
+      used.add(base.toLowerCase());
+      return base;
+    }
+    for (let n = 2; ; n += 1) {
+      const suffix = ` (${n})`;
+      const candidate = base.slice(0, 31 - suffix.length) + suffix;
+      if (!used.has(candidate.toLowerCase())) {
+        used.add(candidate.toLowerCase());
+        return candidate;
+      }
+    }
+  });
+}
+
+function contentTypes(sheetCount: number): string {
+  const sheets = Array.from({ length: sheetCount }, (_, i) =>
+    `<Override PartName="/${sheetPath(
+      i,
+    )}" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`,
+  ).join('');
+
   return xmlPart(
     `<Types xmlns="${CONTENT_TYPES_NS}">` +
       '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
       '<Default Extension="xml" ContentType="application/xml"/>' +
       '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>' +
-      `<Override PartName="/${SHEET_PATH}" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>` +
+      sheets +
       '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>' +
       '</Types>',
   );
 }
 
-function workbook(sheetName: string): string {
+function workbook(sheetNames: string[]): string {
+  const sheets = sheetNames
+    .map(
+      (name, i) =>
+        `<sheet name="${xmlEscape(name)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`,
+    )
+    .join('');
+
   return xmlPart(
     '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" ' +
       'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
-      `<sheets><sheet name="${xmlEscape(
-        sanitiseSheetName(sheetName),
-      )}" sheetId="1" r:id="rId1"/></sheets>` +
+      `<sheets>${sheets}</sheets>` +
       '</workbook>',
   );
 }
@@ -155,10 +236,19 @@ function styles(currency: string): string {
       `<numFmt numFmtId="164" formatCode="${xmlEscape(
         currencyNumberFormat(currency),
       )}"/>` +
-      // Quantities: up to four decimals shown, trailing zeros suppressed, so a
-      // 0.0250 kg recipe measure survives and a plain 12 still reads as "12".
-      // The same four decimals the numeric(14,4) columns carry (§6).
-      '<numFmt numFmtId="165" formatCode="#,##0.####"/>' +
+      // Quantities: two decimals always, up to four when the value has them, so
+      // a 0.0250 kg recipe measure survives — the same four decimals the
+      // numeric(14,4) columns carry (§6).
+      //
+      // The minimum of two is not cosmetic. The obvious format for "up to four
+      // decimals, none if there are none" is `#,##0.####`, and Excel renders 200
+      // under it as "200." — the decimal point in a format code is a LITERAL and
+      // is printed whether or not a digit follows it. A column of "200." and
+      // "48." reads as a rendering bug in a count sheet, which is precisely the
+      // document somebody is checking figures against. Verified in Excel:
+      // `#,##0.####` gives 200 -> "200."; `#,##0.00##` gives 200 -> "200.00",
+      // 0.025 -> "0.025", 1234.5 -> "1,234.50".
+      '<numFmt numFmtId="165" formatCode="#,##0.00##"/>' +
       '</numFmts>' +
       '<fonts count="2">' +
       '<font><sz val="11"/><color theme="1"/><name val="Calibri"/></font>' +
@@ -187,33 +277,38 @@ function styles(currency: string): string {
   );
 }
 
-function sheet(spec: SheetSpec): string {
-  const header: SheetCell[] = spec.columns.map((c) => ({
+function sheet(tab: SheetTab): string {
+  const header: SheetCell[] = tab.columns.map((c) => ({
     kind: 'text' as const,
     value: c.label,
   }));
 
-  const body = [header, ...spec.rows]
+  const body = [header, ...tab.rows]
     .map((cells, index) =>
       rowXml(cells, index + 1, index === 0 ? STYLE.header : undefined),
     )
     .join('');
 
-  const cols = spec.columns
+  const cols = tab.columns
     .map(
       (c, i) =>
         `<col min="${i + 1}" max="${i + 1}" width="${c.width}" customWidth="1"/>`,
     )
     .join('');
 
+  // Freeze the header row: a storekeeper scrolling 300 items needs to keep
+  // seeing which column is which.
+  const view =
+    tab.freezeHeader === false
+      ? '<sheetViews><sheetView workbookViewId="0"/></sheetViews>'
+      : '<sheetViews><sheetView workbookViewId="0">' +
+        '<pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/>' +
+        '</sheetView></sheetViews>';
+
   return xmlPart(
     '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
-      // Freeze the header row: a storekeeper scrolling 300 items needs to keep
-      // seeing which column is which.
-      '<sheetViews><sheetView workbookViewId="0">' +
-      '<pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/>' +
-      '</sheetView></sheetViews>' +
-      `<cols>${cols}</cols>` +
+      view +
+      (cols ? `<cols>${cols}</cols>` : '') +
       `<sheetData>${body}</sheetData>` +
       '</worksheet>',
   );
