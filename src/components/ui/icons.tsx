@@ -435,6 +435,17 @@ export const DownloadIcon = ({ className }: IconProps) => (
   </Line>
 );
 
+// Download's mirror — the arrow points INTO the tray rather than out of it, and
+// the tray is the same tray. Bringing a spreadsheet in and taking one out are
+// the two halves of one job, so they read as one pair of marks.
+export const UploadIcon = ({ className }: IconProps) => (
+  <Line className={className}>
+    <path d="M12 14.5v-10" />
+    <path d="m8 8.5 4-4 4 4" />
+    <path d="M4.5 17.5v1a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-1" />
+  </Line>
+);
+
 // A question mark in a circle — the staff guide. Deliberately the universal
 // "help" mark rather than a book or a lifebuoy: it is the one shape a person
 // looks for when they are stuck, which is the only moment this link matters.

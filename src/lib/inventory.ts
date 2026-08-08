@@ -6,6 +6,7 @@ import type {
   ItemType,
   StockLocation,
   LocationKind,
+  UnitDimension,
   UnitOfMeasure,
 } from '../types/inventory';
 
@@ -65,6 +66,48 @@ export async function fetchAllUnits(
       .order('unit_code', { ascending: true }) // stable tiebreak
       .range(from, to),
   );
+}
+
+export interface UnitWrite {
+  unit_code?: string;
+  name?: string;
+  dimension?: UnitDimension;
+  is_active?: boolean;
+  display_order?: number;
+}
+
+// Add a unit of measure. Used by the "+ New unit" affordance on the item form,
+// so somebody who buys yam by the TUBER can say so without leaving the form they
+// are already filling in.
+//
+// THE CODE IS CANONICALISED HERE, not left to the caller. 035 constrains
+// unit_code to `lower(btrim(unit_code))` and length > 0, and that check is what
+// makes the plain unique (tenant_id, unit_code) behave case-insensitively — so
+// 'KG' typed into the box is not a different unit, it is a constraint violation
+// with an unreadable message. Lowercasing on the way in turns it into the same
+// unit, which is what the person meant.
+export async function createUnit(
+  tenantId: string,
+  values: UnitWrite & {
+    unit_code: string;
+    name: string;
+    dimension: UnitDimension;
+    display_order: number;
+  },
+): Promise<UnitOfMeasure> {
+  const { data, error } = await supabase
+    .from('units_of_measure')
+    .insert({
+      ...values,
+      tenant_id: tenantId,
+      unit_code: values.unit_code.trim().toLowerCase(),
+      name: values.name.trim(),
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data as UnitOfMeasure;
 }
 
 // ===========================================================================
@@ -266,6 +309,17 @@ export interface InventoryItemWrite {
   // string (§6). Null means "not monitored", never 0 — a zero threshold is a
   // real setting that means something different.
   reorder_level?: number | null;
+
+  // The standard field set (037). Every one is nullable and NULL means "not
+  // stated" — never 0, and never ''. An empty barcode string would collide with
+  // every other empty one on 037's unique index, so the caller passes null.
+  barcode?: string | null;
+  pack_size?: string | null;
+  // numbers here, numeric(14,2)/(14,4) in the database, STRINGS on the way back.
+  purchase_cost?: number | null;
+  min_stock_level?: number | null;
+  max_stock_level?: number | null;
+
   is_active?: boolean;
   display_order?: number;
 }
@@ -354,6 +408,11 @@ export async function fetchLocations(
 export interface LocationWrite {
   name?: string;
   kind?: LocationKind;
+  // Setting this TRUE clears the previous default in the same statement — 037's
+  // BEFORE trigger does it, so the client never issues a clear-then-set pair
+  // (two writes are not one transaction, and a half-applied pair leaves the
+  // property with no default at all).
+  is_default_store?: boolean;
   is_active?: boolean;
   display_order?: number;
 }
@@ -414,4 +473,40 @@ export async function softDeleteLocation(
     .is('deleted_at', null); // idempotent
 
   if (error) throw error;
+}
+
+// ===========================================================================
+// Where stock arrives: the designated receiving store
+// ===========================================================================
+
+// THE ONE IMPLEMENTATION of "which location does stock come into by default".
+// Every receiving surface reads it — the opening-stock import today, purchase
+// receipts (2c) tomorrow — so that they cannot disagree about where a delivery
+// lands. The order is documented in 037 §2 and repeated here because this is
+// where it actually runs:
+//
+//   1. the location the hotel DESIGNATED (is_default_store), if it is live and
+//      in use — the owner's own answer, and it beats every rule below;
+//   2. else the first ACTIVE kind='store', in the hotel's own display order.
+//      Stock is received into a store and issued out of it (035 §4) — that is
+//      what the kind means — so a store beats a kitchen even when the kitchen
+//      sorts first;
+//   3. else the first active location of any kind, because a property that has
+//      no store at all still has to be able to record what it holds;
+//   4. else null, and the screen asks rather than guessing.
+//
+// Rows arrive already ordered by display_order then name (fetchLocations), so
+// "first" here means the hotel's own order rather than an arbitrary one.
+export function pickDefaultLocation(
+  locations: StockLocation[],
+): StockLocation | null {
+  const live = locations.filter((l) => l.deleted_at === null);
+  const usable = live.filter((l) => l.is_active);
+
+  return (
+    usable.find((l) => l.is_default_store && l.kind === 'store') ??
+    usable.find((l) => l.kind === 'store') ??
+    usable[0] ??
+    null
+  );
 }

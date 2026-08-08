@@ -24,6 +24,7 @@ import { RoomTypesPage } from './pages/admin/RoomTypesPage';
 import { CompaniesPage } from './pages/admin/CompaniesPage';
 import { InventoryPage } from './pages/admin/InventoryPage';
 import { StockImportPage } from './pages/admin/StockImportPage';
+import { ProductImportPage } from './pages/admin/ProductImportPage';
 import { RequisitionsPage } from './pages/admin/RequisitionsPage';
 import { BookingsPage } from './pages/admin/BookingsPage';
 import { NewBookingPage } from './pages/admin/NewBookingPage';
@@ -181,6 +182,19 @@ const router = createBrowserRouter([
                 element: (
                   <ModuleGuard module="store">
                     <StockImportPage />
+                  </ModuleGuard>
+                ),
+              },
+              // Bringing a whole CATALOGUE in at once — the sibling of
+              // stock/import and the one that comes first. That route loads
+              // quantities for items that already exist; this one creates the
+              // items. Two routes because they are two jobs, and conflating
+              // them is what sent people to the wrong screen.
+              {
+                path: 'products/import',
+                element: (
+                  <ModuleGuard module="store">
+                    <ProductImportPage />
                   </ModuleGuard>
                 ),
               },

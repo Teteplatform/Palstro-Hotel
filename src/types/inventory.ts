@@ -78,6 +78,25 @@ export interface InventoryItem {
   // numeric(14,4) — PostgREST returns numeric as a STRING to preserve precision
   // (CLAUDE.md §6). Parse with parseNumeric before any arithmetic or comparison.
   reorder_level: string | null;
+
+  // --- the standard field set (037) ---------------------------------------
+  // The manufacturer's scanned code, separate from `code` (the hotel's own short
+  // reference). Unique per tenant where set.
+  barcode: string | null;
+  // How it is packed, as a sentence: 'carton of 24'. TEXT, never a number — a
+  // numeric here would be read as a purchase-to-base conversion factor, and this
+  // module deliberately has none (035: everything is entered in the base unit).
+  pack_size: string | null;
+  // numeric(14,2) as a STRING (§6). The standard BUY cost of one base unit,
+  // informational only — valuation is the moving average folded from the
+  // movements (036 §2) and nothing reads this to value anything.
+  purchase_cost: string | null;
+  // numeric(14,4) as STRINGS (§6). The ordering par range. NEITHER is the alert:
+  // the low-stock flag compares on-hand against reorder_level (036 §3.2). These
+  // are read by purchasing (2c) to suggest an order quantity.
+  min_stock_level: string | null;
+  max_stock_level: string | null;
+
   is_active: boolean;
   display_order: number;
   deleted_at: string | null;
@@ -112,6 +131,10 @@ export interface StockLocation {
   property_id: string;
   name: string;
   kind: LocationKind;
+  // The property's designated RECEIVING point — where stock arrives by default
+  // (037). At most one per property, and only ever a kind='store'. An OVERRIDE
+  // of the fallback rule in pickDefaultLocation, not a prerequisite for it.
+  is_default_store: boolean;
   is_active: boolean;
   display_order: number;
   deleted_at: string | null;

@@ -44,7 +44,7 @@ Three kinds of staff use the admin.
 | Room types, rates, companies, settings, site editor | No | Yes | Yes |
 | Inventory items and stock locations | No | Yes | Yes |
 | Record an opening balance, an adjustment or a stock take | Yes — recorded against you | Yes | Yes |
-| Load opening stock from a spreadsheet | Yes — recorded against you | Yes | Yes |
+| Load opening stock from a spreadsheet | Quantities yes — recorded against you. Rows that **create new items** need an owner. | Yes | Yes |
 
 **Two things to know about this table.**
 
@@ -801,8 +801,11 @@ here.
 > Everyone who can open this page sees every location. Restricting a barman to
 > the Bar needs staff logins and roles, which are not built yet.
 
-**Manage locations** sits beside the picker rather than in the tabs — naming your
-stores is setup you do once.
+**Manage locations** and **Load opening stock** sit beside the picker rather than
+in the tabs — both are setup you do once, not daily work. *Load opening stock*
+takes one sheet that does both jobs at once: what you stock, and how much of it
+is on the shelf. **Add product**, on the Products tab, is the same job one item
+at a time.
 
 The tabs:
 
@@ -834,10 +837,10 @@ Search by name or code, and filter by category, type or stock. Narrowing by
 **stock** — *at or below reorder level*, *less than nothing* — lists one line per
 location, because that is a question about a shelf rather than about an item.
 
-**Export** writes every row matching your filters, across all pages. **Import**
-opens the spreadsheet load. Opening a row shows the movements behind its figures
-when you are looking at one location, or where the stock is when you are looking
-at all of them.
+**Export** writes every row matching your filters, across all pages. **Add
+product** creates items — one at a time, or many from a template. Opening a row
+shows the movements behind its figures when you are looking at one location, or
+where the stock is when you are looking at all of them.
 
 Each item has:
 
@@ -867,6 +870,29 @@ Each item has:
 - **Perishable** and **In use** switches. *In use* off keeps an item on file but
   out of new entries, and out of this list unless you ask for it in the filters.
 
+Base unit and Category each carry a **+ New** beside them, so a unit or a group
+you have not set up yet is a field and a button rather than a trip to another
+tab and a half-filled form abandoned on the way. **Type has no + New**, and that
+is deliberate: *Ingredient / Sold as-is / Both* are not a list you add to, they
+are the three behaviours the system knows how to act on — a fourth would have
+nothing to do.
+
+The rest of the fields are optional and are there for the reports and the
+purchasing screens that come next:
+
+| Field | What it is for |
+| --- | --- |
+| **Barcode** | The code on the packaging. Separate from **Code**, which is your own short reference — you may use either, both or neither. |
+| **Pack size** | How it is packed, in words: *carton of 24*, *25 kg bag*. A description only. **Stock is still counted in the base unit.** |
+| **Purchase cost** | What one base unit normally costs to buy. Informational: your stock is still valued at what you actually paid, delivery by delivery. |
+| **Min stock** / **Max stock** | The ordering range — the floor you want to keep, and the ceiling worth holding. Read by purchasing when it arrives. **The low-stock warning uses Reorder level**, not these. |
+
+Two fields you may expect and will not find. **Supplier** arrives with
+purchasing, where it is a proper record — a hotel buys rice from three people at
+three prices, and one box on the item could only ever hold one of them.
+**Selling price** arrives with the menu, because the same bottle sells at one
+price at the bar and another in the restaurant.
+
 **Removing an item** takes it out of the catalogue but keeps its history, so it
 can come back later. An item still holding stock anywhere cannot be removed at
 all — write it down to zero first.
@@ -875,18 +901,67 @@ all — write it down to zero first.
 
 #### Adding a product
 
-**Add product** asks for the item *and*, if you know it, **what is already on the
-shelf**: a location, a quantity, what one unit cost, and the day it was counted.
-Fill that in and the opening balance is recorded in the same pass; leave it blank
-and only the item is created.
+> **Two different jobs, and it is worth being clear which one you are doing.**
+> **Adding a product** says *what a thing is* — "Rice exists, it is an
+> ingredient, it is measured in kilograms". **Loading opening stock** says *how
+> much of it you have* — "there are 200 kg of rice in the Main Store". Products
+> first; stock afterwards, once the items exist.
 
-It is worth filling in. Recording it later is the step people forget, and a
-catalogue the system believes is empty is worse than no catalogue.
+**Add product** asks one question first: **one, or many?**
 
-The two are saved one after the other, not together, so if the item is created
-and the balance is refused — usually because that item already has one in that
-location — the screen says exactly that. The item is real; only the stock is
-missing, and you can record it from the item's row.
+- **Add a single product** — the usual path. Fill in one item, and if you know
+  it, **what is already on the shelf**: a location, a quantity, what one unit
+  cost, and the day it was counted. Fill that in and the opening balance is
+  recorded in the same pass; leave it blank and only the item is created.
+
+  It is worth filling in. Recording it later is the step people forget, and a
+  catalogue the system believes is empty is worse than no catalogue.
+
+  The two are saved one after the other, not together, so if the item is created
+  and the balance is refused — usually because that item already has one in that
+  location — the screen says exactly that. The item is real; only the stock is
+  missing, and you can record it from the item's row.
+
+- **Add many from a template** — for setting up, when you have a hundred items
+  to enter. Download the sheet (**CSV** or **Excel**), type your catalogue into
+  it, upload it back, and check the preview before anything is created.
+
+##### The product template
+
+It arrives with a few **worked example rows**, one per type, showing exactly how
+a product is written — plus your own unit codes and category names. Those rows
+begin with **SAMPLE —** and are **always skipped by the import**, so you can
+type over them or leave them; either is fine.
+
+The columns are **Name, Code, Type, Base unit, Category, Barcode, Pack size,
+Purchase cost, Min stock, Max stock, Reorder level**. Name, Type and Base unit
+are required; everything else is optional. A category has to match one of yours
+exactly — the import will not invent a new one from a typo, it tells you
+instead.
+
+> Take the **CSV** if Excel opens the file read-only and will not let you type
+> in it. That is your office computer's document policy rather than the file.
+
+##### Duplicate protection
+
+This is the part that matters, because two rows for one sack of rice **cannot be
+merged later** — their movements are permanent, so the only fix is to write one
+down to zero and abandon it.
+
+| What is found | What happens |
+| --- | --- |
+| **The same name** (or the same code) already exists | **Blocked.** Not created, not attempted. An item switched off still owns its name. |
+| **A similar name** — *Rice* beside your existing *White Rice* | **Warned.** You are shown the near-matches and asked to confirm before it is created. |
+| Anything else wrong — an unknown unit, an unknown category, a type that is not one of the three | **Blocked**, with the reason on the row. |
+
+The same three answers apply whether you are adding one product or a hundred. In
+the template preview each row is marked, the counts are shown, and **nothing is
+created until you press the button** — and if any row needed review, you tick a
+box confirming those names are genuinely different items before the button will
+work.
+
+Uploading the same file twice is safe: names that already exist are recognised
+and left alone, never created a second time.
 
 ### Stock locations
 
@@ -911,6 +986,13 @@ The **kind** decides what a location will do once stock movements exist:
 | **Bar** | Sells drinks straight off the shelf and pours recipes for cocktails. |
 | **Housekeeping** | Stocks the rooms. Issuing an amenity kit while cleaning takes it off this location. |
 | **Other** | Anything else that holds stock — a maintenance cupboard, laundry chemicals. |
+
+One of your stores is the **default receiving store** — where stock arrives
+unless you say otherwise, on the opening-stock sheet now and on deliveries when
+purchasing arrives. Open a store and turn on **Default receiving store** to move
+it; the previous one gives the badge up in the same action, so there is always
+exactly one. The switch only appears on a **Store**, because receiving is what a
+store is.
 
 Use the arrows to order the list. Removing a location takes it off the list —
 **but a location still holding stock cannot be removed at all**. Move the stock
@@ -1013,22 +1095,42 @@ first.
 
 ### Loading your opening stock from a spreadsheet
 
-**Where:** *Inventory* → **Products** → **Import**.
+**Where:** *Inventory* → **Load opening stock**, beside the location picker.
 
-For the day you start. Instead of typing three hundred items one at a time:
+**One sheet does both jobs.** A row for something you already have records its
+quantity; a row for something new **creates the item and** records its quantity.
+So a hotel starting from nothing fills in one file, once, rather than building a
+catalogue on one screen and then remembering to come back and say what is on the
+shelves.
 
-1. **Choose the location and the count date.** The date is the day you counted —
-   not the day you upload.
-2. **Download the template**, as **Excel** or as **CSV** — the two hold exactly
-   the same thing. It already lists every item in your catalogue with **the unit
+1. **Check the location and the count date**, then press **Download sheet
+   (CSV)** — or **Excel**. It downloads straight away; there is nothing to read
+   first, because the instructions are on the sheet.
+
+   The **Location** starts on your **receiving store** — where deliveries
+   arrive. Pick a kitchen or a bar instead and you get one short question:
+   *"Stock is best received into the store and issued out. Put it in the Bar
+   anyway?"* The answer starts at **No**; putting stock straight into a bar has
+   to be a deliberate yes. (Which store is the default is yours to set — see
+   **Stock locations** below.)
+
+   The **date** is the day you counted, not the day you upload.
+
+2. **Fill it in.** The sheet already lists every item you have, with **the unit
    it is tracked in**, so you never have to remember whether rice is counted in
-   kilograms or in bags. Type a quantity and a unit cost beside the things you
-   actually have; leave the rest blank. Use a full stop for decimals.
+   kilograms or in bags. Type an **Opening quantity** and a **Unit cost** beside
+   the things you actually hold. Blank rows are skipped; **0 records that you
+   counted and there is none**. Use a full stop for decimals.
 
-   The Excel file has a second tab, **How to fill this in**, with a worked
-   example row and the rules in full. The CSV carries the same notes above its
-   header — you can delete them or leave them, the import steps over them either
-   way.
+   Add rows at the bottom for anything not listed yet, filling in its Type, Base
+   unit and Category. A second tab, **Reference**, lists the exact units,
+   categories and types that will be accepted — the column headings point at it.
+   (The CSV has no tabs, so the same three lists sit above the header; delete
+   them or leave them, the import steps over them either way.)
+
+   On a row you already have, only **Opening quantity**, **Unit cost** and
+   **Note** are read. Change an existing item's details on the item itself, not
+   here.
 
    > **If Excel opens the file read-only and will not let you type in it, take
    > the CSV instead.** That is your office computer's document policy rather
@@ -1036,18 +1138,38 @@ For the day you start. Instead of typing three hundred items one at a time:
    > has not been given a company label read-only, whoever created it. The CSV
    > is not affected, opens and edits normally in Excel, and imports back
    > exactly the same way.
-3. **Upload it back** (.xlsx or .csv).
-4. **Check the preview.** Every row is checked *before anything is saved* —
-   which rows will import, which are already loaded, and exactly what is wrong
-   with any that cannot be. **Nothing is written until you press Import.**
+
+3. **Upload it back** (.xlsx or .csv) and **check the preview.** Every row is
+   checked *before anything is saved*: what will be created, what stock will be
+   recorded, what is already loaded, and exactly what is wrong with anything
+   that cannot import. **Nothing is written until you press Import.**
 
 Rows with a problem do not hold up the rest: import the good ones now and fix
 the others in the file.
 
+#### When the sheet says something you have not set up
+
+A unit, a category or a name the sheet uses and your catalogue does not is
+**never created quietly**. It becomes a question, asked once however many rows
+use it, and it holds only those rows:
+
+| What the file said | What you are asked |
+| --- | --- |
+| A unit you do not have — *kilo* | **Create it** (give it a name and say what it measures), or **use one of mine**. |
+| A category you do not have — *Beverges* | **Create it**, or **use one of mine**. |
+| A name that looks like one you already have — *Rice* beside *White Rice* | **Create as new**, or **use the existing one**. |
+
+This is the difference between a catalogue you can report on and one you cannot.
+A typed *kgs* auto-created as a unit splits one item's stock into two scales that
+can never be added together, and nothing would ever have told you. So the import
+waits for you.
+
+The **Import** button stays off until every question has an answer.
+
 **Uploading the same file twice is safe.** Rows that already loaded are
-recognised and left alone — the stock is not doubled. And because an item can
-only ever have one opening balance in a location, even a re-saved copy of the
-file cannot double-load it.
+recognised and left alone — the stock is not doubled, and items you already have
+are not created a second time. Because an item can only ever have one opening
+balance in a location, even a re-saved copy of the file cannot double-load it.
 
 **This is for opening stock only.** Ongoing deliveries are recorded as purchases
 when that screen arrives — not by uploading this sheet again with bigger numbers.

@@ -97,13 +97,22 @@ export function LocationsScreen({
 
   async function handleSave(
     location: StockLocation,
-    values: { name: string; kind: LocationKind; isActive: boolean },
+    values: {
+      name: string;
+      kind: LocationKind;
+      isDefaultStore: boolean;
+      isActive: boolean;
+    },
   ) {
     await run(
       () =>
         updateLocation(location.id, tenantId, propertyId, {
           name: values.name,
           kind: values.kind,
+          // Setting this clears the previous default in the SAME statement —
+          // 037's trigger does it, so there is no clear-then-set pair here that
+          // could half-apply and leave the hotel with no receiving point.
+          is_default_store: values.isDefaultStore,
           is_active: values.isActive,
         }).then(() => undefined),
       'Location saved.',

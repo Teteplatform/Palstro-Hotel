@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
 import { Pagination } from '../../ui/Pagination';
 import { Select } from '../../ui/form';
 import type { SelectOption } from '../../ui/form';
@@ -26,6 +25,7 @@ import type {
   StockLocation,
   UnitOfMeasure,
 } from '../../../types/inventory';
+import { AddProductChoiceDialog } from './AddProductChoiceDialog';
 import { InventorySummaryCard } from './InventorySummaryCard';
 import { ItemPanel } from './ItemPanel';
 import { ProductsTable } from './ProductsTable';
@@ -67,6 +67,8 @@ interface ProductsTabProps {
   items: InventoryItem[];
   itemsError: string | null;
   onCatalogueChanged: () => Promise<void> | void;
+  // Re-pulls units and categories after the item form's inline "+ New" adds one.
+  onReferenceChanged: () => Promise<void> | void;
 }
 
 export function ProductsTab({
@@ -83,6 +85,7 @@ export function ProductsTab({
   items,
   itemsError,
   onCatalogueChanged,
+  onReferenceChanged,
 }: ProductsTabProps) {
   const toast = useToast();
   const list = useInventoryProducts(tenantId, propertyId, locationId);
@@ -95,6 +98,17 @@ export function ProductsTab({
   // The add/edit slide-over. `editing` null with `panelOpen` true is "add".
   const [panelOpen, setPanelOpen] = useState(false);
   const [editing, setEditing] = useState<InventoryItem | null>(null);
+
+  // ADD PRODUCT ASKS "ONE, OR MANY?" FIRST. Pressing the button no longer opens
+  // the form directly — it opens the choice, because the bulk path used to be a
+  // small link on a different screen that nobody found, and a hotel setting up
+  // has three hundred items to enter, not one.
+  const [choiceOpen, setChoiceOpen] = useState(false);
+
+  function openAddChoice() {
+    setEditing(null);
+    setChoiceOpen(true);
+  }
 
   // The stock entry form, opened against one item in one location from a row.
   const [entry, setEntry] = useState<{ itemId: string; locationId: string } | null>(
@@ -269,12 +283,13 @@ export function ProductsTab({
           Filters
         </button>
 
-        <Link
-          to={`/admin/${propertySlug}/stock/import`}
-          className="rounded-lg border border-sand-border bg-white/70 px-4 py-2 text-sm font-semibold text-charcoal transition-colors hover:bg-sand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-cream"
-        >
-          Import
-        </Link>
+        {/* The opening-stock import USED TO SIT HERE, labelled "Import", beside
+            Add product — and that placement is what taught people that adding a
+            product meant uploading a stock sheet. It has moved to a secondary
+            action on the page header ("Load opening stock"), where it reads as
+            what it is: a once-per-location job, done after the items exist.
+            Adding many products at once is now reached through Add product
+            itself, which is where somebody looking for it actually looks. */}
 
         <button
           type="button"
@@ -290,10 +305,7 @@ export function ProductsTab({
 
         <button
           type="button"
-          onClick={() => {
-            setEditing(null);
-            setPanelOpen(true);
-          }}
+          onClick={openAddChoice}
           className="inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
         >
           <PlusIcon className="h-4 w-4" />
@@ -393,13 +405,7 @@ export function ProductsTab({
       ) : list.loading && list.rows.length === 0 ? (
         <LoadingState />
       ) : list.rows.length === 0 ? (
-        <EmptyState
-          filtered={filtered}
-          onAdd={() => {
-            setEditing(null);
-            setPanelOpen(true);
-          }}
-        />
+        <EmptyState filtered={filtered} onAdd={openAddChoice} />
       ) : (
         <>
           <ProductsTable
@@ -429,6 +435,18 @@ export function ProductsTab({
         </>
       )}
 
+      {choiceOpen ? (
+        <AddProductChoiceDialog
+          propertySlug={propertySlug}
+          onSingle={() => {
+            setChoiceOpen(false);
+            setEditing(null);
+            setPanelOpen(true);
+          }}
+          onClose={() => setChoiceOpen(false)}
+        />
+      ) : null}
+
       {panelOpen ? (
         <ItemPanel
           tenantId={tenantId}
@@ -441,6 +459,7 @@ export function ProductsTab({
           currency={currency}
           timezone={timezone}
           defaultLocationId={locationId}
+          onReferenceChanged={onReferenceChanged}
           onSaved={async () => {
             await Promise.all([list.reload(), onCatalogueChanged()]);
           }}
@@ -494,7 +513,7 @@ function EmptyState({ filtered, onAdd }: { filtered: boolean; onAdd: () => void 
       <p className="mx-auto mt-1 max-w-md text-sm text-charcoal-muted">
         {filtered
           ? 'Try a different search, or clear the filters.'
-          : 'Add your first item — start with what your kitchen and bar use most. You can record what is already on the shelf at the same time.'}
+          : 'Start with what your kitchen and bar use most. Add one at a time, or bring the whole catalogue in from a spreadsheet — Add product offers both. What is on the shelves is loaded afterwards, once the items exist.'}
       </p>
       {!filtered ? (
         <button

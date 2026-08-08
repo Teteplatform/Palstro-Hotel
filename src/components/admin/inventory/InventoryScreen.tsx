@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Select } from '../../ui/form';
 import type { SelectOption } from '../../ui/form';
 import { CloseIcon } from '../../ui/icons';
@@ -178,6 +179,21 @@ export function InventoryScreen({
         >
           Manage locations
         </button>
+        {/* THE OPENING-STOCK IMPORT, DEMOTED ON PURPOSE. It used to sit in the
+            Products action row next to Add product, labelled "Import", and that
+            is precisely what taught people that adding a product meant
+            uploading a stock sheet — two different jobs, one button apart.
+            Here it reads as what it is: a page-level setup action, done ONCE
+            per location, AFTER the items exist. Beside Manage locations because
+            they are the same kind of thing — the setup you do on day one and
+            rarely touch again. */}
+        <Link
+          to={`/admin/${propertySlug}/stock/import`}
+          title="Loads QUANTITIES into a location for items that are already in your catalogue. To create the items themselves, use Add product."
+          className="rounded-lg border border-sand-border bg-white/70 px-4 py-2 text-sm font-semibold text-charcoal transition-colors hover:bg-sand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-cream"
+        >
+          Load opening stock
+        </Link>
       </div>
 
       {locations.rows.length === 0 && !locations.loading ? (
@@ -239,6 +255,10 @@ export function InventoryScreen({
             items={items}
             itemsError={itemsError}
             onCatalogueChanged={reloadCatalogue}
+            // A unit or category added inline from the item form has to reach
+            // every other picker on this page, not just the form it was typed
+            // into — the filter bar and the categories tab read the same list.
+            onReferenceChanged={reference.reload}
           />
         ) : null}
 

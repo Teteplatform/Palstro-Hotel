@@ -24,6 +24,9 @@ import type { LocationKind, StockLocation } from '../../../types/inventory';
 export interface LocationFormValues {
   name: string;
   kind: LocationKind;
+  // Where stock arrives by default (037). Only offered on a store — the flag
+  // means "the receiving point", and receiving is what a store IS (035 §4).
+  isDefaultStore: boolean;
   isActive: boolean;
 }
 
@@ -62,6 +65,7 @@ export function LocationCard({
   const dirty =
     values.name.trim() !== location.name ||
     values.kind !== location.kind ||
+    values.isDefaultStore !== location.is_default_store ||
     values.isActive !== location.is_active;
 
   return (
@@ -86,6 +90,11 @@ export function LocationCard({
               >
                 {locationKindLabel(location.kind)}
               </span>
+              {location.is_default_store ? (
+                <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
+                  Default
+                </span>
+              ) : null}
               {!location.is_active ? (
                 <span className="rounded-full bg-charcoal/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-charcoal-muted">
                   Not in use
@@ -152,6 +161,21 @@ export function LocationCard({
               helpText="Turn off to keep the location and its history on file but hide it from new entries."
               disabled={busy}
             />
+            {/* Only on a store, and only shown there — a toggle whose only legal
+                value is off is a dead control. 037 normalises the flag off when
+                the kind changes, so switching a store to a bar does not leave
+                a hotel with a receiving point that cannot receive. */}
+            {values.kind === 'store' ? (
+              <Toggle
+                label="Default receiving store"
+                value={values.isDefaultStore}
+                onChange={(v) =>
+                  setValues((prev) => ({ ...prev, isDefaultStore: v }))
+                }
+                helpText="Where stock arrives by default. One per hotel."
+                disabled={busy}
+              />
+            ) : null}
           </div>
 
           <div className="mt-4 flex flex-wrap items-center gap-2">
@@ -185,6 +209,7 @@ function toForm(location: StockLocation): LocationFormValues {
   return {
     name: location.name,
     kind: location.kind,
+    isDefaultStore: location.is_default_store,
     isActive: location.is_active,
   };
 }
