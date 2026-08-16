@@ -22,6 +22,7 @@ const MOVEMENT_TYPE_LABELS: Record<MovementType, string> = {
   consumption: 'Used by sales',
   wastage: 'Wastage',
   count_adjustment: 'Count correction',
+  reversal: 'Reversal',
 };
 
 export function movementTypeLabel(type: MovementType): string {
@@ -32,6 +33,12 @@ export function movementTypeLabel(type: MovementType): string {
 // Adjustments deliberately read as the loudest of the three that exist today:
 // they are the movement with no purchase and no sale behind them, and they
 // should catch the eye of anyone scanning a ledger.
+//
+// A REVERSAL GETS ITS OWN TONE, distinct from an adjustment, for the same reason
+// 038 gave it its own movement_type: someone scanning a month of movements for
+// the unexplained ones must be able to tell a correction of a legitimate posting
+// from stock that moved with nothing behind it. If the two looked alike here,
+// the type would be doing its job in the database and not on the screen.
 export function movementTypeTone(type: MovementType): string {
   switch (type) {
     case 'opening':
@@ -40,6 +47,8 @@ export function movementTypeTone(type: MovementType): string {
     case 'count_adjustment':
     case 'wastage':
       return 'bg-accent/15 text-accent';
+    case 'reversal':
+      return 'bg-primary/15 text-primary ring-1 ring-inset ring-primary/30';
     default:
       return 'bg-sand text-charcoal-muted';
   }
@@ -107,6 +116,67 @@ export const IMPORT_HISTORY_NOTE =
   'every opening balance on file, newest first, with who loaded it and when. A ' +
   'per-file log (this file, these rows, these failures) needs a record of its ' +
   'own and arrives with purchasing.';
+
+// ---------------------------------------------------------------------------
+// 038's behaviour, explained where people meet it
+// ---------------------------------------------------------------------------
+//
+// NOTHING IN THIS SECTION RESTATES A RULE THE DATABASE ENFORCES. Every refusal
+// message a user sees comes from the server verbatim (stockErrorMessage, which
+// now appends the RAISE hint too). These strings explain what a control DOES
+// before it is used — which is the client's job — and stop where the server's
+// job starts.
+
+export const REVERSAL_POSTS_TODAY_NOTE =
+  'The reversal is dated today, not the day of the original. Yesterday’s stock ' +
+  'report stays exactly as it was printed, and the correction appears on the day ' +
+  'it was actually made — the same rule the folio follows.';
+
+export const REVERSAL_PERMANENCE_NOTE =
+  'Nothing is deleted. The original movement stays exactly as it was recorded ' +
+  'and a matching opposite movement is posted beside it, so both the mistake and ' +
+  'the correction stay visible with their own names against them.';
+
+// What a negative position means, in the words the screen uses. Framed as a
+// question because that is what it is.
+export const NEGATIVE_STOCK_EXPLANATION =
+  'A negative means stock left without a movement behind it: a delivery that ' +
+  'was never entered, an issue posted against the wrong location, or stock that ' +
+  'walked. It is a question worth asking, not a fault in the system — and it is ' +
+  'never rounded up to zero, because hiding it would hide the very thing worth ' +
+  'looking at.';
+
+export const NEGATIVE_STOCK_TOTAL_EXPLANATION =
+  'Covers the whole filtered set, across all pages — not just this page. The ' +
+  'value is negative because the quantity is: it is what the missing stock would ' +
+  'have been worth at the location’s average cost.';
+
+// The distinction between the two places a negative can be seen, stated on the
+// page rather than left to memory. Shown on the Products tab beside its
+// negative filter, pointing at the screen that can see more.
+export const NEGATIVE_FILTER_CROSS_REFERENCE =
+  'A negative sitting behind an item or location that has been REMOVED does not ' +
+  'appear here — the Negative Stock tab lists those as well, and shows which ' +
+  'positions cannot be corrected until something is switched back on.';
+
+export const NEGATIVE_UNCORRECTABLE_NOTE =
+  'Stock cannot be recorded against a location or an item that is switched off ' +
+  'or removed, so this position cannot be corrected until it is switched back on.';
+
+// What turning on batch tracking commits the storekeeper to. Deliberately worded
+// as the WORK it creates rather than as a property of the goods — "perishable"
+// is a different field with a different meaning and no consequences attached.
+export const TRACKS_EXPIRY_EXPLANATION =
+  'Every delivery of this item must record a batch code and an expiry date. ' +
+  'Turn it on for anything you would need to trace or recall — milk, medicines, ' +
+  'packaged food with a date on the box. This is different from “perishable”, ' +
+  'which only describes the goods; this one adds two required fields every time ' +
+  'stock comes in.';
+
+export const BATCH_FIELDS_IN_ONLY_NOTE =
+  'Batch and expiry are recorded when stock comes IN. They are not asked for ' +
+  'when stock goes out: which batch left is decided by the issue rules, not ' +
+  'typed in here.';
 
 // Why an adjustment demands a reason, shown on the form itself rather than
 // discovered as a validation error.

@@ -32,6 +32,7 @@ export type InventoryTabKey =
   | 'categories'
   | 'adjustments'
   | 'stock_take'
+  | 'negative_stock'
   | 'price_update'
   | 'import_history';
 
@@ -52,6 +53,12 @@ export const INVENTORY_TABS: InventoryTab[] = [
   { key: 'categories', label: 'Categories', status: 'ready' },
   { key: 'adjustments', label: 'Adjustments', status: 'ready' },
   { key: 'stock_take', label: 'Stock Take', status: 'ready' },
+  // THE DISCREPANCY SCREEN (038 §9). A tab rather than a filter, because it is
+  // the ONLY surface that can see a negative sitting behind a switched-off or
+  // removed item or location — stock_on_hand_items, which the Products tab's
+  // negative filter reads, joins those away. Those are also the ones that cannot
+  // be corrected, so they are exactly the rows worth a screen of their own.
+  { key: 'negative_stock', label: 'Negative Stock', status: 'ready' },
   { key: 'import_history', label: 'Import History', status: 'ready' },
   // KEPT AS A TAB, unlike transfers and requisitions, for one reason: selling
   // prices arrive with Food and Beverage, and that module is a disabled entry in

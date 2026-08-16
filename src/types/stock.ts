@@ -31,6 +31,12 @@
 //   consumption      recipe-driven deduction from an F&B sale.  (later)
 //   wastage          spoilage/breakage written off.             (later)
 //   count_adjustment the variance a physical count posts.       (later)
+//   reversal         the counter-movement reverse_stock_movement posts (038).
+//                    A TYPE OF ITS OWN, deliberately, and not an adjustment: a
+//                    reversal that read as an adjustment would be invisible to
+//                    every variance and theft report, which is the whole reason
+//                    those reports exist. Either direction — reversing a receipt
+//                    removes stock, reversing an issue puts it back.
 export type MovementType =
   | 'opening'
   | 'adjustment'
@@ -41,9 +47,11 @@ export type MovementType =
   | 'transfer_in'
   | 'consumption'
   | 'wastage'
-  | 'count_adjustment';
+  | 'count_adjustment'
+  | 'reversal';
 
-// The movement types this tranche can actually write.
+// The movement types this tranche can actually write. 'reversal' is NOT here:
+// it is never chosen on a form, only produced by reverse_stock_movement.
 export type WritableMovementType = Extract<
   MovementType,
   'opening' | 'adjustment'
@@ -145,7 +153,67 @@ export interface StockLedgerRow {
   created_by: string | null;
   running_quantity: string;
   running_average_cost: string;
-  // Signed value this movement moved: in = quantity × its own cost,
-  // out = quantity × the average it left at.
+  // Signed value this movement moved: a reversal moves its carried basis, a
+  // stock-in its own cost, a stock-out the cost it actually carried out.
   movement_value: string;
+
+  // --- added by 038 --------------------------------------------------------
+  // numeric(14,4) as a string. What this stock cost ON THE WAY OUT, stamped at
+  // the moment it left. Present on every negative-quantity movement and on
+  // every reversal (where it is the basis being unwound); NULL on a stock-in,
+  // which states its cost in unit_cost instead.
+  //
+  // COST OF SALE IS READ FROM THIS AND NEVER RECOMPUTED (CLAUDE.md §6). No
+  // screen may re-derive it from the movement history.
+  carried_unit_cost: string | null;
+  // The movement THIS one undoes. Non-null exactly when movement_type is
+  // 'reversal'.
+  reverses_movement_id: string | null;
+  // The reversal that undid THIS one, derived by the view from the partial
+  // unique index — there is no such column on the table, because
+  // stock_movements admits no UPDATE. Non-null means "this was reversed".
+  reversed_by_movement_id: string | null;
+  batch_code: string | null;
+  expiry_date: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// Negative positions (038 §9)
+// ---------------------------------------------------------------------------
+
+// A row of `stock_negative_positions`: an (item, location) holding LESS THAN
+// NOTHING. Stock that left without a movement behind it.
+//
+// WHY THIS IS NOT THE SAME AS THE PRODUCTS TAB'S "negative" FILTER, which reads
+// stock_on_hand_items — verified against the view rather than assumed. That view
+// filters "deleted_at is null" on the item and the location, and does NOT filter
+// is_active. So a negative behind a REMOVED item or location is visible on
+// exactly one of the two surfaces: this one. A negative behind a merely
+// SWITCHED-OFF parent appears on both — and is uncorrectable on both, because
+// the posting RPCs require an active location and item, which is the fact this
+// screen exists to state.
+export interface StockNegativePositionRow {
+  tenant_id: string;
+  property_id: string;
+  location_id: string;
+  inventory_item_id: string;
+  quantity_on_hand: string;
+  moving_average_cost: string | null;
+  stock_value: string;
+  last_movement_date: string | null;
+  item_name: string;
+  item_code: string | null;
+  base_unit: string;
+  category_id: string | null;
+  // A position whose item or location is switched off or removed CANNOT BE
+  // CORRECTED until it is switched back on: both posting RPCs require a live,
+  // active location and a live item. The screen says so rather than letting
+  // someone discover it by trying.
+  item_is_active: boolean;
+  item_deleted_at: string | null;
+  location_name: string;
+  location_kind: string;
+  location_is_active: boolean;
+  location_deleted_at: string | null;
+  category_name: string | null;
 }

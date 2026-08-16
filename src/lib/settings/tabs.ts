@@ -391,6 +391,36 @@ const financeFields: SettingsField[] = [
           : null,
     },
   },
+  // THE POSTING LOCK (038 §4). One date per property: everything on or before it
+  // is closed, and every posting RPC refuses a movement dated inside it.
+  //
+  // NOT REQUIRED, deliberately, and this is the whole design of the field. The
+  // column is nullable and NULL means "nothing is locked", so a CLEARED field is
+  // a real instruction — unlock — rather than an incomplete form. It serialises
+  // to '' and update_property_finance_settings turns that into NULL; leaving the
+  // field untouched sends no key at all, which the RPC reads as "leave it alone".
+  // Absent, empty and set are three different things and all three are meant.
+  //
+  // NO `max` BOUND HERE, even though a future date is refused. The server owns
+  // that rule and states it in its own words, naming the property's today — and
+  // a `max` computed in the browser would be the browser's idea of today, which
+  // is the wrong timezone for a hotel in Bonny Island being administered from
+  // anywhere else. One authority, and it is the one that knows the property.
+  {
+    key: 'posting_locked_through',
+    label: 'Postings locked through',
+    help:
+      'The last closed day. Nothing can be recorded on or before this date — ' +
+      'stock movements included — and anyone who tries is told which date is ' +
+      'locked. Leave it empty to lock nothing; clear it to unlock a period ' +
+      'again. A date in the future is refused: a period is closed once it has ' +
+      'happened, not before.',
+    type: 'date',
+    storage: {
+      target: 'property_finance_settings',
+      column: 'posting_locked_through',
+    },
+  },
 ];
 
 // --- Tax -------------------------------------------------------------------

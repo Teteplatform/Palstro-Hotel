@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import {
   TextField,
   TextArea,
+  DateField,
   NumberField,
   CurrencyField,
   Select,
@@ -123,6 +124,17 @@ export function FieldControl({
           onChange={onChange}
           currency={currency}
           placeholder={field.placeholder}
+        />
+      );
+
+    case 'date':
+      return (
+        <DateField
+          {...base}
+          value={asString(value)}
+          onChange={onChange}
+          min={field.min}
+          max={field.max}
         />
       );
 

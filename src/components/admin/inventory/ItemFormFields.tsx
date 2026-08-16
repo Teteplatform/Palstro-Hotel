@@ -14,6 +14,7 @@ import {
   itemTypeLabel,
   unitDimensionLabel,
 } from '../../../lib/inventoryLabels';
+import { TRACKS_EXPIRY_EXPLANATION } from '../../../lib/stockLabels';
 import type {
   InventoryCategory,
   ItemType,
@@ -66,6 +67,7 @@ export interface ItemFormValues {
   baseUnit: string;
   categoryId: string;
   isPerishable: boolean;
+  tracksExpiry: boolean;
   reorderLevel: number | null;
   barcode: string;
   packSize: string;
@@ -275,11 +277,26 @@ export function ItemFormFields({
         disabled={disabled}
       />
 
+      {/* TWO NEIGHBOURING BOOLEANS THAT SOUND ALIKE AND ARE NOT, so they sit
+          together and each says what it actually does. "Perishable" describes
+          the GOODS and has no consequences; "Track batch and expiry" describes
+          the WORK and adds two required fields to every delivery. Labelling the
+          second one "expiry" alone would have read as a restatement of the
+          first, and the storekeeper would meet the difference as a validation
+          error instead of as a choice. */}
       <Toggle
         label="Perishable"
         value={values.isPerishable}
         onChange={(v) => onChange({ isPerishable: v })}
-        helpText="Goes off with time. Expiry tracking comes later."
+        helpText="Describes the goods only — it changes nothing about how stock is recorded."
+        disabled={disabled}
+      />
+
+      <Toggle
+        label="Track batch and expiry"
+        value={values.tracksExpiry}
+        onChange={(v) => onChange({ tracksExpiry: v })}
+        helpText={TRACKS_EXPIRY_EXPLANATION}
         disabled={disabled}
       />
 

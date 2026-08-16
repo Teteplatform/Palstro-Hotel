@@ -5,7 +5,11 @@ import type { SelectOption } from '../../ui/form';
 import { useAuth } from '../../../hooks/useAuth';
 import { formatDisplayDate, formatDisplayDateTimeInZone } from '../../../lib/date';
 import { describeError } from '../../../lib/errors';
-import { formatMoney, formatQuantity, MISSING_VALUE } from '../../../lib/format';
+import {
+  formatMoney,
+  formatSignedQuantity,
+  MISSING_VALUE,
+} from '../../../lib/format';
 import { fetchInventoryItemsByIds } from '../../../lib/inventory';
 import {
   EMPTY_MOVEMENT_FILTERS,
@@ -302,7 +306,7 @@ export function MovementsList({
                           outward ? 'text-accent' : 'text-charcoal'
                         }`}
                       >
-                        {signedQuantity(row.quantity)}
+                        {formatSignedQuantity(row.quantity)}
                         <span className="block text-xs font-normal text-charcoal-muted">
                           {item?.base_unit ?? ''}
                         </span>
@@ -350,11 +354,7 @@ export function MovementsList({
   );
 }
 
-// §6: numeric arrives as a STRING. formatQuantity parses it; the sign is added
-// here so a positive movement reads "+40" rather than "40" — a bare number in a
-// ledger is ambiguous in the one place ambiguity costs money.
-function signedQuantity(value: string): string {
-  const formatted = formatQuantity(value);
-  if (formatted === MISSING_VALUE) return formatted;
-  return value.trim().startsWith('-') ? formatted : `+${formatted}`;
-}
+// The signed-quantity formatter used to live here as a private copy, identical
+// to the one in StockItemLedger. Both assumed their input was a string and
+// crashed on anything else; both are now the shared formatSignedQuantity in
+// lib/format.ts, which takes the sign from the parsed number instead.

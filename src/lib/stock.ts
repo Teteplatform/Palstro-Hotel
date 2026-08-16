@@ -10,6 +10,7 @@ import type {
   MovementType,
   StockLedgerRow,
   StockMovement,
+  StockNegativePositionRow,
   StockOnHandRow,
 } from '../types/stock';
 
@@ -63,10 +64,16 @@ export const STOCK_INVALID = 'PT422';
 // allowNegative: true and the SAME idempotency key — which is what stops the
 // confirmation from posting a second movement.
 export const STOCK_NEEDS_CONFIRMATION = 'PT449';
+// The property's books are closed through posting_locked_through (038 §4), so a
+// movement dated on or before it is refused. A BRANCHING CONSTANT ONLY — the
+// sentence the user reads is the server's, which names both the lock date and
+// the date they tried to post to. Nothing in this client re-states that rule.
+export const STOCK_LOCKED = 'PT423';
 
 interface PostgrestLikeError {
   code?: string;
   message?: string;
+  hint?: string;
 }
 
 // humanizeError (lib/errors.ts) replaces codes with soft generic copy, which is
@@ -75,9 +82,32 @@ interface PostgrestLikeError {
 // "this item has no stock history in this location, so a unit cost is required"
 // — three different, actionable sentences the storekeeper has to read verbatim
 // to fix what they typed. So: prefer the server's message, always.
+//
+// THE HINT IS APPENDED, exactly as folioErrorMessage does — one behaviour across
+// the product, not two. This is load-bearing rather than tidy: 038 deliberately
+// splits every refusal in half, putting THE RULE in the message and THE WAY OUT
+// in the RAISE hint.
+//
+//   message: 'An opening balance cannot be reversed — it is the starting line…'
+//   hint:    'Post an adjustment for the difference instead. Before anything
+//             else has moved, the average still equals the opening cost…'
+//
+//   message: 'Reversing this movement would put stock back, but the location
+//             "Main Store" is switched off…'
+//   hint:    'Switch it back on (or restore it) first, then reverse the movement.'
+//
+// Dropping the hint would show the user "no" without "instead" — and the
+// pressure would then be to write the instruction into a component, which is
+// precisely the second source of truth that drifts the first time the rule
+// changes. Appending it is what makes "the client never restates a rule"
+// achievable rather than aspirational.
 export function stockErrorMessage(e: unknown): string {
   const err = e as PostgrestLikeError | null;
-  if (err?.message) return err.message;
+  const message = err?.message?.trim();
+  if (message) {
+    const hint = err?.hint?.trim();
+    return hint ? `${message} — ${hint}` : message;
+  }
   return 'Something went wrong. Please try again.';
 }
 
@@ -372,6 +402,11 @@ export interface OpeningBalanceInput {
   // Rules 2/3. For the spreadsheet import this is derived from the FILE'S OWN
   // CONTENT, so re-uploading the same file replays instead of double-loading.
   idempotencyKey: string;
+  // 038 §1C. REQUIRED by the server when the item's tracks_expiry is set, and
+  // meaningless otherwise. Optional here so every existing caller is unchanged:
+  // both parameters carry SQL defaults, so an omitted key resolves to NULL.
+  batchCode?: string | null;
+  expiryDate?: string | null;
 }
 
 export async function postOpeningBalance(
@@ -386,6 +421,8 @@ export async function postOpeningBalance(
     p_business_date: input.businessDate,
     p_note: input.note,
     p_idempotency_key: input.idempotencyKey,
+    p_batch_code: input.batchCode ?? null,
+    p_expiry_date: input.expiryDate ?? null,
   });
 
   if (error) throw error; // rule 11 — never swallowed; the caller surfaces it
@@ -410,6 +447,12 @@ export interface StockAdjustmentInput {
   idempotencyKey: string;
   // Re-submit after a PT449 with the SAME key to record a result below zero.
   allowNegative?: boolean;
+  // 038 §1C. Required by the server on a stock-IN of a batch-tracked item, and
+  // REFUSED on a stock-out — which batch left is an issue-rules decision, not a
+  // typed one, so a guess here would put a wrong answer into the history a
+  // recall will read.
+  batchCode?: string | null;
+  expiryDate?: string | null;
 }
 
 export async function postStockAdjustment(
@@ -425,9 +468,47 @@ export async function postStockAdjustment(
     p_unit_cost: input.unitCost,
     p_idempotency_key: input.idempotencyKey,
     p_allow_negative: input.allowNegative ?? false,
+    p_batch_code: input.batchCode ?? null,
+    p_expiry_date: input.expiryDate ?? null,
   });
 
   if (error) throw error;
+  return data as StockMovement;
+}
+
+// ---------------------------------------------------------------------------
+// Reversing a movement (038 §7)
+// ---------------------------------------------------------------------------
+
+export interface ReverseMovementInput {
+  movementId: string;
+  // Mandatory and non-blank. Kept permanently on the counter-movement and on
+  // the reversals audit row.
+  reason: string;
+  // Required ALWAYS, with no threshold. Held in component state for the length
+  // of one call and cleared in a finally block — never stored anywhere.
+  managerPin: string;
+  // Rules 2/3. OPTIONAL, and the distinction matters: a key the caller supplies
+  // means "this is one request of mine, possibly retried", and the server
+  // replays it. Omitting it means "reverse this", and the server answers with
+  // the state — it was already reversed, on such-and-such a day. The UI omits
+  // it, because a person pressing the button twice is asking twice.
+  idempotencyKey?: string;
+}
+
+// Returns the COUNTER-MOVEMENT, not the original. The original is untouched —
+// movements are permanent, and the counter is what moves the stock back.
+export async function reverseStockMovement(
+  input: ReverseMovementInput,
+): Promise<StockMovement> {
+  const { data, error } = await supabase.rpc('reverse_stock_movement', {
+    p_movement_id: input.movementId,
+    p_reason: input.reason,
+    p_manager_pin: input.managerPin,
+    p_idempotency_key: input.idempotencyKey ?? null,
+  });
+
+  if (error) throw error; // rule 11 — the caller surfaces the server's own words
   return data as StockMovement;
 }
 
@@ -590,4 +671,233 @@ export async function fetchOpeningBalanceKeys(
       .range(from, to),
   );
   return new Set(rows.map((r) => openingKey(r.location_id, r.inventory_item_id)));
+}
+
+// ---------------------------------------------------------------------------
+// Negative positions (038 §9) — the discrepancy screen
+// ---------------------------------------------------------------------------
+//
+// WHY THIS IS ITS OWN READ AND NOT ANOTHER StockFilters STATE. The Products tab
+// already has a `state: 'negative'` filter over stock_on_hand_items, and it
+// stays — it is the quick view while you are looking at one location's stock.
+// THE EXACT DIFFERENCE, verified against the view rather than assumed.
+// stock_on_hand_items filters "deleted_at is null" on the item, the location and
+// the category, and does NOT filter is_active. So:
+//
+//   * a negative behind a REMOVED item or location is invisible to the Products
+//     tab and visible ONLY here. That is what this screen is for.
+//   * a negative behind a SWITCHED-OFF parent appears on BOTH. It is still
+//     uncorrectable — the posting RPCs require an ACTIVE location and item — and
+//     this surface is the one that says so.
+//
+// stock_negative_positions filters neither, by design: a discrepancy report that
+// could hide a row would be the wrong tool for the only job it has.
+//
+// It is also PROPERTY-WIDE rather than per-location: a negative is a question
+// about the property, and asking it one location at a time is how one gets
+// missed.
+
+export interface NegativeFilters {
+  // Free text over item name and code.
+  search: string;
+  categoryId: string;
+  locationId: string;
+  // Narrow to the positions that cannot be corrected until something is
+  // switched back on. A server-side predicate, like every other filter here.
+  onlyUncorrectable: boolean;
+}
+
+export const EMPTY_NEGATIVE_FILTERS: NegativeFilters = {
+  search: '',
+  categoryId: '',
+  locationId: '',
+  onlyUncorrectable: false,
+};
+
+export function hasNegativeFilters(f: NegativeFilters): boolean {
+  return (
+    Boolean(f.search) ||
+    Boolean(f.categoryId) ||
+    Boolean(f.locationId) ||
+    f.onlyUncorrectable
+  );
+}
+
+// THE SINGLE FILTER IMPLEMENTATION for this surface — the page, the totals and
+// the export all go through it, so all three provably describe the same set
+// (rules 1b and 20).
+function applyNegativeFilters(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  query: any,
+  tenantId: string,
+  propertyId: string,
+  filters: NegativeFilters,
+) {
+  let q = query
+    .eq('tenant_id', tenantId) // rule 19 — RLS is the floor, not the ceiling
+    .eq('property_id', propertyId); // rule 19
+
+  const search = filters.search.trim().replace(/[,()*]/g, ' ').trim();
+  if (search.length > 0) {
+    // Commas and parens are PostgREST or() syntax; stripped rather than
+    // escaped, exactly as applyStockFilters does.
+    q = q.or(`item_name.ilike.%${search}%,item_code.ilike.%${search}%`);
+  }
+
+  if (filters.categoryId) q = q.eq('category_id', filters.categoryId);
+  if (filters.locationId) q = q.eq('location_id', filters.locationId);
+
+  if (filters.onlyUncorrectable) {
+    // Any of the four states that leave a position with no write path. Rule 5's
+    // NULL-safe direction applies to the two deleted_at columns: "removed" is
+    // `not.is.null`, so a row where the flag was never set is correctly NOT
+    // matched rather than silently swept in.
+    q = q.or(
+      'item_is_active.is.false,location_is_active.is.false,' +
+        'item_deleted_at.not.is.null,location_deleted_at.not.is.null',
+    );
+  }
+
+  return q;
+}
+
+export interface NegativePositionsPage {
+  rows: StockNegativePositionRow[];
+  count: number; // exact total for the CURRENT FILTER, not the page length
+}
+
+// One SERVER-PAGINATED, SERVER-FILTERED page. `page` is 1-based.
+//
+// Ordered MOST NEGATIVE FIRST, which is the ordering this screen wants: the
+// biggest hole is the one to explain first, and an alphabetical list of
+// discrepancies buries it. (location_id, inventory_item_id) is the stable
+// tiebreak — a unique pair — so two equally-negative rows can never swap
+// between pages.
+export async function fetchNegativePositionsPage(
+  tenantId: string,
+  propertyId: string,
+  page: number,
+  pageSize: number,
+  filters: NegativeFilters = EMPTY_NEGATIVE_FILTERS,
+): Promise<NegativePositionsPage> {
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+
+  const base = supabase
+    .from('stock_negative_positions')
+    .select('*', { count: 'exact' });
+
+  const { data, error, count } = await applyNegativeFilters(
+    base,
+    tenantId,
+    propertyId,
+    filters,
+  )
+    .order('quantity_on_hand', { ascending: true })
+    .order('location_id', { ascending: true })
+    .order('inventory_item_id', { ascending: true })
+    .range(from, to);
+
+  if (error) throw error;
+  return {
+    rows: (data ?? []) as StockNegativePositionRow[],
+    count: count ?? 0,
+  };
+}
+
+export interface NegativeSummary {
+  // How many (item, location) positions match the filter.
+  positionCount: number;
+  // Of those, how many cannot be corrected until something is switched back on.
+  uncorrectableCount: number;
+  // The value of the shortfall across the whole filter — negative, because the
+  // quantities are. What the missing stock would have been worth.
+  totalValue: number;
+}
+
+// The summary across the WHOLE FILTERED SET (rule 20), never the visible page.
+// A SEPARATE query through the SAME filter builder, for the reason
+// fetchStockSummary states: a total summed from the visible page is a wrong
+// number presented with confidence.
+export async function fetchNegativeSummary(
+  tenantId: string,
+  propertyId: string,
+  filters: NegativeFilters = EMPTY_NEGATIVE_FILTERS,
+): Promise<NegativeSummary> {
+  interface SummaryRow {
+    location_id: string;
+    inventory_item_id: string;
+    stock_value: string;
+    item_is_active: boolean;
+    location_is_active: boolean;
+    item_deleted_at: string | null;
+    location_deleted_at: string | null;
+  }
+
+  // fetchAllPaged (rule 1a): a total that stopped at a row cap would understate
+  // the shortfall, which is the one direction this figure must never err in.
+  const rows = await fetchAllPaged<SummaryRow>((from, to) => {
+    const base = supabase
+      .from('stock_negative_positions')
+      .select(
+        'location_id, inventory_item_id, stock_value, item_is_active, ' +
+          'location_is_active, item_deleted_at, location_deleted_at',
+      );
+    return applyNegativeFilters(base, tenantId, propertyId, filters)
+      .order('location_id', { ascending: true })
+      .order('inventory_item_id', { ascending: true }) // unique pair → stable paging
+      .range(from, to);
+  });
+
+  let totalValue = 0;
+  let uncorrectableCount = 0;
+
+  for (const row of rows) {
+    // §6: numeric → STRING. A bad value contributes 0 rather than NaN-ing the
+    // whole total.
+    totalValue += parseNumeric(row.stock_value) ?? 0;
+    if (isUncorrectable(row)) uncorrectableCount += 1;
+  }
+
+  return { positionCount: rows.length, uncorrectableCount, totalValue };
+}
+
+// Every row matching the current filter, across ALL pages — what Export writes
+// (rule 20: filters apply, pagination does not).
+export async function fetchNegativePositionsForExport(
+  tenantId: string,
+  propertyId: string,
+  filters: NegativeFilters = EMPTY_NEGATIVE_FILTERS,
+): Promise<StockNegativePositionRow[]> {
+  return fetchAllPaged<StockNegativePositionRow>((from, to) => {
+    const base = supabase.from('stock_negative_positions').select('*');
+    return applyNegativeFilters(base, tenantId, propertyId, filters)
+      .order('quantity_on_hand', { ascending: true })
+      .order('location_id', { ascending: true })
+      .order('inventory_item_id', { ascending: true }) // unique → stable paging
+      .range(from, to);
+  });
+}
+
+// ONE definition of "this position cannot be corrected right now", shared by the
+// row badge, the filter's meaning and the summary count — so the number above
+// the table and the flags inside it can never disagree about which rows they
+// mean.
+//
+// It is a fact about the PARENTS, not about the quantity: both posting RPCs
+// require a live, ACTIVE location and a live item, so a position behind a
+// switched-off or removed parent has no write path at all until it is switched
+// back on. Not even an adjustment down to zero.
+export function isUncorrectable(row: {
+  item_is_active: boolean;
+  location_is_active: boolean;
+  item_deleted_at: string | null;
+  location_deleted_at: string | null;
+}): boolean {
+  return (
+    !row.item_is_active ||
+    !row.location_is_active ||
+    row.item_deleted_at !== null ||
+    row.location_deleted_at !== null
+  );
 }

@@ -96,6 +96,12 @@ export interface PropertyFinanceSettings {
   // numeric(14,2) — a STRING over PostgREST (§6). Parse with parseNumeric before
   // any arithmetic or comparison. 0 means EVERY discount needs a manager PIN.
   discount_threshold: string;
+  // 038 §4. The last CLOSED business date: every posting RPC refuses a movement
+  // dated on or before it, naming both the lock and the attempted date. A
+  // Postgres `date` arrives as an ISO 'YYYY-MM-DD' string. NULL — the default —
+  // means nothing is locked, and is a real value the settings form can write
+  // back by clearing the field.
+  posting_locked_through: string | null;
   created_at: string;
   updated_at: string;
   created_by: string | null;

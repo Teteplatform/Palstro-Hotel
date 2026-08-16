@@ -18,6 +18,7 @@ import {
   type ProductRow,
   type ProductStockState,
 } from '../../../lib/inventoryProducts';
+import { NEGATIVE_FILTER_CROSS_REFERENCE } from '../../../lib/stockLabels';
 import type {
   InventoryCategory,
   InventoryItem,
@@ -336,7 +337,18 @@ export function ProductsTab({
               list.setFilters({ ...list.filters, state: v as ProductStockState })
             }
             options={stateOptions}
-            helpText="Narrowing by stock lists one line per location."
+            helpText={
+              list.filters.state === 'negative'
+                ? // THE TWO NEGATIVE SURFACES MUST NOT BOTH CLAIM TO BE THE
+                  // LIST. This filter reads stock_on_hand_items, which joins
+                  // away soft-deleted items and locations; the Negative stock
+                  // screen reads stock_negative_positions, which deliberately
+                  // does not. The difference is real and decides which rows a
+                  // person can see, so it is stated on the page rather than left
+                  // in somebody's memory.
+                  NEGATIVE_FILTER_CROSS_REFERENCE
+                : 'Narrowing by stock lists one line per location.'
+            }
           />
           <Select
             label="Items switched off"
@@ -419,6 +431,11 @@ export function ProductsTab({
             onEdit={(row) => void handleEdit(row)}
             onAdjust={(row, locId) => setEntry({ itemId: row.itemId, locationId: locId })}
             onRemove={(row) => void handleRemove(row)}
+            // A reversal from the expanded ledger moves the on-hand figure and
+            // the location's total, so both the page and the summary are
+            // re-pulled — never patched locally, which would be a second,
+            // drifting copy of a number the server already computes.
+            onReversed={() => list.reload()}
           />
 
           <div className="mt-6">

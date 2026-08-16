@@ -44,6 +44,9 @@ interface ProductsTableProps {
   onEdit: (row: ProductRow) => void;
   onAdjust: (row: ProductRow, locationId: string) => void;
   onRemove: (row: ProductRow) => void;
+  // Re-pull the page and its totals after a reversal posts from the expanded
+  // ledger: the on-hand figure and the location total have both just moved.
+  onReversed: () => Promise<void> | void;
   busy: boolean;
 }
 
@@ -57,6 +60,7 @@ export function ProductsTable({
   onEdit,
   onAdjust,
   onRemove,
+  onReversed,
   busy,
 }: ProductsTableProps) {
   // One row open at a time: the panel is a detail view, and two open at once
@@ -103,6 +107,7 @@ export function ProductsTable({
                 onEdit={() => onEdit(row)}
                 onAdjust={onAdjust}
                 onRemove={() => onRemove(row)}
+                onReversed={onReversed}
                 busy={busy}
               />
             );
@@ -136,6 +141,7 @@ function ProductTableRow({
   onEdit,
   onAdjust,
   onRemove,
+  onReversed,
   busy,
 }: {
   row: ProductRow;
@@ -149,6 +155,7 @@ function ProductTableRow({
   onEdit: () => void;
   onAdjust: (row: ProductRow, locationId: string) => void;
   onRemove: () => void;
+  onReversed: () => Promise<void> | void;
   busy: boolean;
 }) {
   // §6: numeric arrives as a STRING — parsed explicitly before any comparison.
@@ -327,6 +334,17 @@ function ProductTableRow({
                   inventoryItemId={row.itemId}
                   baseUnit={row.baseUnit}
                   currency={currency}
+                  // Named so the reversal card can say WHICH item in WHICH
+                  // location is about to move. The location name comes from the
+                  // row's own position rather than being looked up, so it is
+                  // always the location whose ledger is on screen.
+                  itemName={row.name}
+                  locationName={
+                    row.locations.find(
+                      (l) => l.locationId === (locationId ?? row.locations[0]!.locationId),
+                    )?.locationName ?? row.locations[0]?.locationName
+                  }
+                  onReversed={onReversed}
                 />
               ) : (
                 <LocationDetail

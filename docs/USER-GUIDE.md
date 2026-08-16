@@ -1092,6 +1092,19 @@ Nothing on that list can be edited, by anyone.
 
 ### Reversing a stock movement
 
+**Where:** open an item on the **Products** tab to see its movements, then
+**Reverse** on the line you want undone.
+
+> It is only offered there, and that is deliberate. The item's own ledger is the
+> one place you can see the quantity, the running total and the average cost all
+> at once — which is what you need to decide whether reversing is the right
+> answer. From a flat list of every movement in the hotel, one row looks much
+> like another.
+>
+> The button does not appear on an opening balance, on a reversal, or on a
+> movement already reversed. All three are refused anyway; hiding the button just
+> saves you the trip.
+
 Sometimes a movement should not have been posted at all — a delivery keyed
 against the wrong item, or a receipt for stock that was rejected at the gate. A
 **reversal** undoes it.
@@ -1124,6 +1137,36 @@ move again, post it again.
 history in that location. Correct it with an adjustment instead — before anything
 else has moved, an adjustment unwinds it exactly.
 
+**If the location or the item has been switched off**, a reversal that would put
+stock *back* is refused, and the message names which one. Stock cannot be
+recorded against something switched off, so the stock would land somewhere
+nothing could reach it. Switch it back on, then reverse.
+
+Once it is done, the ledger shows both halves: the original line reads
+**Reversed**, and the new line reads **Reversal** and says which movement it
+undid. Neither can be edited or deleted, by anyone.
+
+### Batch and expiry
+
+**Where:** the item form, **Track batch and expiry**.
+
+Turn it on for anything you would need to trace or recall — milk, medicines,
+packaged food with a date on the box. From then on, **every time stock comes in
+for that item you must enter a batch code and an expiry date**, and the two
+fields appear on the stock entry form automatically.
+
+**It is not the same as “Perishable”**, which sits beside it. Perishable
+describes the goods and changes nothing about how stock is recorded. This one
+adds two required fields to every delivery, so turn it on where the tracing is
+worth the keying.
+
+**The fields never appear when stock goes out.** Which batch left is decided by
+the issue rules, not typed in by whoever is at the keyboard — a guess there would
+put a wrong answer into the history a recall depends on.
+
+Stock that arrives already past its date is still recorded honestly: enter the
+real expiry. Nothing refuses it, and a written-down truth beats a tidy fiction.
+
 ### Closing a period
 
 **Where:** Settings → Finance.
@@ -1136,9 +1179,34 @@ This is how you make "we have reported this month" a fact rather than something
 everybody is trusted to remember. Without it, somebody corrects a February figure
 in April and every report printed since February is quietly wrong.
 
+**Leaving the field empty locks nothing, and clearing it unlocks again.** An
+empty date here is a real instruction, not an unfinished form.
+
 You cannot set the lock to a date in the future — a period is closed once it has
 happened, not before. Moving the lock is recorded, like every other settings
 change.
+
+### Finding stock that says less than nothing
+
+**Where:** the **Negative Stock** tab under Inventory.
+
+Every position in the hotel holding less than nothing, biggest hole first, with
+what the shortfall would have been worth. Search, filter by location or category,
+and export the whole filtered set to a spreadsheet to work through.
+
+**Why this is a separate tab from the “Less than nothing” filter on Products.**
+They are not the same list. The Products filter hides items and locations you
+have *removed*; this tab hides nothing. So a negative sitting behind a removed
+store or a removed item shows up **here and nowhere else** — and those are
+exactly the ones easiest to lose track of.
+
+**Some positions cannot be corrected yet**, and the tab flags each one and counts
+them. Stock cannot be recorded against a location or an item that is switched off
+or removed, so those cannot even be written down to zero until you switch the
+thing back on. Do that first, then correct the stock.
+
+An empty tab is the outcome you want, and it says so rather than looking like a
+screen that failed to load.
 
 > **Write-offs, requisitions and purchase receipts are not built yet.** Today,
 > stock that spoils or breaks is recorded as an **adjustment** with the reason

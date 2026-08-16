@@ -75,6 +75,8 @@ export interface InventoryItem {
   base_unit: string;
   category_id: string | null;
   is_perishable: boolean;
+  // 038: every stock-IN of this item must record a batch code and expiry date.
+  tracks_expiry: boolean;
   // numeric(14,4) — PostgREST returns numeric as a STRING to preserve precision
   // (CLAUDE.md §6). Parse with parseNumeric before any arithmetic or comparison.
   reorder_level: string | null;

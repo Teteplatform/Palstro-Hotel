@@ -305,6 +305,10 @@ export interface InventoryItemWrite {
   base_unit?: string;
   category_id?: string | null;
   is_perishable?: boolean;
+  // 038 §1C. When TRUE, every stock-IN of this item must state a batch code and
+  // an expiry date — enforced by the posting RPCs, not by this form. Different
+  // from is_perishable, which describes the goods and commits nobody to anything.
+  tracks_expiry?: boolean;
   // A JS number or null here; the column is numeric(14,4) and comes BACK as a
   // string (§6). Null means "not monitored", never 0 — a zero threshold is a
   // real setting that means something different.

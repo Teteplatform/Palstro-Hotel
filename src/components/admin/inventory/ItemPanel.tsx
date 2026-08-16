@@ -109,6 +109,7 @@ const EMPTY_ITEM_FORM: ItemFormValues = {
   baseUnit: '',
   categoryId: '',
   isPerishable: false,
+  tracksExpiry: false,
   reorderLevel: null,
   barcode: '',
   packSize: '',
@@ -134,6 +135,7 @@ function toForm(item: InventoryItem): ItemFormValues {
     baseUnit: item.base_unit,
     categoryId: item.category_id ?? '',
     isPerishable: item.is_perishable,
+    tracksExpiry: item.tracks_expiry,
     reorderLevel: toNumber(item.reorder_level),
     barcode: item.barcode ?? '',
     packSize: item.pack_size ?? '',
@@ -682,6 +684,7 @@ function itemFieldsFrom(values: ItemFormValues): {
   base_unit: string;
   category_id: string | null;
   is_perishable: boolean;
+  tracks_expiry: boolean;
   reorder_level: number | null;
   barcode: string | null;
   pack_size: string | null;
@@ -696,6 +699,7 @@ function itemFieldsFrom(values: ItemFormValues): {
     base_unit: values.baseUnit,
     category_id: values.categoryId || null,
     is_perishable: values.isPerishable,
+    tracks_expiry: values.tracksExpiry,
     reorder_level: values.reorderLevel,
     barcode: values.barcode.trim() || null,
     pack_size: values.packSize.trim() || null,

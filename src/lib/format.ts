@@ -92,6 +92,46 @@ export function formatMoney(
   }
 }
 
+// A SIGNED quantity, for a ledger where direction is the whole point: "+40"
+// adds, "-40" removes. A bare "40" is ambiguous in the one place ambiguity costs
+// money.
+//
+// ----------------------------------------------------------------------------
+// WHY THIS LIVES HERE, AND WHY IT DOES NOT READ THE RAW VALUE
+// ----------------------------------------------------------------------------
+// This replaces two identical private copies — one in StockItemLedger, one in
+// MovementsList — that both did:
+//
+//     const formatted = formatQuantity(value);
+//     return value.trim().startsWith('-') ? formatted : `+${formatted}`;
+//
+// and both CRASHED with "value.trim is not a function" the moment they were
+// handed anything that was not a string.
+//
+// The defect was not the missing guard. It was that the function had ALREADY
+// parsed the value into a number and then reached back past that parse to the
+// unvalidated boundary value to ask a question — "is it negative?" — that the
+// parsed number answers exactly. parseNumeric accepts string | number | null |
+// undefined precisely because that is the range of shapes PostgREST emits
+// (numeric arrives as a string, int8 and JSON nulls do not), and every other
+// formatter here honours that. This one silently narrowed it back to `string`
+// in its signature and trusted the narrowing at runtime.
+//
+// So the sign now comes from the parsed number. There is nothing left to guard,
+// because there is nothing left that assumes a shape.
+export function formatSignedQuantity(
+  quantity: number | string | null | undefined,
+): string {
+  const value = parseNumeric(quantity);
+  // Unparseable or absent renders as the shared dash, never as "+—" — a sign in
+  // front of a missing value would read as a quantity of nothing.
+  if (value === null) return MISSING_VALUE;
+  const formatted = formatQuantity(value);
+  // A negative value already carries its own minus from Intl; only a
+  // non-negative one needs the plus added.
+  return value < 0 ? formatted : `+${formatted}`;
+}
+
 // A quantity column (numeric(14,4) — four decimals, because recipe and bar
 // measures are fractional). Trailing zeros are trimmed so a plain "2" does not
 // render as "2.0000", while 0.025 kg survives intact.

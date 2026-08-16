@@ -16,6 +16,7 @@ import { ComingSoonPanel } from './ComingSoonPanel';
 import { ImportHistoryTab } from './ImportHistoryTab';
 import { LocationsScreen } from './LocationsScreen';
 import { ProductsTab } from './ProductsTab';
+import { NegativeStockTab } from './NegativeStockTab';
 import { StockTakeTab } from './StockTakeTab';
 
 // THE CONSOLIDATED INVENTORY SCREEN — one page for the whole module, modelled on
@@ -294,6 +295,17 @@ export function InventoryScreen({
             categories={reference.categories}
             locationId={scopedLocationId}
             onPosted={reloadCatalogue}
+          />
+        ) : null}
+
+        {activeTab === 'negative_stock' ? (
+          <NegativeStockTab
+            tenantId={tenantId}
+            propertyId={propertyId}
+            currency={currency}
+            timezone={timezone}
+            locations={locations.rows}
+            categories={reference.categories}
           />
         ) : null}
 

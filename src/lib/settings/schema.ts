@@ -156,6 +156,23 @@ export type SettingsField =
     })
   | (BaseField & { type: 'currency'; placeholder?: string })
   | (BaseField & {
+      // A calendar date, stored as an ISO 'YYYY-MM-DD' string — which is exactly
+      // what a Postgres `date` column returns over PostgREST, so there is no
+      // conversion anywhere in the path and no timezone to get wrong.
+      //
+      // A CLEARED DATE FIELD IS A REAL VALUE, not an empty form. It serialises
+      // to '' and every settings RPC turns that into NULL via
+      // `nullif(btrim(...), '')`, so clearing posting_locked_through UNLOCKS the
+      // period rather than failing validation. That is the behaviour the field
+      // is for, so it must not be `required` unless the column genuinely is.
+      type: 'date';
+      // ISO bounds, when the column has them. The SERVER is still the authority
+      // — 038 refuses a future posting lock in its own words, naming the
+      // property's today — and these only stop the obvious mistake earlier.
+      min?: string;
+      max?: string;
+    })
+  | (BaseField & {
       type: 'select';
       options: SelectOption[];
       placeholder?: string;
@@ -220,7 +237,8 @@ export function emptyValueFor(field: SettingsField): SettingsValue {
     case 'coordinateMap': // presentational, never holds a value
       return null;
     default:
-      // text, textarea, select, color, font
+      // text, textarea, select, color, font, date — all string-valued, and for
+      // date the empty string is the meaningful "not set" the RPCs read as NULL.
       return '';
   }
 }

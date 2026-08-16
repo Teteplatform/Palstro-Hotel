@@ -24,6 +24,7 @@ import {
 } from '../../../lib/stock';
 import {
   ADJUSTMENT_REASON_EXPLANATION,
+  BATCH_FIELDS_IN_ONLY_NOTE,
   MOVING_AVERAGE_EXPLANATION,
 } from '../../../lib/stockLabels';
 import type { InventoryItem } from '../../../types/inventory';
@@ -97,6 +98,9 @@ export function StockEntryForm({
   const [quantity, setQuantity] = useState<number | null>(null);
   const [unitCost, setUnitCost] = useState<number | null>(null);
   const [date, setDate] = useState(today);
+  // 038 §1C. Only ever sent on a stock-IN of an item that tracks them.
+  const [batchCode, setBatchCode] = useState('');
+  const [expiryDate, setExpiryDate] = useState('');
   const [reason, setReason] = useState('');
   const [note, setNote] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -173,6 +177,13 @@ export function StockEntryForm({
   const item = items.find((i) => i.id === itemId) ?? null;
   const baseUnit = item?.base_unit ?? '';
 
+  // An opening balance is always stock coming IN; an adjustment is only stock in
+  // when the direction toggle says so. One expression, used by both the batch
+  // fields and the submit guard, so the form cannot ask for a batch it then
+  // fails to send.
+  const isStockIn = mode === 'opening' || direction === 'add';
+  const tracksBatch = Boolean(item?.tracks_expiry) && isStockIn;
+
   // Only ever show a position that belongs to the item currently selected.
   const shownPosition =
     position && position.inventory_item_id === itemId ? position : null;
@@ -201,6 +212,8 @@ export function StockEntryForm({
     setItemId('');
     setQuantity(null);
     setUnitCost(null);
+    setBatchCode('');
+    setExpiryDate('');
     setReason('');
     setNote('');
     setConfirm(null);
@@ -247,6 +260,10 @@ export function StockEntryForm({
           businessDate: date || null,
           note: note.trim() || null,
           idempotencyKey: key,
+          // Sent only when the item tracks them and this is stock coming IN.
+          // The server is the authority on whether they were required.
+          batchCode: tracksBatch ? batchCode.trim() || null : null,
+          expiryDate: tracksBatch ? expiryDate || null : null,
         });
         toast.success('Opening balance recorded.');
       } else {
@@ -263,6 +280,8 @@ export function StockEntryForm({
           unitCost: direction === 'add' ? unitCost : null,
           idempotencyKey: key,
           allowNegative,
+          batchCode: tracksBatch ? batchCode.trim() || null : null,
+          expiryDate: tracksBatch ? expiryDate || null : null,
         });
         toast.success('Adjustment recorded.');
       }
@@ -445,6 +464,42 @@ export function StockEntryForm({
             enter here.
           </div>
         )}
+
+        {/* BATCH AND EXPIRY — only for an item that tracks them, and ONLY ON THE
+            WAY IN (038 §1C).
+            They are deliberately absent on a removal rather than optional there:
+            which batch left is decided by the issue rules, not typed in by
+            whoever is at the keyboard, and a guess here would put a wrong answer
+            into the history a future recall reads. The server refuses a batch on
+            a stock-out for the same reason, so an optional field would only be a
+            slower way to reach a refusal. */}
+        {tracksBatch ? (
+          <>
+            <TextField
+              label="Batch code"
+              required
+              value={batchCode}
+              onChange={setBatchCode}
+              disabled={submitting}
+              placeholder="e.g. LOT-4471"
+              helpText="From the packaging. It is what a recall traces back to."
+            />
+            <DateField
+              label="Expiry date"
+              required
+              value={expiryDate}
+              onChange={setExpiryDate}
+              disabled={submitting}
+              helpText="From the packaging. Stock that arrives already expired is still recorded honestly — enter the real date."
+            />
+          </>
+        ) : null}
+
+        {item?.tracks_expiry && !isStockIn ? (
+          <p className="rounded-xl border border-dashed border-sand-border bg-white/40 px-3 py-2 text-xs text-charcoal-muted sm:col-span-2">
+            {BATCH_FIELDS_IN_ONLY_NOTE}
+          </p>
+        ) : null}
 
         <DateField
           label="Date"
