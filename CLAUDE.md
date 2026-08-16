@@ -32,9 +32,10 @@ the right order.
 
 ---
 
-## 2. Engineering non-negotiables (20)
+## 2. Engineering non-negotiables (22)
 
-Every one of these came from a real bug on a prior product. They are binding.
+Every one of these came from a real bug — most from a prior product, the last two
+from this one. They are binding.
 
 ### 1. Every list read is bounded correctly — two cases, split below
 A bounded query with no way to reach the rest is **worse** than an unbounded one:
@@ -298,6 +299,42 @@ Cross-references rule 16: as a dashboard number carries a tooltip of what it
 includes and excludes, a list total needs the same — and the tooltip must state
 that it covers the **whole filtered set, not the page**.
 
+### 21. Errors belong to the database — the client shows them, never authors them
+A refusal is raised where the rule lives. The **message carries the rule**, the
+**hint carries the way out**, and the client renders both verbatim and writes
+neither.
+*Why: a UI that restates a rule is a second source of truth, and it drifts the
+first time the rule changes — silently, because nothing errors.*
+
+Dropping the hint is the subtle half of this, and it is what makes the rule
+achievable rather than aspirational: a refusal shown without its hint says "no"
+without "instead", and the pressure is then to write the "instead" into a
+component. Every error helper appends the hint.
+```ts
+const message = err?.message?.trim();
+const hint = err?.hint?.trim();
+return hint ? `${message} — ${hint}` : message;  // never re-worded
+```
+
+### 22. A screen needs a render proof, and the proof must have been made to fail
+SQL proofs cannot render React. Any shipment that touches a surface ships a
+render proof of the **real component** (extract a seam rather than copy it), and
+that proof is not trusted until it has been made to fail against the bug it
+claims to catch.
+*Why: 1.1c shipped with forty passing SQL wiring proofs and a screen that
+crashed on first render. `pg` returns int8 AND numeric alike as strings;
+PostgREST returns int8 as a JSON **number** and numeric as a **string**. Only the
+browser ever sees the second mapping, so no amount of SQL can catch a formatter
+that assumes the first. Every green proof was honest and the screen was still
+broken.*
+```bash
+npm run proof:render   # proofs/ledgerRender.tsx
+```
+A corollary that follows from the same fact: **never re-narrow a boundary value's
+type.** `parseNumeric` accepts `string | number | null | undefined` because that
+is the full range PostgREST emits; a helper that narrows its own parameter back
+to `string` and then trusts the narrowing at runtime is the exact defect above.
+
 ---
 
 ## 3. Multi-tenancy model
@@ -506,7 +543,7 @@ first.
 
 ## 7. Before-you-write-code checklist (run every session)
 
-1. **Read this file.** Confirm the 19 non-negotiables are fresh in mind.
+1. **Read this file.** Confirm the 22 non-negotiables are fresh in mind.
    **Starting a new module?** Read [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
    first — the system map, shared engines, and dependency order that decide where
    the module fits and what must exist before it.
@@ -530,6 +567,16 @@ first.
    (rule 16).
 10. **Handle the edge cases:** empty, error, loading, network-drop, concurrent
     actions — with clear user-facing messages. No silent failures.
+11. **Touching inventory, F&B or housekeeping?** Read [§9, the inventory
+    standing rules](#9-inventory-the-standing-rules) — one way in, only the store
+    receives, base units only, adjustment ≠ write-off, blind counts, both sides
+    of a requisition.
+12. **Writing a user-facing error?** You probably should not be. The rule lives
+    in the database and the client shows its message AND its hint, verbatim
+    (rule 21).
+13. **Touching a screen?** It ships a render proof, and you have made that proof
+    fail before trusting it (rule 22). A passing SQL proof says nothing about
+    what the browser does with the JSON.
 
 ---
 
@@ -543,3 +590,80 @@ first.
   on it (and at what measured ratio), so building a component never requires
   recomputing contrast. If a new pairing is needed, prove it at the token and
   record the ratio there.
+
+---
+
+## 9. Inventory: the standing rules
+
+Decisions already made and agreed. They are **not** in the build tracker,
+because the tracker records what *ships*; these record what is *true*. Read them
+before touching anything in the inventory, F&B or housekeeping modules — every
+one of them is load-bearing for a report further downstream.
+
+**One way in.** The upload page creates items and, **for a brand-new item only**,
+sets its opening balance. A row whose item name already exists is skipped
+**whole** — definition and quantity both — so re-uploading the same file can
+never double stock.
+
+**After creation, stock moves only by a recorded movement.** An adjustment with
+a mandatory reason, a counted stock take, a receipt, an issue, a write-off, or a
+reversal. Opening balance is a one-time event per item per location and is
+**never** a way in.
+
+**Only the store receives.** Goods reach the kitchen, bar or housekeeping by
+**leaving the store**, never by arriving from outside. A manager may authorise a
+direct receipt elsewhere with a mandatory reason; every one of those appears on
+the **received outside the store** report, alongside every opening balance posted
+after go-live and every negative position.
+*Why the exception exists on purpose: without it, staff who buy something
+directly will fake a store receipt and an instant requisition, which is worse
+than no paperwork.*
+
+**Base units only, no conversion factors.** Stock is held in the smallest unit
+actually measured — kg, litre, piece. The storekeeper converts and enters the
+real measured quantity.
+*Why: a "bag" is ambiguous, and entering real kilos is what catches a 50 kg bag
+that weighs 47.*
+Where the ergonomics hurt, an entry field may accept `12 x 25` and show
+`300 kg` before saving. **That is a calculator, not a stored conversion factor**,
+and nothing persists but the base quantity.
+
+**Cost.** Valuation is the moving average, always. `inventory_items.purchase_cost`
+is **informational** and must never be used to value stock. A receipt at a new
+price recomputes the average; stock out carries at the current average and leaves
+it unchanged. Cost of sale is read from `stock_movements.carried_unit_cost` and
+never recomputed (§6).
+
+**Price.** The **item** owns its selling price. **Blank means not sold, which is
+not the same as zero.** Where an outlet price exists it overrides the item price
+at the point of sale, and the price actually charged is **locked onto the sale**,
+the way `booking_nights` locks the rate. Changing a price never rewrites a past
+sale. The menu **reads** these prices and never defines its own.
+
+**Adjustment and write-off are different things.** An adjustment means *the count
+was wrong*. A write-off means *we lost it, and here is why* — spoilage, breakage,
+expiry, staff meal, complimentary.
+*Why: blur them and the variance report is worthless.*
+
+**Negative stock is flagged, never blocked.** A negative on-hand means stock left
+without a movement.
+*Why: blocking an issue stops service and teaches staff to invent fake receipts,
+which destroys the ledger far more thoroughly than an honest negative.*
+
+**Counts are blind.** The counter types what they physically counted. Expected
+quantity and variance appear **only after submitting**.
+*Why: a count taken with the expected figure on screen proves nothing.*
+
+**Requisitions need both sides.** The requester raises it, the store ticks what it
+actually sends, the requester confirms receipt. **Stock does not move until both
+agree.** That mutual confirmation is the theft control — and it only means
+anything once two different people have two different logins.
+
+Two further rules were first learned here and apply to the **whole product**, so
+they live with the non-negotiables rather than in this section — but they bind
+every inventory surface just the same:
+
+- **Errors belong to the database** (rule 21). The message carries the rule, the
+  hint carries the way out, the client authors neither.
+- **A screen needs a render proof** (rule 22), and the proof must have been made
+  to fail before it is trusted.
