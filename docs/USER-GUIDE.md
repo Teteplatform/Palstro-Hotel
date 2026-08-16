@@ -1035,6 +1035,28 @@ the cost of what just arrived are **blended in proportion to their quantities**.
 already is, so cooking with the rice cannot change what the rice still in the
 store is worth. Only buying more at a different price moves it.
 
+**What each issue actually cost is written down at the moment it happens**, and
+never worked out again afterwards. That is what lets a food-cost figure from last
+March still be the figure that was true last March, rather than something
+recalculated from today's prices.
+
+#### When stock says less than nothing
+
+A location can show a **negative** quantity — say **−15 kg** — and the system
+will never round that up to zero or refuse to display it.
+
+**It means stock left without a movement behind it.** In practice that is one of
+three things: a delivery that was never entered, an issue posted against the
+wrong location, or stock that walked. It is a question worth asking, not a
+display fault, and hiding it would hide exactly the thing this module exists to
+show you.
+
+The system will **warn you before** an entry takes a location below zero, and
+tell you what it would come to, so a slipped decimal point gets caught. If you
+confirm, it records it. Serving guests always wins: a system that refuses to let
+the kitchen work is a system whose staff start writing fake receipts to get
+through the night, and then nothing in it can be trusted.
+
 ### Adding or correcting stock
 
 **Where:** the **Adjustments** tab, or **Add or correct stock** on any item's row.
@@ -1067,6 +1089,61 @@ why, and in whose name — filtered by location, item, date range, or direction.
 Nothing on that list can be edited, by anyone.
 
 ![screenshot: the Adjustments tab, with a correction being recorded above the list of past ones](/help/stock-adjustments.png)
+
+### Reversing a stock movement
+
+Sometimes a movement should not have been posted at all — a delivery keyed
+against the wrong item, or a receipt for stock that was rejected at the gate. A
+**reversal** undoes it.
+
+**It works exactly like reversing a charge on a folio**, and the rules are the
+same three:
+
+- **A manager's PIN is always required.** There is no size of movement small
+  enough to skip it. Reversal is the power to erase, and the reversal is recorded
+  against the approving manager by name.
+- **A reason is required**, and it is kept permanently.
+- **The original movement is never touched.** The system posts an equal and
+  opposite movement beside it, so both stay visible — what was recorded, and what
+  undid it.
+
+**A reversal is dated today, not the day of the original.** If a receipt from
+last Tuesday is reversed this Friday, Tuesday's stock report stays exactly as it
+was printed and the correction appears on Friday. Two people running the same
+report a week apart should never get different numbers.
+
+**The cost unwinds exactly.** Reversing a delivery removes precisely the value it
+added, so the average cost goes back to what it was before — not to something
+approximately right.
+
+**A movement can be reversed once, ever.** Asking a second time tells you when it
+was already reversed. A reversal cannot itself be reversed; if the stock needs to
+move again, post it again.
+
+**An opening balance cannot be reversed.** It is the starting line of that item's
+history in that location. Correct it with an adjustment instead — before anything
+else has moved, an adjustment unwinds it exactly.
+
+### Closing a period
+
+**Where:** Settings → Finance.
+
+Set **Postings locked through** to a date and nothing can be recorded on or
+before it. Anyone who tries is told which date is locked and which date they were
+trying to post to.
+
+This is how you make "we have reported this month" a fact rather than something
+everybody is trusted to remember. Without it, somebody corrects a February figure
+in April and every report printed since February is quietly wrong.
+
+You cannot set the lock to a date in the future — a period is closed once it has
+happened, not before. Moving the lock is recorded, like every other settings
+change.
+
+> **Write-offs, requisitions and purchase receipts are not built yet.** Today,
+> stock that spoils or breaks is recorded as an **adjustment** with the reason
+> written out. When write-offs arrive they will be their own kind of movement so
+> that wastage can be reported on separately from clerical corrections.
 
 ### Counting a location
 

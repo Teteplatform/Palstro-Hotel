@@ -405,6 +405,19 @@ two, because recipe ingredients (0.0250 kg per plate) and bar shot measures are
 fractional. Rounding to 2 dp introduces drift that destroys the variance
 reports the system exists to produce.
 
+**Cost of sale is READ, never recomputed.** When stock leaves, what it cost is
+written onto the movement (`stock_movements.carried_unit_cost`) at that instant,
+and every consumption figure, food-cost report and P&L line reads that column.
+Nothing re-derives it from the movement history. *Why: a moving average is
+path-dependent, so the cost of an issue is knowable only at the moment it
+happens — one more receipt and the fold produces a different number. A report
+that recomputes will disagree with the one that read, and neither will be
+reproducible. This is the same principle as `booking_nights` locking the nightly
+rate: a fact captured when it was true.* This does **not** make it a cache under
+rule 6 — a cache stores something also derivable now and must ship a recompute
+function; this stores something derivable **only** at write time, and there is
+deliberately no recompute function because a correct one cannot exist.
+
 **Business date.** Every operational table (something that *happened*) carries
 `business_date date not null`, separate from `created_at timestamptz`. Hotels
 run a night audit, so a bar sale at 02:00 belongs to the previous business day.
