@@ -1,10 +1,11 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useId, useState } from 'react';
 import {
   ChevronDownIcon,
   DownloadIcon,
   MailIcon,
   WhatsappIcon,
 } from '../../ui/icons';
+import { Popover } from '../../ui/Popover';
 import { useActiveProperty } from '../../../hooks/useActiveProperty';
 import { useToast } from '../../ui/Toast';
 import {
@@ -95,7 +96,9 @@ export function StatementExportMenu({
   // does not already hold the statement, and that wait needs a label of its own —
   // `busy` belongs to the file exports.
   const [preparingEmail, setPreparingEmail] = useState(false);
-  const wrapper = useRef<HTMLDivElement | null>(null);
+  // Floats through the shared Popover, portalled to document.body — this menu
+  // sits on the guest home and the stay page, both of which scroll.
+  const [trigger, setTrigger] = useState<HTMLButtonElement | null>(null);
   const menuId = useId();
   const active = useActiveProperty();
   const toast = useToast();
@@ -106,22 +109,6 @@ export function StatementExportMenu({
     statement,
     property: resolvedProperty,
   });
-
-  useEffect(() => {
-    if (!open) return;
-    function onPointerDown(event: PointerEvent) {
-      if (!wrapper.current?.contains(event.target as Node)) setOpen(false);
-    }
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') setOpen(false);
-    }
-    document.addEventListener('pointerdown', onPointerDown);
-    document.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.removeEventListener('pointerdown', onPointerDown);
-      document.removeEventListener('keydown', onKeyDown);
-    };
-  }, [open]);
 
   const busyLabel = preparingEmail
     ? 'Email'
@@ -149,8 +136,9 @@ export function StatementExportMenu({
   }
 
   return (
-    <div ref={wrapper} className="relative print:hidden">
+    <div className="print:hidden">
       <button
+        ref={setTrigger}
         type="button"
         aria-haspopup="menu"
         aria-expanded={open}
@@ -175,13 +163,17 @@ export function StatementExportMenu({
         <ChevronDownIcon className="h-3.5 w-3.5" />
       </button>
 
-      {open ? (
-        <div
-          id={menuId}
-          role="menu"
-          aria-label="Export or share this statement"
-          className="absolute right-0 top-full z-20 mt-1 w-64 max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-sand-border bg-white shadow-lg"
-        >
+      <Popover
+        open={open}
+        onClose={() => setOpen(false)}
+        anchor={trigger}
+        align="right"
+        role="menu"
+        ariaLabel="Export or share this statement"
+        id={menuId}
+        className="w-64 max-w-[calc(100vw-1rem)]"
+      >
+        <div>
           {ITEMS.map((item) => (
             <button
               key={item.action}
@@ -221,7 +213,7 @@ export function StatementExportMenu({
             </button>
           ))}
         </div>
-      ) : null}
+      </Popover>
 
       {/* Mounted only while sending. The dialog is where the address is
           confirmed or corrected — the menu never sends anything by itself. */}

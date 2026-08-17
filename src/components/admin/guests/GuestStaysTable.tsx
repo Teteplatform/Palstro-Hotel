@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { KebabIcon } from '../../ui/icons';
+import { Popover } from '../../ui/Popover';
 import { formatMoney, MISSING_VALUE, parseNumeric } from '../../../lib/format';
 import { formatShortDate } from '../../../lib/date';
 import { bookingStatusLabel, bookingStatusTone } from '../../../lib/bookingLabels';
@@ -333,29 +334,18 @@ function StayActionsMenu({
   onOpen?: () => void;
 }) {
   const [open, setOpen] = useState(false);
-  const wrapper = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    function onPointerDown(event: PointerEvent) {
-      if (!wrapper.current?.contains(event.target as Node)) setOpen(false);
-    }
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') setOpen(false);
-    }
-    document.addEventListener('pointerdown', onPointerDown);
-    document.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.removeEventListener('pointerdown', onPointerDown);
-      document.removeEventListener('keydown', onKeyDown);
-    };
-  }, [open]);
+  // The floating panel goes through the shared Popover, which portals it to
+  // document.body. It used to be an absolutely-positioned child of this cell,
+  // and the stays table scrolls — so on a narrow window the menu was clipped by
+  // its own table exactly as the stock count's was.
+  const [trigger, setTrigger] = useState<HTMLButtonElement | null>(null);
 
   if (actions.length === 0) return null;
 
   return (
-    <div ref={wrapper} className="relative print:hidden">
+    <div className="print:hidden">
       <button
+        ref={setTrigger}
         type="button"
         aria-haspopup="menu"
         aria-expanded={open}
@@ -372,31 +362,36 @@ function StayActionsMenu({
       >
         <KebabIcon className="h-4 w-4" />
       </button>
-      {open ? (
-        <div
-          role="menu"
-          // Opens to the RIGHT of the kebab, which is the only direction with
-          // room when the control sits in the first column at 360px.
-          className="absolute left-0 top-full z-20 mt-1 min-w-[11rem] overflow-hidden rounded-xl border border-sand-border bg-white shadow-lg"
-        >
-          {actions.map((item) => (
-            <button
-              key={item.key}
-              type="button"
-              role="menuitem"
-              onClick={() => {
-                setOpen(false);
-                item.onSelect();
-              }}
-              className={`block w-full whitespace-nowrap px-3 py-2 text-left text-xs font-semibold transition-colors hover:bg-sand focus-visible:bg-sand focus-visible:outline-none ${
-                item.tone === 'destructive' ? 'text-negative' : 'text-charcoal'
-              }`}
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
-      ) : null}
+      <Popover
+        open={open}
+        onClose={() => setOpen(false)}
+        anchor={trigger}
+        // Opens to the RIGHT of the kebab, which is the only direction with room
+        // when the control sits in the first column at 360px. Popover clamps it
+        // to the viewport regardless, so it can no longer run off that edge.
+        align="left"
+        role="menu"
+        ariaLabel={label}
+        className="min-w-[11rem]"
+      >
+        {actions.map((item) => (
+          <button
+            key={item.key}
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setOpen(false);
+              trigger?.focus({ preventScroll: true });
+              item.onSelect();
+            }}
+            className={`block w-full whitespace-nowrap px-3 py-2 text-left text-xs font-semibold transition-colors hover:bg-sand focus-visible:bg-sand focus-visible:outline-none ${
+              item.tone === 'destructive' ? 'text-negative' : 'text-charcoal'
+            }`}
+          >
+            {item.label}
+          </button>
+        ))}
+      </Popover>
     </div>
   );
 }

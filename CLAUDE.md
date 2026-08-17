@@ -32,9 +32,9 @@ the right order.
 
 ---
 
-## 2. Engineering non-negotiables (22)
+## 2. Engineering non-negotiables (23)
 
-Every one of these came from a real bug — most from a prior product, the last two
+Every one of these came from a real bug — most from a prior product, the last three
 from this one. They are binding.
 
 ### 1. Every list read is bounded correctly — two cases, split below
@@ -335,6 +335,43 @@ type.** `parseNumeric` accepts `string | number | null | undefined` because that
 is the full range PostgREST emits; a helper that narrows its own parameter back
 to `string` and then trusts the narrowing at runtime is the exact defect above.
 
+### 23. Popovers are never clipped, and every action is reachable
+Any floating layer — kebab menu, dropdown, tooltip, date picker, autocomplete —
+renders in a **portal to `document.body`** and is positioned against its trigger.
+It is **never a child of a scrolling or overflow-hidden container**. It closes on
+outside click, on Escape and on ancestor scroll, returns focus to the trigger,
+and **flips above the trigger when there is no room below**.
+*Why: a menu whose items cannot be reached is the same defect as a button that
+does nothing. The kebab on a stock count row opened and was cut in half — it was
+an absolutely-positioned child of the table's `overflow-x-auto` wrapper, so the
+wrapper clipped it. Four other menus in this codebase had the identical markup,
+which makes it the pattern rather than one screen's mistake.*
+
+**Do not fix this with `overflow: visible` on the parent.** It fixes one screen,
+leaves the next one broken, and usually breaks the scrolling the parent needed —
+the wrapper's overflow is what lets a wide table scroll sideways at 360px. There
+is also no single parent to fix: the clipping ancestor is whichever one happens
+to have overflow, and that changes as layouts change, silently.
+
+A second symptom travels with this one and is routinely misread as a table-width
+problem: **an absolutely-positioned child still contributes to its scroll
+container's `scrollWidth`**, so an overhanging menu grows a horizontal scrollbar
+on the card it sits in. Portalling the panel removes the scrollbar too. If a card
+has a scrollbar it should not have, look for a floating layer inside it before
+touching the table's widths.
+
+```tsx
+// One primitive owns the behaviour; each menu keeps its own look.
+<Popover open={open} onClose={close} anchor={trigger} align="right" role="menu">
+```
+The anchor is held in **state via a callback ref**, never read from a ref during
+render — React does not re-render when `.current` changes, so the popover would
+position against whatever was there on the previous pass.
+
+**Every action must be reachable at 1366×768 and at 360px wide.** The last row of
+a table is the case that breaks, so it is the case to check — both in the render
+proof and on the live site.
+
 ---
 
 ## 3. Multi-tenancy model
@@ -543,7 +580,7 @@ first.
 
 ## 7. Before-you-write-code checklist (run every session)
 
-1. **Read this file.** Confirm the 22 non-negotiables are fresh in mind.
+1. **Read this file.** Confirm the 23 non-negotiables are fresh in mind.
    **Starting a new module?** Read [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
    first — the system map, shared engines, and dependency order that decide where
    the module fits and what must exist before it.

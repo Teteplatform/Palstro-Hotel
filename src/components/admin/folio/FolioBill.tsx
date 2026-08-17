@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
+import { Popover } from '../../ui/Popover';
 import { CalculationNote } from '../../ui/CalculationNote';
 import { useAuth } from '../../../hooks/useAuth';
 import { useFolio } from '../../../hooks/useFolio';
@@ -1222,27 +1223,15 @@ function LineActions({
   items: { label: string; onClick: () => void }[];
 }) {
   const [open, setOpen] = useState(false);
-  const wrapper = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    function onPointerDown(event: PointerEvent) {
-      if (!wrapper.current?.contains(event.target as Node)) setOpen(false);
-    }
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') setOpen(false);
-    }
-    document.addEventListener('pointerdown', onPointerDown);
-    document.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.removeEventListener('pointerdown', onPointerDown);
-      document.removeEventListener('keydown', onKeyDown);
-    };
-  }, [open]);
+  // Floats through the shared Popover (portalled to document.body). As an
+  // absolutely-positioned child it was clipped by the bill's own scrolling
+  // wrapper — the same defect as the stock count kebab, in a different table.
+  const [trigger, setTrigger] = useState<HTMLButtonElement | null>(null);
 
   return (
-    <div ref={wrapper} className="relative flex justify-end">
+    <div className="flex justify-end">
       <button
+        ref={setTrigger}
         type="button"
         aria-haspopup="menu"
         aria-expanded={open}
@@ -1254,27 +1243,31 @@ function LineActions({
       >
         ⋯
       </button>
-      {open ? (
-        <div
-          role="menu"
-          className="absolute right-0 top-full z-10 mt-1 min-w-[8rem] overflow-hidden rounded-xl border border-sand-border bg-white shadow-lg"
-        >
-          {items.map((item) => (
-            <button
-              key={item.label}
-              type="button"
-              role="menuitem"
-              onClick={() => {
-                setOpen(false);
-                item.onClick();
-              }}
-              className="block w-full px-3 py-2 text-left text-xs font-semibold text-charcoal transition-colors hover:bg-sand focus-visible:bg-sand focus-visible:outline-none"
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
-      ) : null}
+      <Popover
+        open={open}
+        onClose={() => setOpen(false)}
+        anchor={trigger}
+        align="right"
+        role="menu"
+        ariaLabel="Line actions"
+        className="min-w-[8rem]"
+      >
+        {items.map((item) => (
+          <button
+            key={item.label}
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setOpen(false);
+              trigger?.focus({ preventScroll: true });
+              item.onClick();
+            }}
+            className="block w-full px-3 py-2 text-left text-xs font-semibold text-charcoal transition-colors hover:bg-sand focus-visible:bg-sand focus-visible:outline-none"
+          >
+            {item.label}
+          </button>
+        ))}
+      </Popover>
     </div>
   );
 }

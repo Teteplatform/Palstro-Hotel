@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
+import { Popover } from '../ui/Popover';
 import { useAuth } from '../../hooks/useAuth';
 import { useToast } from '../ui/Toast';
 import {
@@ -35,23 +36,12 @@ export function UserMenu({ tenantId, canHoldManagerPin }: UserMenuProps) {
   const [open, setOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const [pinOpen, setPinOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    function onDocClick(e: MouseEvent) {
-      if (!containerRef.current?.contains(e.target as Node)) setOpen(false);
-    }
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape') setOpen(false);
-    }
-    document.addEventListener('mousedown', onDocClick);
-    document.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.removeEventListener('mousedown', onDocClick);
-      document.removeEventListener('keydown', onKeyDown);
-    };
-  }, [open]);
+  // Floats through the shared Popover. The header is sticky rather than
+  // scrolling, so this one was not visibly clipped — but it is a floating layer,
+  // and the standing rule (CLAUDE.md §8) admits no "this one is fine" exceptions:
+  // that judgement is exactly what was made about every other menu here before
+  // one of them ended up half unreachable.
+  const [trigger, setTrigger] = useState<HTMLButtonElement | null>(null);
 
   async function handleSignOut() {
     if (signingOut) return;
@@ -73,8 +63,9 @@ export function UserMenu({ tenantId, canHoldManagerPin }: UserMenuProps) {
   const email = user?.email ?? MISSING_VALUE;
 
   return (
-    <div className="relative" ref={containerRef}>
+    <div>
       <button
+        ref={setTrigger}
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="menu"
@@ -88,11 +79,16 @@ export function UserMenu({ tenantId, canHoldManagerPin }: UserMenuProps) {
         <ChevronDownIcon className="h-4 w-4 text-charcoal-muted" />
       </button>
 
-      {open ? (
-        <div
-          role="menu"
-          className="absolute right-0 z-20 mt-2 w-56 overflow-hidden rounded-xl border border-sand-border bg-cream shadow-lg"
-        >
+      <Popover
+        open={open}
+        onClose={() => setOpen(false)}
+        anchor={trigger}
+        align="right"
+        role="menu"
+        ariaLabel="Account"
+        className="w-56 !bg-cream"
+      >
+        <div>
           <div className="border-b border-sand-border px-4 py-3">
             <p className="text-xs text-charcoal-muted">Signed in as</p>
             <p className="truncate text-sm font-semibold text-charcoal">
@@ -124,7 +120,7 @@ export function UserMenu({ tenantId, canHoldManagerPin }: UserMenuProps) {
             {signingOut ? 'Signing out…' : 'Sign out'}
           </button>
         </div>
-      ) : null}
+      </Popover>
 
       {pinOpen && tenantId ? (
         <ManagerPinDialog tenantId={tenantId} onClose={() => setPinOpen(false)} />
