@@ -43,7 +43,10 @@ Three kinds of staff use the admin.
 | Set **your own** approval PIN | No | Yes | Yes |
 | Room types, rates, companies, settings, site editor | No | Yes | Yes |
 | Inventory items and stock locations | No | Yes | Yes |
-| Record an opening balance, an adjustment or a stock take | Yes — recorded against you | Yes | Yes |
+| Record an opening balance or an adjustment | Yes — recorded against you | Yes | Yes |
+| Start, fill in and abandon a stock take | Yes — recorded against you | Yes | Yes |
+| Finish a stock take worth more than the approval threshold | Needs a manager's PIN | Yes — and named as approver | Yes |
+| Undo a finished stock take | Needs a manager's PIN, always | Yes — and named as approver | Yes |
 | Load opening stock from a spreadsheet | Quantities yes — recorded against you. Rows that **create new items** need an owner. | Yes | Yes |
 
 **Two things to know about this table.**
@@ -541,7 +544,8 @@ Everything above, plus the approvals. All of it turns on your PIN.
   owner, not support, not this system. It is stored scrambled, one way.
 - **Forgotten it?** Nobody can recover it. Set a new one here; that replaces it.
 - **A manager with no PIN cannot approve anything**, so a shift with no
-  PIN-holding manager is a shift that cannot reverse a payment. Set it on day
+  PIN-holding manager is a shift that cannot reverse a payment — or finish a
+  stock take that found more than the hotel's approval threshold. Set it on day
   one.
 - Avoid `1111` or `1234` — obvious PINs are rejected.
 - If you work for two hotel groups, you have a separate PIN for each.
@@ -722,7 +726,7 @@ Switching tabs with unsaved changes warns you first.
 | **Content** | Tagline, about text and image, hero images (up to 5), gallery, amenities, which sections show on the guest site and in what order. |
 | **Contact** | Hotel name, phone, email, address, map coordinates with a live pin preview, directions. **Invoices and confirmations read these too.** |
 | **Operations** | Timezone, currency, night-audit time, online booking on/off. |
-| **Finance** | The discount approval threshold. Private to your staff — never shown on the guest site. |
+| **Finance** | The discount approval threshold, the stock count approval threshold, and the date your postings are locked through. Private to your staff — never shown on the guest site. |
 | **Tax** | Default VAT rate for the company, entered as a percentage (e.g. `7.5`). |
 
 **Two settings that are not cosmetic:**
@@ -737,6 +741,14 @@ Switching tabs with unsaved changes warns you first.
 can discount without a manager. Above it, a manager's PIN is required and that
 manager is recorded as the approver. A **full comp always needs a PIN**, whatever
 this is set to. Set it to **0** to require a manager for every discount.
+
+**The stock count approval threshold** (Finance tab) is the same idea for stock
+takes: a count whose differences are worth more than this cannot be finished
+without a manager's PIN, and that manager is named on the count. It is a
+**value, not a quantity** — 3 kg of saffron and 3 kg of rice are not the same
+event — and stock found and stock missing both count towards it, so they never
+cancel out. Set it to **0** to require a manager for every count that finds any
+difference at all.
 
 **Edit visually** (top right of Settings) opens the **Site editor**: your real
 guest site with editing switched on, so you click the thing you want to change
@@ -814,7 +826,7 @@ The tabs:
 | **Products** | The main list: every item, with what you hold of it and what it is worth. |
 | **Categories** | The groups your stock reports are broken down by. |
 | **Adjustments** | Every correction ever posted, and the form that posts one. |
-| **Stock Take** | Count a location and record the differences. |
+| **Stock Take** | Start, carry on and finish a count of one location. The count is a document: it survives a reload and a shift change, and it is blind until you finish it. |
 | **Import History** | Every opening balance loaded, with who loaded it and when. |
 | **Price Update** | Marked **SOON** — selling prices arrive with the menu. The tab says what it needs first and what to use meanwhile. |
 
@@ -1173,7 +1185,9 @@ real expiry. Nothing refuses it, and a written-down truth beats a tidy fiction.
 
 Set **Postings locked through** to a date and nothing can be recorded on or
 before it. Anyone who tries is told which date is locked and which date they were
-trying to post to.
+trying to post to. That covers stock takes at both ends: a count dated inside a
+closed period cannot be **started**, and a count already open cannot be
+**finished** if the books close underneath it.
 
 This is how you make "we have reported this month" a fact rather than something
 everybody is trusted to remember. Without it, somebody corrects a February figure
@@ -1217,26 +1231,219 @@ screen that failed to load.
 
 **Where:** the **Stock Take** tab.
 
-Pick the location and the day you counted, then walk the store keying what is
-actually on each shelf beside what the system believes. Nothing is pre-filled —
-a counted quantity copied from the system is the system agreeing with itself,
-which is the exact check a count exists to break.
+A count is a **document**, not a form. You start it, fill it in, walk away from
+it, come back to it, and finish it. It survives closing the page, changing
+device and handing over to the next shift.
 
-The sheet **keeps what you have keyed as you page through**, and **Record the
-differences** posts all of it, not the page you are on. Only items whose count
-differs produce anything; counting a shelf and finding it right records nothing,
-which is correct.
+#### Starting a count
 
-Each difference is recorded as a normal **adjustment**, with the count and its
-date as the reason — permanent, and in your name. A line that fails stays on your
-sheet with the reason beside it, so you can fix it and post again without any
-risk of recording it twice.
+Pick the location and the day you counted, add a note if it helps ("counted with
+the chef"), and press **Start counting**. The count gets a number — ST-000004 —
+that you can refer to out loud, and it **opens on its own page**. That page has
+its own web address, so you can bookmark it, send it to somebody ("please finish
+ST-000004"), or just close the tab and come back later.
 
-Only items that have moved in that location can be counted: an item with no
-history there has no cost to value a count against. Give it an opening balance
-first.
+The Stock Take tab keeps the list of every count on file. Each row has a **⋮
+menu** with what you can do with that one — carry on counting it, open its
+report, print it, or undo it.
 
-![screenshot: a stock take part-counted, with three differences ready to record](/help/stock-take.png)
+Starting takes a **snapshot** of what the system thinks that location holds, at
+that moment. Everything you count is compared against the snapshot, which is why
+a delivery that arrives while you are still counting does not turn into a
+difference you caused: it shows up as stock the count did not see, and the
+delivery stays in the ledger as the delivery it was.
+
+**One count per location at a time.** If somebody already has one open in that
+store, you are told which one and asked to carry on with it or abandon it. Two
+people counting the same shelves are measuring two different moments, and
+whichever finished second would post its differences against a snapshot the first
+had already moved.
+
+Only items that have moved in that location are on the sheet: an item with no
+history there has no cost to value a count against. If you find something on a
+shelf that the system has never seen, that is an **opening balance**, loaded from
+the spreadsheet — not a count.
+
+#### Why you cannot see what the system expects
+
+**The count is blind, and it is blind on the server.** The expected quantity is
+not hidden on the screen — it is never sent to your browser at all until the
+count is finished. There is no toggle, no "show me anyway", and nothing in the
+page that could be persuaded to reveal it.
+
+That is deliberate, and it is the whole reason a count is worth doing. If the
+expected figure were on screen, the quickest way to finish a long sheet would be
+to type it back — and then the count would prove only that the system agrees with
+itself. Finding out where that belief is *wrong* is the point.
+
+The same rule is why **abandoning a count does not reveal it either**: otherwise
+starting a count and cancelling it would be a one-click way to read the answers
+before counting for real.
+
+#### Printing the sheet to carry round the store
+
+**Print the count sheet** opens a clean page in a new tab: your hotel's name, the
+count number, the location, the date, and every shelf on the count with a **blank
+box** to write in and a space for notes. There are signature lines at the bottom
+for whoever counted and whoever checked.
+
+It has **no expected quantities on it**, for exactly the reason the screen does
+not — a printed sheet with the answers on it would be photocopied for years.
+
+Print it, walk the store with a biro, then key what you wrote in when you get
+back to a screen. Or key straight into a phone as you go. Both work; the sheet is
+the same either way.
+
+#### Filling it in
+
+Key what is physically on the shelf and move on. **Every line is saved where you
+type it** — there is no Post button to remember and nothing waiting in the page
+to be lost. Each shelf shows **Counted** or **Not counted** beside it, and the
+header keeps a running "142 counted, 38 still to count" for the whole sheet, not
+just the page you are looking at.
+
+The page shows two lists. **Still to count** is the working list and is always
+open. **Already counted** is folded away underneath it — open it when you need to
+check or correct something you have already keyed. They page separately, so
+looking at what you have done never loses your place in what is left.
+
+Two things that look similar and are completely different:
+
+| What you do | What it means | What it posts |
+| --- | --- | --- |
+| Leave a line alone | **Not counted.** Nobody has been to that shelf. | Nothing at all. The stock is left exactly as it is. |
+| Type **0** | **Counted, and there is none.** | The whole expected quantity is written off. |
+
+So a partial count is a perfectly good count: walk the dry goods today, leave the
+bar for tomorrow, and the bar is untouched. What you must not do is type 0 down a
+column of shelves you have not been to.
+
+To undo a line you keyed against the wrong shelf, **clear the field**. That puts
+it back to "not counted" — which is not the same as typing 0.
+
+#### Finishing it, and the manager PIN
+
+**Finish the count** turns every difference into a stock movement, dated the day
+you counted. Shelves you never counted are left alone. A shelf that matched
+posts nothing — counting something and finding it right is a real and common
+outcome.
+
+A count whose differences are worth more than your hotel's **stock count
+approval threshold** needs a manager's PIN to finish. The threshold is a
+**value**, not a quantity: 3 kg of saffron and 3 kg of rice are not the same
+event. Stock found and stock missing both count towards it, so they never cancel
+each other out. Owners set it under *Settings → Finance*; 0 means every count
+that finds any difference at all needs a manager.
+
+**The PIN box is always there and is often not needed.** The screen cannot tell
+you in advance whether yours needs one — it would have to show you the answer you
+are counting against to do it. So it offers the box, you leave it empty if you
+have the authority, and if a manager was needed you are told plainly and the
+count stays open until one is there. Nothing is posted by a refused finish.
+
+> **This is an approval, not a reversal.** The PIN box on this screen used to say
+> "authorise this reversal", which was wrong and confusing — nothing is being
+> reversed when a count is finished. A manager approving a count and a manager
+> undoing one are two different acts, and the screen now says which is which.
+
+#### If stock moved while you were counting
+
+Finishing checks one more thing, and stops to ask if it finds it: **did stock
+move in this location while the count was running, on shelves you counted
+afterwards?**
+
+That is the one case the snapshot cannot see. Say the count starts with 100 kg of
+rice on file, a delivery of 20 kg is received at 10:00 and put on the shelf, and
+you reach that shelf at 11:00 and count 120. The difference is measured against
+the snapshot — 120 − 100 = **+20** — so the same 20 kg is recorded twice: once as
+the delivery, and again as stock the count appears to have found.
+
+So the screen stops, **names the items**, and gives you two choices:
+
+- **Go back and check** — usually the right answer. Look at those items'
+  movements, clear the affected lines and count them again.
+- **Finish anyway** — when you know the count is right (the delivery was still in
+  the corridor when you counted, so the +20 is a genuine find).
+
+The system does **not** quietly subtract the delivery for you. It cannot know
+whether you saw it, and a guess dressed up as arithmetic would delete a real
+finding.
+
+**Counting a shelf *before* stock moves on it is fine and always was** — that is
+the normal working day, and it does not warn. It is only counting *after* the
+movement that double-counts. The same applies to stock going out: count a shelf
+after an issue and the difference double-subtracts in the same way.
+
+If your books are **closed through** a date that covers the count, it cannot be
+started or finished. See *Closing a period*.
+
+#### What to do with the variance
+
+The moment the count is finished the **variance report** appears: expected,
+counted, the difference and what the difference is worth, line by line and in
+total, plus how many shelves were counted and how many were not.
+
+Read it as three questions:
+
+1. **Is any single line big?** One large difference is usually a recording error
+   — a delivery entered against the wrong location, or an issue posted twice.
+   Open that item's movements from the Products tab and read down the list.
+2. **Is the same item short every month?** That is the pattern the whole module
+   exists to surface. A steady drift in one direction is not a counting mistake.
+3. **Is everything a little bit out?** Check the unit. Stock is held in the
+   smallest unit you actually measure, and a bag counted as a bag when the system
+   holds kilos will be out by exactly the bag size every time.
+
+The differences are recorded as **count corrections**, which are deliberately a
+different kind of movement from an adjustment you type in yourself. That is what
+lets a manager ask "what did our counts find this month?" without the answer
+being diluted by ordinary clerical corrections. None of them can be edited or
+deleted; a mistake in a count is answered by another count, so both stay visible.
+
+Every finished and abandoned count stays on file under **Counts on file**, with
+who started it, who finished it, and which manager approved it.
+
+The report prints too: **Print** on the count, or **Print or save as PDF** from
+its ⋮ menu, opens it as a clean page with your hotel's name at the top and
+signature lines at the bottom, ready to sign and file.
+
+#### Abandoning a count
+
+If a count has to be given up, **Abandon this count** closes it with a reason.
+Nothing is posted and no stock changes. What was counted stays readable, with the
+names against it — an abandoned count is itself a fact worth keeping — and the
+expected figures stay hidden for good.
+
+#### Undoing a count that was wrong
+
+Sometimes a count is finished and then turns out to have been wrong — the bar was
+counted in cases when the system holds bottles, or somebody counted the wrong
+store. **Undo this count**, from the ⋮ menu on the count or on the list, puts
+every shelf back.
+
+**It always needs a manager's PIN**, at any size, and a reason. That is different
+from finishing a count, where the PIN depends on the threshold: undoing takes
+back movements a manager already approved, so there is no amount at which it is
+routine.
+
+**Nothing is deleted.** Every movement the count posted is undone by an opposite
+movement beside it, and both the count and its undoing stay on file with the
+names against them. The report still shows what the count *found* — marked as
+reversed, so nobody mistakes it for what the stock stands at now. Then count
+again: a count that was wrong is answered by another count, never by editing the
+old one.
+
+There is deliberately **no way to delete a count**. A finished count moved real
+stock and a manager approved it; deleting the record would delete the evidence
+that either happened. An open count is abandoned, a finished one is undone, and
+both stay readable.
+
+If you only need to correct **one line** rather than the whole count, you can
+reverse that single movement instead, from the item's own movement list on the
+Products tab. The count's report then shows that line as reversed while the rest
+of it still stands.
+
+![screenshot: a stock take part-counted, with no expected quantity anywhere on the sheet](/help/stock-take.png)
 
 ### Loading your opening stock from a spreadsheet
 
@@ -1406,6 +1613,12 @@ asked.
 | **On hand** | What a location is holding, added up from its movements. Never a stored number. |
 | **Average cost** | What one unit of an item is worth in that location, blended across everything that has come in. Taking stock out does not change it. |
 | **Opening balance** | What was already on the shelf when you started using the system. Once per item per location. |
+| **Stock take** | A counted document for one location: started, filled in, and finished. Its differences post as **count corrections** — a different kind of movement from an adjustment you type yourself, so counts can be reported on separately. |
+| **Blind count** | A count where the system's expected figure is never sent to the screen until the count is finished. Not hidden — not sent. |
+| **Snapshot** | What the system believed a location held at the moment a count was started. Every line of that count is measured against it, so a delivery arriving mid-count is not mistaken for a difference the counter caused. |
+| **Not counted** | A shelf on a count sheet that nobody has been to. Left completely untouched when the count is finished — which is not the same as counting it and finding **0**, which writes the whole expected quantity off. |
+| **Abandoned count** | An open count given up before it was finished. It posted nothing, keeps what was counted on file, and never reveals its expected figures. |
+| **Undone count** | A finished count put back: every movement it made is reversed, and both the count and its undoing stay on file. Always needs a manager's PIN. Nothing is ever deleted. |
 
 ---
 

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Select } from '../../ui/form';
 import type { SelectOption } from '../../ui/form';
 import { CloseIcon } from '../../ui/icons';
@@ -68,7 +68,36 @@ export function InventoryScreen({
   const locations = useLocations(propertyId, tenantId);
   const reference = useInventoryReference(tenantId);
 
-  const [activeTab, setActiveTab] = useState<InventoryTabKey>('products');
+  // THE ACTIVE TAB LIVES IN THE URL, so it can be linked to and come back to.
+  // It became necessary the moment a stock count moved to its own page: "back
+  // to counts" has to land on the Stock Take tab, and a tab held only in
+  // component state would drop the user on Products every time. The same
+  // convention the settings screen already uses.
+  //
+  // An unknown or absent tab falls back to the first one rather than rendering
+  // nothing — a mistyped URL should open the page, not break it.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedTab = searchParams.get('tab') as InventoryTabKey | null;
+  const activeTab: InventoryTabKey =
+    requestedTab && INVENTORY_TABS.some((t) => t.key === requestedTab)
+      ? requestedTab
+      : 'products';
+
+  const setActiveTab = useCallback(
+    (key: InventoryTabKey) => {
+      // replace, not push: a tab is a view of one page, and pushing would make
+      // the browser's Back button walk the tab strip instead of leaving.
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.set('tab', key);
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
   // '' is All locations — the roll-up across the property, and the default,
   // because "what does this hotel hold?" is the question the page opens on.
   // Not stored anywhere (no browser storage, by constraint): a fresh visit
@@ -289,10 +318,10 @@ export function InventoryScreen({
           <StockTakeTab
             tenantId={tenantId}
             propertyId={propertyId}
+            propertySlug={propertySlug}
             currency={currency}
             timezone={timezone}
             locations={locations.rows}
-            categories={reference.categories}
             locationId={scopedLocationId}
             onPosted={reloadCatalogue}
           />

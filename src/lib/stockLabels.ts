@@ -104,12 +104,16 @@ export const TOTAL_UNITS_EXPLANATION =
 // in the same words used in the build notes, so nobody discovers the limit by
 // finding a number missing.
 
-export const STOCK_COUNT_POSTING_NOTE =
-  'A count posts each difference as an ADJUSTMENT, with the count and its date ' +
-  'as the reason. The dedicated “count” movement type is reserved for the stock ' +
-  'count tranche and has no way to be written yet, so nothing here pretends to ' +
-  'be one — every line you post is a normal adjustment, permanent and in your ' +
-  'name.';
+// STOCK_COUNT_POSTING_NOTE lived here until 039 and has been DELETED rather than
+// updated, because every word of it is now false. It said a count posted its
+// differences as ordinary ADJUSTMENTS, and that the dedicated count movement
+// type was reserved with no way to be written — both true of 036/038 and both
+// untrue the moment finish_stock_take shipped. A stale caveat is worse than no
+// caveat: it teaches the reader something the system stopped doing, and nothing
+// errors while it does.
+//
+// The count's own copy now lives in stockTakeLabels.ts, beside the screen that
+// says it.
 
 export const IMPORT_HISTORY_NOTE =
   'Spreadsheet loads record opening balances, and that is what is listed here — ' +

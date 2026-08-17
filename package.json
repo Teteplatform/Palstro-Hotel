@@ -8,7 +8,9 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "proof:render": "vite build --ssr proofs/ledgerRender.tsx --outDir node_modules/.tmp/proofdist --logLevel error && node node_modules/.tmp/proofdist/ledgerRender.js"
+    "proof:render": "npm run proof:ledger && npm run proof:stocktake",
+    "proof:ledger": "vite build --ssr proofs/ledgerRender.tsx --outDir node_modules/.tmp/proofdist --logLevel error && node node_modules/.tmp/proofdist/ledgerRender.js",
+    "proof:stocktake": "vite build --ssr proofs/stockTakeRender.tsx --outDir node_modules/.tmp/proofdist --logLevel error && node node_modules/.tmp/proofdist/stockTakeRender.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.7",

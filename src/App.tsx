@@ -24,6 +24,8 @@ import { RoomTypesPage } from './pages/admin/RoomTypesPage';
 import { CompaniesPage } from './pages/admin/CompaniesPage';
 import { InventoryPage } from './pages/admin/InventoryPage';
 import { StockImportPage } from './pages/admin/StockImportPage';
+import { StockCountPage } from './pages/admin/StockCountPage';
+import { StockCountPrintPage } from './pages/admin/StockCountPrintPage';
 import { ProductImportPage } from './pages/admin/ProductImportPage';
 import { RequisitionsPage } from './pages/admin/RequisitionsPage';
 import { BookingsPage } from './pages/admin/BookingsPage';
@@ -182,6 +184,36 @@ const router = createBrowserRouter([
                 element: (
                   <ModuleGuard module="store">
                     <StockImportPage />
+                  </ModuleGuard>
+                ),
+              },
+              // ONE STOCK COUNT, as its own page. A count is a document worked
+              // on for hours, and it was a tab panel under a tab strip until a
+              // real sheet made that plainly wrong — the strip above it is an
+              // invitation to lose two hours of counting by clicking something.
+              // Its own route also means it can be LINKED TO ("finish
+              // ST-000004" is a URL), refreshed into, and printed with the
+              // admin chrome hidden. Declared before nothing dynamic; kept
+              // beside its parent so the pair reads as one feature.
+              {
+                path: 'inventory/counts/:takeId',
+                element: (
+                  <ModuleGuard module="store">
+                    <StockCountPage />
+                  </ModuleGuard>
+                ),
+              },
+              // THE PAPER, on a route of its own so it opens in a NEW TAB: the
+              // person printing it is about to walk away from the screen with a
+              // clipboard, and taking the sheet they are keying into with them
+              // is the last thing they want. One URL, two documents, decided by
+              // the count's state — a blank tally sheet while it is open, the
+              // variance report once it is finished.
+              {
+                path: 'inventory/counts/:takeId/print',
+                element: (
+                  <ModuleGuard module="store">
+                    <StockCountPrintPage />
                   </ModuleGuard>
                 ),
               },

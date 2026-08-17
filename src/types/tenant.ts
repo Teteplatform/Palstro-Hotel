@@ -96,6 +96,13 @@ export interface PropertyFinanceSettings {
   // numeric(14,2) — a STRING over PostgREST (§6). Parse with parseNumeric before
   // any arithmetic or comparison. 0 means EVERY discount needs a manager PIN.
   discount_threshold: string;
+  // 039 §1. The VALUE of variance above which finishing a stock take needs a
+  // manager PIN — numeric(14,2), so a STRING over PostgREST. Money, never a
+  // quantity: 3 kg of saffron and 3 kg of rice are not the same event, and
+  // quantities across units cannot be compared at all. Measured as the sum of
+  // the ABSOLUTE value of every counted line's variance. 0 (the default) means
+  // every count with any variance at all needs a manager.
+  count_variance_threshold: string;
   // 038 §4. The last CLOSED business date: every posting RPC refuses a movement
   // dated on or before it, naming both the lock and the attempted date. A
   // Postgres `date` arrives as an ISO 'YYYY-MM-DD' string. NULL — the default —

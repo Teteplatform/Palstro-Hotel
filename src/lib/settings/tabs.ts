@@ -391,6 +391,45 @@ const financeFields: SettingsField[] = [
           : null,
     },
   },
+  // THE COUNT APPROVAL THRESHOLD (039 §1). The VALUE of variance above which
+  // finishing a stock take requires a manager PIN.
+  //
+  // A VALUE, NOT A QUANTITY, and the help text says so because it is the first
+  // thing anyone asks: 3 kg of saffron and 3 kg of rice are not the same event,
+  // and there is no meaningful way to compare quantities across units at all —
+  // a threshold of "5" would mean five kilos, five bottles and five sachets at
+  // once. Money is the only dimension a mixed basket of stock compares in.
+  //
+  // Validated exactly as the discount threshold beside it: NOT NULL with a
+  // meaningful 0, so a BLANK field is rejected rather than written. A cleared
+  // value that silently became 0 would tighten the hotel's policy without
+  // anyone choosing to.
+  //
+  // finish_stock_take re-reads this on every count, so raising it here changes
+  // what the database allows — not merely what the screen shows (rule 19).
+  {
+    key: 'count_variance_threshold',
+    label: 'Stock count approval threshold',
+    help:
+      'A stock count whose differences are worth more than this cannot be ' +
+      'finished without a manager PIN. It is a VALUE, not a quantity — 3 kg of ' +
+      'saffron and 3 kg of rice are not the same event. Stock found and stock ' +
+      'missing both count towards it, so they never cancel each other out. Set ' +
+      'to 0 to require a manager for every count that finds any difference at all.',
+    type: 'currency',
+    required: true,
+    storage: {
+      target: 'property_finance_settings',
+      column: 'count_variance_threshold',
+    },
+    validation: {
+      min: 0,
+      validate: (v) =>
+        v === null
+          ? 'Enter a threshold (use 0 to require a manager for every count with a difference).'
+          : null,
+    },
+  },
   // THE POSTING LOCK (038 §4). One date per property: everything on or before it
   // is closed, and every posting RPC refuses a movement dated inside it.
   //

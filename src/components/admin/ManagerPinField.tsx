@@ -38,6 +38,20 @@ import { LockIcon } from '../ui/icons';
 // SECURITY DEFINER RPC, and the RPC refuses the whole call without a valid one.
 // A user who bypassed this input entirely would get exactly as far.
 
+// ----------------------------------------------------------------------------
+// THE ACT IS A PROP, and it was a real defect that it once was not
+// ----------------------------------------------------------------------------
+// The heading and the lead sentence were hardcoded to "this reversal" / "every
+// reversal needs a PIN", which was correct for the four surfaces this component
+// was built for and WRONG the first time it was reused. On the stock count's
+// finish panel it asked a storekeeper to authorise "this reversal" — and the
+// owner's reaction on first sight was exactly the right one: "what is a manager
+// reversal PIN? what is he reversing?" Nothing was reversing. The person was
+// approving a count.
+//
+// A component that names the act it is embedded in has to be TOLD the act. Both
+// strings default to the reversal wording, so the four reversal forms are
+// untouched, and a surface that is not a reversal says what it actually is.
 interface ManagerPinFieldProps {
   value: string;
   onChange: (value: string) => void;
@@ -49,6 +63,13 @@ interface ManagerPinFieldProps {
   // that the ledger says left" are different warnings, and collapsing them into
   // one would make the panel say less at every site than the four copies do now.
   reason: string;
+  // WHAT IS BEING AUTHORISED. Defaults to the reversal wording the four folio
+  // forms use.
+  title?: string;
+  // WHEN a PIN is needed. A reversal always needs one, whatever the amount; a
+  // stock count needs one only above the property's threshold, and the screen
+  // cannot know which — so it must not claim "always".
+  lead?: string;
 }
 
 export function ManagerPinField({
@@ -56,18 +77,19 @@ export function ManagerPinField({
   onChange,
   disabled = false,
   reason,
+  title = 'A manager must authorise this reversal',
+  lead = 'Every reversal needs a PIN, whatever the amount',
 }: ManagerPinFieldProps) {
   return (
     <div className="rounded-xl border-2 border-primary/40 bg-primary/5 p-3 sm:p-4">
       <p className="flex flex-wrap items-center gap-2 text-sm font-bold text-primary">
-        <LockIcon className="h-5 w-5 shrink-0" />A manager must authorise this
-        reversal
+        <LockIcon className="h-5 w-5 shrink-0" />
+        {title}
       </p>
       <p className="mt-1.5 text-xs text-charcoal">
-        Every reversal needs a PIN, whatever the amount — {reason} Hand the
-        terminal to a manager: the approval is recorded{' '}
-        <strong>against them by name</strong>, permanently, and it can never be
-        edited or deleted.
+        {lead} — {reason} Hand the terminal to a manager: the approval is
+        recorded <strong>against them by name</strong>, permanently, and it can
+        never be edited or deleted.
       </p>
 
       <label className="mt-3 block">
