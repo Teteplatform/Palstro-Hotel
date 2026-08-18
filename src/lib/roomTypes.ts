@@ -1,7 +1,18 @@
 import { supabase } from './supabase';
-import { fetchAllPaged } from './fetchAllPaged';
-import { parseNumeric } from './format';
+import { fetchAllPagedRows } from './fetchAllPaged';
+import { boundary, scalarNumber } from './rowParse';
 import type { RoomType, SeasonalRate } from '../types/room';
+
+// The boundaries (rule 24) — completeness checked by the compiler.
+const roomTypes = boundary<RoomType>('room_types')(
+  ['base_rate', 'max_adults', 'max_children', 'display_order'] as const,
+  ['weekend_rate', 'size_sqm'] as const,
+);
+
+const seasonalRates = boundary<SeasonalRate>('seasonal_rates')(
+  ['rate'] as const,
+  [] as const,
+);
 
 // The data layer for the room-types admin screen (build 5a). Every function here
 // follows the same compliance rules as mediaAssets.ts / useRoomTypes:
@@ -12,7 +23,8 @@ import type { RoomType, SeasonalRate } from '../types/room';
 //     .eq(..., false)-style filters.
 //   - Rule 11: every call is awaited and throws its error; the calling component
 //     surfaces it via toast and never swallows it.
-//   - §6: numeric columns arrive as STRINGS; callers parse with parseNumeric.
+//   - Rule 24: every read parses its rates at the boundary; a caller receives
+//     numbers, and the two scalar RPCs go through scalarNumber.
 //
 // Writes go DIRECT to the tables (not through RPCs), matching mediaAssets.ts:
 // room types and seasonal rates are admin-gated configuration master data, and
@@ -51,7 +63,7 @@ export async function fetchRoomTypesPage(
     .range(from, to);
 
   if (error) throw error;
-  return { rows: (data ?? []) as RoomType[], count: count ?? 0 };
+  return { rows: roomTypes.rows(data), count: count ?? 0 };
 }
 
 // Every live room type for a property — used where the WHOLE set is consumed at
@@ -65,7 +77,7 @@ export async function fetchAllRoomTypes(
   propertyId: string,
   tenantId: string,
 ): Promise<RoomType[]> {
-  return fetchAllPaged<RoomType>((from, to) =>
+  return fetchAllPagedRows<RoomType>(roomTypes, (from, to) =>
     supabase
       .from('room_types')
       .select('*')
@@ -116,7 +128,7 @@ export async function createRoomType(
     .single();
 
   if (error) throw error;
-  return data as RoomType;
+  return roomTypes.row(data);
 }
 
 // Patch a room type. Scoped to the active tenant+property AND live rows only, so
@@ -139,7 +151,7 @@ export async function updateRoomType(
     .single();
 
   if (error) throw error;
-  return data as RoomType;
+  return roomTypes.row(data);
 }
 
 // Soft-delete a room type (rule 5 / §6: master data is never hard-deleted). Its
@@ -180,7 +192,7 @@ export async function fetchSeasonalRates(
     .order('created_at', { ascending: false });
 
   if (error) throw error;
-  return (data ?? []) as SeasonalRate[];
+  return seasonalRates.rows(data);
 }
 
 export interface SeasonalRateWrite {
@@ -210,7 +222,7 @@ export async function createSeasonalRate(
     .single();
 
   if (error) throw error;
-  return data as SeasonalRate;
+  return seasonalRates.row(data);
 }
 
 export async function updateSeasonalRate(
@@ -228,7 +240,7 @@ export async function updateSeasonalRate(
     .single();
 
   if (error) throw error;
-  return data as SeasonalRate;
+  return seasonalRates.row(data);
 }
 
 export async function softDeleteSeasonalRate(
@@ -264,5 +276,6 @@ export async function resolveRoomRate(
   });
 
   if (error) throw error;
-  return parseNumeric(data as string | number | null);
+  // A scalar RPC — one numeric, which arrives as a string (rule 24).
+  return scalarNumber(data);
 }

@@ -61,7 +61,7 @@ export interface UseStockTakeSheetResult {
   reload: () => Promise<void>;
   patchLine: (
     lineId: string,
-    counted: string | null,
+    counted: number | null,
     countedAt: string | null,
     countedBy: string | null,
   ) => void;
@@ -106,7 +106,7 @@ export function useStockTakeSheet(
   const patchLine = useCallback(
     (
       lineId: string,
-      countedQuantity: string | null,
+      countedQuantity: number | null,
       countedAt: string | null,
       countedBy: string | null,
     ) => {

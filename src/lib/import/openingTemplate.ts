@@ -1,6 +1,5 @@
-import { buildWorkbookXlsx, type SheetCell } from '../export/simpleSheet';
+import { buildWorkbookXlsx, numberCell, type SheetCell } from '../export/simpleSheet';
 import { ITEM_TYPES, itemTypeLabel, unitDimensionLabel } from '../inventoryLabels';
-import { parseNumeric } from '../format';
 import type {
   InventoryCategory,
   InventoryItem,
@@ -125,17 +124,15 @@ function text(value: string | null): SheetCell {
   return value ? { kind: 'text', value } : null;
 }
 
-// numeric columns arrive as STRINGS over PostgREST (§6). parseNumeric is the
-// single place that is handled: Number('') is 0, and a 0 written into a
-// purchase-cost cell is a claim that the item is free.
-function money(value: string | null): SheetCell {
-  const n = parseNumeric(value);
-  return n === null ? null : { kind: 'number', value: n, format: 'money' };
+// The catalogue's own figures, already parsed by the data layer (rule 24), so
+// these place the number rather than re-reading it. A null stays an EMPTY cell:
+// a 0 written into a purchase-cost cell is a claim that the item is free.
+function money(value: number | null): SheetCell {
+  return numberCell(value, 'money');
 }
 
-function quantity(value: string | null): SheetCell {
-  const n = parseNumeric(value);
-  return n === null ? null : { kind: 'number', value: n, format: 'quantity' };
+function quantity(value: number | null): SheetCell {
+  return numberCell(value, 'quantity');
 }
 
 // ---------------------------------------------------------------------------
@@ -278,10 +275,10 @@ export function buildOpeningSheetCsv(input: OpeningSheetInput): string {
         item.category_id ? (categoryName.get(item.category_id) ?? '') : '',
         item.barcode ?? '',
         item.pack_size ?? '',
-        item.purchase_cost ?? '',
-        item.min_stock_level ?? '',
-        item.max_stock_level ?? '',
-        item.reorder_level ?? '',
+        csvNumber(item.purchase_cost),
+        csvNumber(item.min_stock_level),
+        csvNumber(item.max_stock_level),
+        csvNumber(item.reorder_level),
         '', // Opening quantity
         '', // Unit cost
         '', // Note
@@ -301,6 +298,12 @@ function csvField(value: string): string {
     return `"${value.replace(/"/g, '""')}"`;
   }
   return value;
+}
+
+// A figure in the CSV fallback. An absent one is an EMPTY field, never a 0 —
+// the same distinction the .xlsx makes with an empty cell.
+function csvNumber(value: number | null): string {
+  return value === null ? '' : String(value);
 }
 
 function csvRow(fields: string[]): string {

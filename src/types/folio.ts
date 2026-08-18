@@ -14,10 +14,11 @@
 //     tax_charges, so a rate change cannot make history disagree with itself.
 // If you find yourself wanting either as a column, read §5 and §8 of the migration.
 //
-// MONEY IS A STRING. Every numeric(14,2)/numeric(14,4) column arrives from
-// PostgREST as a string (§6) so the exact decimal survives. Parse with
-// parseNumeric before ANY arithmetic or comparison; `typeof amount === 'number'`
-// is always false.
+// EVERY MONEY FIELD BELOW IS A `number`, ALREADY PARSED (rule 24). The wire
+// sends numeric(14,2)/numeric(14,4) as a string so the exact decimal survives;
+// src/lib/folio.ts parses each read at the boundary, so a component receives
+// the figure and never the transport. The column type stays in each comment —
+// it is where the scale and the rounding come from.
 
 export type FolioStatus = 'open' | 'settled' | 'closed';
 
@@ -64,8 +65,8 @@ export interface TaxCharge {
   property_id: string;
   code: string;
   name: string;
-  // numeric(5,4) -> STRING. A FRACTION, not a percent: '0.0750' is 7.5%.
-  rate: string;
+  // numeric(5,4). A FRACTION, not a percent: 0.0750 is 7.5%.
+  rate: number;
   is_compulsory: boolean;
   applies_to: TaxAppliesTo;
   is_active: boolean;
@@ -116,16 +117,16 @@ export interface FolioCharge {
   folio_id: string;
   charge_category_id: string;
   description: string | null;
-  quantity: string;                   // numeric(14,4) -> string
-  unit_amount: string;                // numeric(14,2) -> string
-  gross_amount: string;
-  discount_amount: string;
+  quantity: number;                   // numeric(14,4)
+  unit_amount: number;                // numeric(14,2)
+  gross_amount: number;
+  discount_amount: number;
   discount_reason: string | null;
   // WHO authorised the discount: the manager whose PIN was verified above the
   // threshold (or for any comp), else the staff member acting within their own
   // authority. The accountability record the discount feature exists to create.
   discount_approved_by: string | null;
-  net_amount: string;                 // always exactly gross - discount (DB CHECK)
+  net_amount: number;                 // always exactly gross - discount (DB CHECK)
   charge_date: string;                // 'YYYY-MM-DD' — the BUSINESS date (rules 8, 12)
   source: string;                     // 'room' | 'manual' | 'fnb' | 'reversal' | ... free text
   // Set ONLY on a REVERSAL COUNTER-ENTRY (032 §1): the id of the original charge
@@ -162,7 +163,7 @@ export interface FolioPayment {
   tenant_id: string;
   property_id: string;
   folio_id: string;
-  amount: string;                     // numeric(14,2) -> string; signed
+  amount: number;                     // numeric(14,2); signed
   method: PaymentMethod;
   reference: string | null;
   payment_date: string;               // BUSINESS date (rules 8, 12)
@@ -239,7 +240,7 @@ export interface PropertyFinanceSettings {
   // Largest discount a staff member may apply without a manager PIN. '0.00'
   // (the default) means EVERY discount needs manager approval. A full comp
   // always needs a PIN whatever this is.
-  discount_threshold: string;
+  discount_threshold: number;
   created_at: string;
   updated_at: string;
   created_by: string | null;
@@ -257,8 +258,8 @@ export interface FolioChargeTaxLine {
   tax_charge_id: string;
   code: string;
   name: string;
-  rate: string;
-  amount: string;
+  rate: number;
+  amount: number;
 }
 
 // A charge as the folio PANEL reads it: the row plus the category it was posted
@@ -282,13 +283,13 @@ export interface FolioChargeWithCategory extends FolioCharge {
 //   balance       = charges_total - payments_total = folio_balance(folio_id)
 // All live from non-voided rows; nothing cached.
 export interface FolioTotals {
-  gross_total: string;
-  discount_total: string;
-  net_total: string;
-  tax_total: string;
-  charges_total: string;
-  payments_total: string;
-  balance: string;
+  gross_total: number;
+  discount_total: number;
+  net_total: number;
+  tax_total: number;
+  charges_total: number;
+  payments_total: number;
+  balance: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -309,8 +310,8 @@ export interface FolioChargeTaxRow {
   tax_charge_id: string;
   code: string;
   name: string;
-  rate: string;                       // numeric(5,4) -> string; a FRACTION
-  amount: string;                     // numeric(14,2) -> string
+  rate: number;                       // numeric(5,4); a FRACTION
+  amount: number;                     // numeric(14,2)
 }
 
 // One row of booking_balances: a booking's LIVE folio balance (folio_totals)
@@ -323,7 +324,7 @@ export interface BookingBalanceRow {
   property_id: string;
   folio_id: string;
   folio_status: FolioStatus;
-  charges_total: string;
-  payments_total: string;
-  balance: string;                    // positive = guest owes; negative = refund due
+  charges_total: number;
+  payments_total: number;
+  balance: number;                    // positive = guest owes; negative = refund due
 }

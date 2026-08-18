@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
-import { fetchAllPaged } from './fetchAllPaged';
-import { parseNumeric } from './format';
+import { fetchAllPagedRows } from './fetchAllPaged';
+import { boundary, passthrough } from './rowParse';
 import type {
   ChargeCategory,
   Folio,
@@ -28,11 +28,13 @@ import type {
 //   - Rule 1a: reads consumed in full go through fetchAllPaged — a bill must show
 //     EVERY line, so nothing here caps.
 //   - Rule 2/3: every write RPC gets a fresh idempotency key per submit attempt.
+//   - Rule 24: every read parses its money at the boundary, so a bill adds up
+//     numbers and never concatenates two strings that looked like numbers.
 //   - Rule 6: no balance is ever cached client-side. After any mutation the
 //     caller re-reads folio_totals; there is no local arithmetic on the balance.
 //   - Rule 11: every call is awaited and throws; the caller surfaces the error.
-//   - §6: every numeric column arrives as a STRING — parse with parseNumeric
-//     before any arithmetic or comparison.
+//   - Rule 24: every read parses its money at the boundary (see the
+//     declarations below), so a bill adds numbers and never concatenates.
 
 // A fresh idempotency key per submit intent (rules 2/3). crypto.randomUUID needs
 // no storage (constraint) and is available in every supported browser. A NEW key
@@ -79,6 +81,60 @@ export function folioErrorMessage(e: unknown): string {
 // INSERT trigger and backfilled the existing ones, so this is expected to find a
 // row; null means something is genuinely wrong (and the panel says so) rather
 // than "no folio yet".
+// ---------------------------------------------------------------------------
+// The boundaries (rule 24) — one per read, completeness checked by the compiler
+// ---------------------------------------------------------------------------
+
+const folios = passthrough<Folio>('folios');
+
+const charges = boundary<FolioChargeWithCategory>('folio_charges')(
+  [
+    'quantity',
+    'unit_amount',
+    'gross_amount',
+    'discount_amount',
+    'net_amount',
+  ] as const,
+  [] as const,
+);
+
+const payments = boundary<FolioPayment>('folio_payments')(
+  ['amount'] as const,
+  [] as const,
+);
+
+const chargeTaxes = boundary<FolioChargeTaxRow>('folio_charge_taxes')(
+  ['rate', 'amount'] as const,
+  [] as const,
+);
+
+const totals = boundary<FolioTotals>('folio_totals')(
+  [
+    'gross_total',
+    'discount_total',
+    'net_total',
+    'tax_total',
+    'charges_total',
+    'payments_total',
+    'balance',
+  ] as const,
+  [] as const,
+);
+
+const chargeCategories = boundary<ChargeCategory>('charge_categories')(
+  ['display_order'] as const,
+  [] as const,
+);
+
+const taxCharges = boundary<TaxCharge>('tax_charges')(
+  ['rate', 'display_order'] as const,
+  [] as const,
+);
+
+// A reversal is an audit row: who, when, why, and the two ids. No money on it —
+// the counter-entry carries that.
+const reversals = passthrough<Reversal>('reversals');
+
 export async function fetchFolioForBooking(
   bookingId: string,
   tenantId: string,
@@ -93,7 +149,7 @@ export async function fetchFolioForBooking(
     .maybeSingle();
 
   if (error) throw error;
-  return (data ?? null) as Folio | null;
+  return folios.maybeRow(data);
 }
 
 // Every charge on the folio, in BUSINESS-DATE order (rule 8: charge_date, never
@@ -108,7 +164,7 @@ export async function fetchFolioCharges(
   tenantId: string,
   propertyId: string,
 ): Promise<FolioChargeWithCategory[]> {
-  return fetchAllPaged<FolioChargeWithCategory>((from, to) =>
+  return fetchAllPagedRows<FolioChargeWithCategory>(charges, (from, to) =>
     supabase
       .from('folio_charges')
       // The category embed is NOT filtered by deleted_at — a retired category
@@ -134,7 +190,7 @@ export async function fetchFolioPayments(
   tenantId: string,
   propertyId: string,
 ): Promise<FolioPayment[]> {
-  return fetchAllPaged<FolioPayment>((from, to) =>
+  return fetchAllPagedRows<FolioPayment>(payments, (from, to) =>
     supabase
       .from('folio_payments')
       .select('*')
@@ -159,7 +215,7 @@ export async function fetchFolioChargeTaxes(
   tenantId: string,
   propertyId: string,
 ): Promise<FolioChargeTaxRow[]> {
-  return fetchAllPaged<FolioChargeTaxRow>((from, to) =>
+  return fetchAllPagedRows<FolioChargeTaxRow>(chargeTaxes, (from, to) =>
     supabase
       .from('folio_charge_taxes')
       .select('*')
@@ -183,7 +239,7 @@ export async function fetchFolioTotals(
   if (error) throw error;
   // A `returns table` function comes back as an array of rows; folio_totals
   // returns exactly one.
-  const rows = (data ?? []) as FolioTotals[];
+  const rows = totals.rows(data);
   return rows[0] ?? null;
 }
 
@@ -194,7 +250,7 @@ export async function fetchFolioTotals(
 export async function fetchChargeCategories(
   tenantId: string,
 ): Promise<ChargeCategory[]> {
-  return fetchAllPaged<ChargeCategory>((from, to) =>
+  return fetchAllPagedRows<ChargeCategory>(chargeCategories, (from, to) =>
     supabase
       .from('charge_categories')
       .select('*')
@@ -214,7 +270,7 @@ export async function fetchActiveTaxCharges(
   tenantId: string,
   propertyId: string,
 ): Promise<TaxCharge[]> {
-  return fetchAllPaged<TaxCharge>((from, to) =>
+  return fetchAllPagedRows<TaxCharge>(taxCharges, (from, to) =>
     supabase
       .from('tax_charges')
       .select('*')
@@ -241,6 +297,14 @@ export async function fetchActiveTaxCharges(
 export async function fetchDiscountThreshold(
   propertyId: string,
 ): Promise<number> {
+  interface ThresholdRow {
+    discount_threshold: number;
+  }
+  const thresholds = boundary<ThresholdRow>('property_finance_settings')(
+    ['discount_threshold'] as const,
+    [] as const,
+  );
+
   const { data, error } = await supabase
     .from('property_finance_settings')
     .select('discount_threshold')
@@ -248,7 +312,7 @@ export async function fetchDiscountThreshold(
     .maybeSingle();
 
   if (error) throw error;
-  return parseNumeric((data as { discount_threshold: string } | null)?.discount_threshold) ?? 0;
+  return thresholds.maybeRow(data)?.discount_threshold ?? 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -273,7 +337,7 @@ export async function fetchDiscountThreshold(
 export interface PreviewTaxLine {
   code: string;
   name: string;
-  rate: string;
+  rate: number;
   amount: number;
 }
 
@@ -290,11 +354,12 @@ export function previewChargeTaxes(
         (t.applies_to === 'service_chargeable' && category.service_chargeable),
     )
     .map((t) => {
-      const rate = parseNumeric(t.rate) ?? 0;
+      // Already a number (rule 24) — the rate was parsed when tax_charges was read.
+      const rate = t.rate;
       return {
         code: t.code,
         name: t.name,
-        rate: t.rate,
+        rate,
         // Rounded per line to 2dp, exactly as folio_charge_tax rounds, so the
         // preview and the posted bill agree to the kobo.
         amount: Math.round(netAmount * rate * 100) / 100,
@@ -499,7 +564,7 @@ export async function reversePayment(
     p_idempotency_key: input.idempotencyKey,
   });
   if (error) throw error;
-  return data as Reversal;
+  return reversals.row(data);
 }
 
 // Every reversal recorded against a folio's payments, so the bill can name the
@@ -526,7 +591,7 @@ export async function fetchPaymentReversals(
   const CHUNK = 200;
   for (let i = 0; i < paymentIds.length; i += CHUNK) {
     const chunk = paymentIds.slice(i, i + CHUNK);
-    const rows = await fetchAllPaged<Reversal>((from, to) =>
+    const rows = await fetchAllPagedRows<Reversal>(reversals, (from, to) =>
       supabase
         .from('reversals')
         .select('*')
@@ -599,7 +664,7 @@ export async function reverseCharge(
     p_idempotency_key: input.idempotencyKey,
   });
   if (error) throw error;
-  return data as Reversal;
+  return reversals.row(data);
 }
 
 // Reverse the DISCOUNT on a charge, restoring it to full price. Same shape, same
@@ -614,7 +679,7 @@ export async function reverseDiscount(
     p_idempotency_key: input.idempotencyKey,
   });
   if (error) throw error;
-  return data as Reversal;
+  return reversals.row(data);
 }
 
 // Every reversal recorded against a folio's CHARGES, split by which act it was,
@@ -646,7 +711,7 @@ export async function fetchChargeReversals(
   const CHUNK = 200;
   for (let i = 0; i < chargeIds.length; i += CHUNK) {
     const chunk = chargeIds.slice(i, i + CHUNK);
-    const rows = await fetchAllPaged<Reversal>((from, to) =>
+    const rows = await fetchAllPagedRows<Reversal>(reversals, (from, to) =>
       supabase
         .from('reversals')
         .select('*')

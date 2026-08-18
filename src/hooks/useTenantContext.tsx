@@ -6,9 +6,14 @@ import {
   type ReactNode,
 } from 'react';
 import { supabase } from '../lib/supabase';
-import { fetchAllPaged } from '../lib/fetchAllPaged';
+import { fetchAllPagedRows } from '../lib/fetchAllPaged';
+import { passthrough } from '../lib/rowParse';
 import { ADMIN_ROLES, type TenantMembership } from '../types/auth';
 import { useAuth } from './useAuth';
+
+// The boundary (rule 24). A membership is ids and a role — no numeric column —
+// and it declares that rather than being quietly skipped.
+const membershipRows = passthrough<TenantMembership>('tenant_users');
 
 interface TenantContextValue {
   // The active tenant: for now, the first membership. A tenant switcher will
@@ -84,7 +89,7 @@ export function TenantContextProvider({ children }: { children: ReactNode }) {
       try {
         // Paginated per rule 1 — a user could theoretically belong to many
         // tenants, so we never issue an unbounded read.
-        const rows = await fetchAllPaged<TenantMembership>((from, to) =>
+        const rows = await fetchAllPagedRows<TenantMembership>(membershipRows, (from, to) =>
           supabase
             .from('tenant_users')
             .select(EMBED)

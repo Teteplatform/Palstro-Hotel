@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ChevronDownIcon } from '../../ui/icons';
-import { formatMoney, formatQuantity, MISSING_VALUE, parseNumeric } from '../../../lib/format';
+import { formatMoney, formatQuantity, MISSING_VALUE } from '../../../lib/format';
 import { itemTypeLabel, itemTypeTone } from '../../../lib/inventoryLabels';
 import type { ProductRow } from '../../../lib/inventoryProducts';
 import { StockItemLedger } from './StockItemLedger';
@@ -158,9 +158,9 @@ function ProductTableRow({
   onReversed: () => Promise<void> | void;
   busy: boolean;
 }) {
-  // §6: numeric arrives as a STRING — parsed explicitly before any comparison.
-  // `typeof col === 'number'` is always false here.
-  const quantity = parseNumeric(row.quantity);
+  // Already a number, or genuinely absent (rule 24). null means NO POSITION at
+  // this scope, which is the distinction the next line depends on.
+  const quantity = row.quantity;
   const negative = quantity !== null && quantity < 0;
   // No movements at this scope at all. Rendered as the shared em-dash, never as
   // a confident zero: "we hold none" and "we have no figure" are different
@@ -372,7 +372,7 @@ function LocationBreakdown({
   row: ProductRow;
   locationId: string | null;
 }) {
-  const held = row.locations.filter((l) => (parseNumeric(l.quantity) ?? 0) !== 0);
+  const held = row.locations.filter((l) => l.quantity !== 0);
 
   if (locationId) {
     const here = row.locations[0];
@@ -447,8 +447,8 @@ function LocationDetail({
           </thead>
           <tbody className="divide-y divide-sand-border/50">
             {row.locations.map((l) => {
-              const q = parseNumeric(l.quantity);
-              const negative = q !== null && q < 0;
+              const q = l.quantity;
+              const negative = q < 0;
               return (
                 <tr key={l.locationId}>
                   <td className="py-2 pr-3 text-charcoal">

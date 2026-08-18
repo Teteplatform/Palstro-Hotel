@@ -1,7 +1,14 @@
 import { supabase } from './supabase';
-import { fetchAllPaged } from './fetchAllPaged';
-import { parseNumeric } from './format';
+import { fetchAllPagedRows } from './fetchAllPaged';
+import { boundary, passthrough, scalarNumber } from './rowParse';
 import type { Company, CompanyRate, CompanyRateMode } from '../types/company';
+
+// The boundaries (rule 24) — completeness checked by the compiler.
+const companies = passthrough<Company>('companies');
+const rates = boundary<CompanyRate>('company_rates')(
+  [] as const,
+  ['fixed_rate', 'discount_percent'] as const,
+);
 
 // Data layer for companies + their negotiated rates (build 6b, §1/§2).
 //
@@ -11,7 +18,8 @@ import type { Company, CompanyRate, CompanyRateMode } from '../types/company';
 //     also carry property_id, scoped on write.
 //   - Rule 5: deleted_at NULL-safe — "live" is deleted_at IS NULL.
 //   - Rule 11: every call is awaited and throws; the caller surfaces the error.
-//   - §6: numeric columns arrive as STRINGS; callers parse with parseNumeric.
+//   - Rule 24: both reads parse their numerics at the boundary, so a caller
+//     receives a rate it can compare and add.
 //
 // Companies + company_rates are ADMIN-gated configuration master data (016's
 // is_tenant_admin insert/update policies are the enforcement), NOT financial
@@ -57,7 +65,7 @@ export async function fetchCompaniesPage(
 
   const { data, error, count } = await q.range(from, to);
   if (error) throw error;
-  return { rows: (data ?? []) as Company[], count: count ?? 0 };
+  return { rows: companies.rows(data), count: count ?? 0 };
 }
 
 // Every live company for a tenant — used where the WHOLE set is a picker (the
@@ -68,7 +76,7 @@ export async function fetchAllCompanies(
   tenantId: string,
   activeOnly = false,
 ): Promise<Company[]> {
-  return fetchAllPaged<Company>((from, to) => {
+  return fetchAllPagedRows<Company>(companies, (from, to) => {
     let q = supabase
       .from('companies')
       .select('*')
@@ -100,7 +108,7 @@ export async function createCompany(
     .single();
 
   if (error) throw error;
-  return data as Company;
+  return companies.row(data);
 }
 
 export async function updateCompany(
@@ -118,7 +126,7 @@ export async function updateCompany(
     .single();
 
   if (error) throw error;
-  return data as Company;
+  return companies.row(data);
 }
 
 // Soft-delete a company (rule 5 / §6: master data is never hard-deleted). Its
@@ -157,7 +165,7 @@ export async function fetchCompanyRates(
     .order('created_at', { ascending: true });
 
   if (error) throw error;
-  return (data ?? []) as CompanyRate[];
+  return rates.rows(data);
 }
 
 // The value side of a rate: exactly one of fixed_rate / discount_percent per the
@@ -198,7 +206,7 @@ export async function createCompanyRate(
     .single();
 
   if (error) throw error;
-  return data as CompanyRate;
+  return rates.row(data);
 }
 
 export async function updateCompanyRate(
@@ -221,7 +229,7 @@ export async function updateCompanyRate(
     .single();
 
   if (error) throw error;
-  return data as CompanyRate;
+  return rates.row(data);
 }
 
 export async function softDeleteCompanyRate(
@@ -275,7 +283,9 @@ export async function previewCompanyRate(
   if (company.error) throw company.error;
 
   return {
-    rack: parseNumeric(rack.data as string | number | null),
-    company: parseNumeric(company.data as string | number | null),
+    // A scalar RPC, not a row: resolve_booking_rate returns one numeric, which
+    // arrives as a string. scalarNumber is the boundary for that shape (rule 24).
+    rack: scalarNumber(rack.data),
+    company: scalarNumber(company.data),
   };
 }

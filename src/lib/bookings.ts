@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
-import { fetchAllPaged } from './fetchAllPaged';
-import { parseNumeric } from './format';
+import { fetchAllPagedRows } from './fetchAllPaged';
+import { boundary, passthrough, scalarNumber } from './rowParse';
 import type {
   Booking,
   BookingDetail,
@@ -24,7 +24,7 @@ import type { Reversal } from '../types/folio';
 //     (fetchAllPaged), never from the visible page — see fetchBookingSummary.
 //   - Rule 11: every call is awaited and throws; the caller surfaces the error.
 //   - §6: numeric columns (night rates, resolved rates) arrive as STRINGS; parse
-//     with parseNumeric before any arithmetic.
+//     at the boundary (rule 24), so what this module returns holds numbers.
 
 // ---------------------------------------------------------------------------
 // Filters — one definition, applied identically to the list and the summary so
@@ -132,6 +132,60 @@ const LIST_SELECT =
   '*, guest:guests!inner(full_name, phone), room_type:room_types(name), company:companies(name), booking_nights(rate)';
 
 // ---------------------------------------------------------------------------
+// The boundaries (rule 24)
+// ---------------------------------------------------------------------------
+//
+// A NOTE ON EMBEDS, because bookings is where this matters most. The
+// completeness check covers a row's OWN numeric keys; it cannot see into
+// `booking_nights(rate)`, which is a nested shape. So each read that carries an
+// embed with money in it parses that embed on the same line it returns the row —
+// never later, and never in the component that renders it.
+
+const listRows = boundary<BookingListRow>('bookings (list)')(
+  ['adults', 'children'] as const,
+  ['balance'] as const,
+);
+
+const detailRows = boundary<BookingDetail>('bookings (detail)')(
+  ['adults', 'children'] as const,
+  [] as const,
+);
+
+// The locked nightly rate — a fact captured when it was true, and the reason a
+// booking's value is read rather than re-priced.
+const nightRates = boundary<{ rate: number }>('booking_nights (rate)')(
+  ['rate'] as const,
+  [] as const,
+);
+
+const detailNights = boundary<BookingDetail['booking_nights'][number]>(
+  'booking_nights (detail)',
+)(['rate'] as const, [] as const);
+
+const bookingBalances = boundary<{ booking_id: string; balance: number }>(
+  'booking_balances',
+)(['balance'] as const, [] as const);
+
+const bookingRows = boundary<Booking>('bookings')(
+  ['adults', 'children'] as const,
+  [] as const,
+);
+
+// An audit row: who, when, why. No money on it.
+const reversals = passthrough<Reversal>('reversals');
+
+// The follow-up read selects no numeric column at all, and still declares a
+// boundary — "every read is parsed" has to be checkable, not remembered.
+const followUps = passthrough<FollowUpRow>('bookings (follow-ups)');
+
+// The list read, with its nights embed parsed alongside the row.
+function parseListRows(data: unknown): BookingListRow[] {
+  return listRows
+    .rows(data)
+    .map((row) => ({ ...row, booking_nights: nightRates.rows(row.booking_nights) }));
+}
+
+// ---------------------------------------------------------------------------
 // List (rule 1b)
 // ---------------------------------------------------------------------------
 
@@ -165,9 +219,9 @@ export async function fetchBookingsPage(
 
   if (error) throw error;
   // PostgREST types to-one embeds (guest/room_type/company) as arrays it can't
-  // prove singular; at runtime they are single objects. Cast to the row shape,
-  // as useTenantContext does for its tenant embed.
-  const rows = (data ?? []) as unknown as BookingListRow[];
+  // prove singular; at runtime they are single objects — the boundary's shallow
+  // copy carries them through untouched (rule 24).
+  const rows = parseListRows(data);
 
   return {
     rows: await attachBalances(rows, tenantId, propertyId),
@@ -211,8 +265,8 @@ async function attachBalances(
 
   if (error) throw error;
 
-  const balances = new Map<string, string>();
-  for (const row of (data ?? []) as { booking_id: string; balance: string }[]) {
+  const balances = new Map<string, number>();
+  for (const row of bookingBalances.rows(data)) {
     balances.set(row.booking_id, row.balance);
   }
   // A missing entry stays null (not 0): the list shows a dash rather than
@@ -250,13 +304,23 @@ export interface BookingSummary {
 // A trimmed row used only for aggregation: status + the locked night rates.
 interface SummaryRow {
   status: BookingStatus;
-  booking_nights: { rate: string }[];
+  booking_nights: { rate: number }[];
 }
 
 // A trimmed booking_balances row for the outstanding aggregate.
 interface BalanceSummaryRow {
-  balance: string;
+  balance: number;
 }
+
+const summaryRows = boundary<SummaryRow>('bookings (summary)')(
+  [] as const,
+  [] as const,
+);
+
+const balanceSummaryRows = boundary<BalanceSummaryRow>('booking_balances (summary)')(
+  ['balance'] as const,
+  [] as const,
+);
 
 // Compute the status summary across the WHOLE filtered set (rule 20), NOT the
 // visible page. We fetch every matching row's status + locked night rates via
@@ -276,7 +340,7 @@ export async function fetchBookingSummary(
   // WORTH versus what is still OWED on them — and blending them into one number
   // would produce a figure nobody could reconcile to anything.
   const [rows, balanceRows] = await Promise.all([
-    fetchAllPaged<SummaryRow>((from, to) => {
+    fetchAllPagedRows<SummaryRow>(summaryRows, (from, to) => {
       const base = supabase
         .from('bookings')
         // Only what the aggregate needs. guests inner-joined for the name filter.
@@ -284,11 +348,14 @@ export async function fetchBookingSummary(
       return applyBookingFilters(base, tenantId, propertyId, filters)
         .order('id', { ascending: true }) // unique → stable range pagination
         .range(from, to);
-    }),
+    }).then((rows) =>
+      // The nights embed carries the money; it crosses the boundary too.
+      rows.map((r) => ({ ...r, booking_nights: nightRates.rows(r.booking_nights) })),
+    ),
     // The outstanding aggregate spans the WHOLE filtered set, not the page (rule
     // 20), and applies the SAME filters through the same implementation — so the
     // total and the page's Balance column provably describe the same bookings.
-    fetchAllPaged<BalanceSummaryRow>((from, to) => {
+    fetchAllPagedRows<BalanceSummaryRow>(balanceSummaryRows, (from, to) => {
       const base = supabase.from('booking_balances').select('balance');
       return applyBalanceFilters(base, tenantId, propertyId, filters)
         .order('booking_id', { ascending: true }) // unique → stable pagination
@@ -299,8 +366,8 @@ export async function fetchBookingSummary(
   let outstandingTotal = 0;
   let refundsDueTotal = 0;
   for (const row of balanceRows) {
-    // numeric -> STRING (§6); parse before comparing or adding.
-    const balance = parseNumeric(row.balance) ?? 0;
+    // Already a number (rule 24).
+    const balance = row.balance;
     if (balance > 0) outstandingTotal += balance;
     else if (balance < 0) refundsDueTotal += -balance;
   }
@@ -310,10 +377,9 @@ export async function fetchBookingSummary(
   let totalValue = 0;
 
   for (const row of rows) {
-    const value = (row.booking_nights ?? []).reduce((sum, n) => {
-      const r = parseNumeric(n.rate);
-      return sum + (r ?? 0);
-    }, 0);
+    // Locked rates, already parsed with the read (rule 24) — added up, never
+    // re-priced.
+    const value = (row.booking_nights ?? []).reduce((sum, n) => sum + n.rate, 0);
     const bucket = byStatus[row.status] ?? { count: 0, total: 0 };
     bucket.count += 1;
     bucket.total += value;
@@ -326,8 +392,10 @@ export async function fetchBookingSummary(
 }
 
 // Sum a booking's locked night rates (its total, never a recompute — brief §3).
-export function bookingTotal(nights: { rate: string }[]): number {
-  return (nights ?? []).reduce((sum, n) => sum + (parseNumeric(n.rate) ?? 0), 0);
+export function bookingTotal(nights: { rate: number }[]): number {
+  // The rates are already numbers — parsed with the read that fetched them
+  // (rule 24). This adds up locked figures; it does not re-price anything.
+  return (nights ?? []).reduce((sum, n) => sum + n.rate, 0);
 }
 
 // ---------------------------------------------------------------------------
@@ -358,8 +426,11 @@ export async function fetchBookingDetail(
     .maybeSingle();
 
   if (error) throw error;
-  // To-one embeds arrive as single objects at runtime; cast to the detail shape.
-  return (data ?? null) as unknown as BookingDetail | null;
+  const row = detailRows.maybeRow(data);
+  if (!row) return null;
+  // The nights embed is part of this read, and the top-level parse cannot see
+  // into it — so it is parsed here, on the same line it is returned (rule 24).
+  return { ...row, booking_nights: detailNights.rows(row.booking_nights) };
 }
 
 // ---------------------------------------------------------------------------
@@ -409,7 +480,7 @@ export async function fetchOpenFollowUps(
   propertyId: string,
   guestId?: string,
 ): Promise<BookingFollowUp[]> {
-  const rows = await fetchAllPaged<FollowUpRow>((from, to) => {
+  const rows = await fetchAllPagedRows<FollowUpRow>(followUps, (from, to) => {
     let q = supabase
       .from('bookings')
       .select(
@@ -457,7 +528,7 @@ export async function acknowledgeBookingFollowUp(
     p_idempotency_key: null,
   });
   if (error) throw error;
-  return data as Booking;
+  return bookingRows.row(data);
 }
 
 // ---------------------------------------------------------------------------
@@ -495,7 +566,8 @@ export async function resolveBookingRate(
     p_company_id: companyId,
   });
   if (error) throw error;
-  return parseNumeric(data as string | number | null);
+  // A scalar RPC: one numeric, which arrives as a string (rule 24).
+  return scalarNumber(data);
 }
 
 // ---------------------------------------------------------------------------
@@ -548,7 +620,7 @@ export async function createBooking(
     p_expected_arrival_time: input.expectedArrivalTime,
   });
   if (error) throw error;
-  return data as Booking;
+  return bookingRows.row(data);
 }
 
 // True when an error is the overbooking guard firing (create_booking raises a
@@ -574,7 +646,7 @@ export async function cancelBooking(
     p_idempotency_key: null,
   });
   if (error) throw error;
-  return data as Booking;
+  return bookingRows.row(data);
 }
 
 // The lifecycle transitions the screen exposes (016, extended by 024). Each is a
@@ -599,7 +671,7 @@ export async function checkInBooking(
     p_arrival_at: arrivalAt,
   });
   if (error) throw error;
-  return data as Booking;
+  return bookingRows.row(data);
 }
 
 // Mark a confirmed booking whose reserved arrival has passed as a no-show (024).
@@ -619,7 +691,7 @@ export async function markNoShow(bookingId: string): Promise<Booking> {
     p_idempotency_key: null,
   });
   if (error) throw error;
-  return data as Booking;
+  return bookingRows.row(data);
 }
 
 // CHECKOUT COMPLETES THE BILL (migration 026), so it no longer returns a bare
@@ -659,11 +731,13 @@ export interface CheckOutSummary {
   balance: number | null;
 }
 
-// numeric values inside a jsonb result arrive as JSON numbers rather than the
-// strings a top-level numeric column would give (§6) — parseNumeric accepts both,
-// so the parsing is explicit either way and never an implicit coercion.
+// A jsonb result is the shape rule 24 is most emphatic about: the numbers
+// inside it arrive as JSON numbers where the same columns read directly would
+// arrive as strings, and NOTHING at the call site shows which. scalarNumber
+// takes either; the ?? 0 is this function's own contract (a count the server did
+// not send is none), not a guess about the transport.
 function toCount(value: unknown): number {
-  return parseNumeric(value as string | number | null) ?? 0;
+  return scalarNumber(value) ?? 0;
 }
 
 export async function checkOutBooking(
@@ -677,7 +751,9 @@ export async function checkOutBooking(
 
   const row = (data ?? {}) as Record<string, unknown>;
   return {
-    booking: row.booking as Booking,
+    // The booking is a whole row nested inside the jsonb, so it crosses the
+    // boundary like any other (rule 24).
+    booking: bookingRows.row(row.booking),
     alreadyCheckedOut: row.already_checked_out === true,
     chargeFrom: (row.charge_from as string | null) ?? null,
     nightsTotal: toCount(row.nights_total),
@@ -685,7 +761,7 @@ export async function checkOutBooking(
     nightsAlreadyPosted: toCount(row.nights_already_posted),
     nightsUnbilled: toCount(row.nights_unbilled),
     amountPosted: toCount(row.amount_posted),
-    balance: parseNumeric(row.balance as string | number | null),
+    balance: scalarNumber(row.balance),
   };
 }
 
@@ -742,7 +818,7 @@ export async function reverseNoShow(
     p_idempotency_key: input.idempotencyKey,
   });
   if (error) throw error;
-  return data as Reversal;
+  return reversals.row(data);
 }
 
 // Reverse a cancellation: the booking returns to CONFIRMED, but only if every
@@ -764,7 +840,7 @@ export async function reverseCancel(
     p_idempotency_key: input.idempotencyKey,
   });
   if (error) throw error;
-  return data as Reversal;
+  return reversals.row(data);
 }
 
 // ---------------------------------------------------------------------------
@@ -817,7 +893,7 @@ export async function reverseCheckout(
     p_idempotency_key: input.idempotencyKey,
   });
   if (error) throw error;
-  return data as Reversal;
+  return reversals.row(data);
 }
 
 // The status reversals recorded against ONE booking, if any: at most one of
@@ -858,7 +934,7 @@ export async function fetchBookingStatusReversals(
 
   if (error) throw error;
 
-  const rows = (data ?? []) as Reversal[];
+  const rows = reversals.rows(data);
   return {
     noShow: rows.find((r) => r.target_type === 'no_show') ?? null,
     cancel: rows.find((r) => r.target_type === 'cancel') ?? null,

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { KebabIcon } from '../../ui/icons';
 import { Popover } from '../../ui/Popover';
-import { formatMoney, MISSING_VALUE, parseNumeric } from '../../../lib/format';
+import { formatMoney, MISSING_VALUE } from '../../../lib/format';
 import { formatShortDate } from '../../../lib/date';
 import { bookingStatusLabel, bookingStatusTone } from '../../../lib/bookingLabels';
 import type { GuestStayRow } from '../../../types/guestLedger';
@@ -290,20 +290,19 @@ function BalanceCell({
   balance,
   currency,
 }: {
-  balance: string | null;
+  balance: number;
   currency: string;
 }) {
-  const value = parseNumeric(balance);
-  const owed = value !== null && value > 0;
+  // Already a number (rule 24) — guest_stays.balance is not-null in the view.
+  const owed = balance > 0;
 
   return (
     <td
       className={`whitespace-nowrap px-3 py-3 text-right font-bold tabular-nums sm:px-4 ${
-        value === null ? 'text-charcoal-muted' : owed ? 'text-negative' : 'text-positive'
+        owed ? 'text-negative' : 'text-positive'
       }`}
     >
-      {/* A missing balance reads as the shared dash, never a confident ₦0.00. */}
-      {value === null ? MISSING_VALUE : formatMoney(value, currency)}
+      {formatMoney(balance, currency)}
     </td>
   );
 }

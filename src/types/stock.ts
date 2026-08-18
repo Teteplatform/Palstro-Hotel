@@ -8,10 +8,12 @@
 // cost folded from the same movements. Everything below is either a movement or
 // something computed from movements on read (CLAUDE.md rule 6).
 //
-// §6: every numeric column arrives from PostgREST as a STRING, never a JS
-// number, so the precision a numeric(14,4) carries is not silently lost. Parse
-// with parseNumeric before any arithmetic or comparison — `typeof col ===
-// 'number'` is always false here.
+// EVERY NUMERIC FIELD BELOW IS A `number`, ALREADY PARSED (rule 24). The wire
+// sends numeric(p,s) as a string and int8 as a JSON number; src/lib/stock.ts
+// parses both at the boundary, so nothing downstream sees either shape. The DB
+// column type is still named in each comment, because it is what the precision
+// and the rounding come from — but it is no longer a shape a component may
+// depend on, and a string method on any of these is now a compile error.
 
 // ---------------------------------------------------------------------------
 // Movements
@@ -69,13 +71,13 @@ export interface StockMovement {
   location_id: string;
   inventory_item_id: string;
   movement_type: MovementType;
-  // numeric(14,4) SIGNED, as a string (§6). Positive adds to the location,
-  // negative removes from it. Never zero — a table constraint refuses it.
-  quantity: string;
-  // numeric(14,2) as a string (§6). Present on every stock-IN, NULL on every
-  // stock-OUT: arriving stock states its cost and moves the average, leaving
-  // stock carries out the average already there.
-  unit_cost: string | null;
+  // numeric(14,4) SIGNED. Positive adds to the location, negative removes from
+  // it. Never zero — a table constraint refuses it.
+  quantity: number;
+  // numeric(14,2). Present on every stock-IN, NULL on every stock-OUT: arriving
+  // stock states its cost and moves the average, leaving stock carries out the
+  // average already there.
+  unit_cost: number | null;
   // The OPERATING DAY (rules 8/12), in the property's timezone. Never created_at.
   business_date: string;
   reason: string | null;
@@ -105,14 +107,14 @@ export interface StockOnHandRow {
   property_id: string;
   location_id: string;
   inventory_item_id: string;
-  // numeric(14,4) as a string. NOT floored at zero — a negative quantity is
-  // real (stock that left without a movement) and is shown as such (rule 7).
-  quantity_on_hand: string;
-  // numeric(14,4) as a string. FOUR decimals, not two: an average of 2dp costs
-  // is not itself a 2dp number, and a base unit may be a gram.
-  moving_average_cost: string;
-  // numeric(14,2) as a string — money, rounded once, at the end.
-  stock_value: string;
+  // numeric(14,4). NOT floored at zero — a negative quantity is real (stock
+  // that left without a movement) and is shown as such (rule 7).
+  quantity_on_hand: number;
+  // numeric(14,4). FOUR decimals, not two: an average of 2dp costs is not
+  // itself a 2dp number, and a base unit may be a gram.
+  moving_average_cost: number;
+  // numeric(14,2) — money, rounded once, at the end.
+  stock_value: number;
   movement_count: number;
   last_movement_date: string | null;
   // --- catalogue / location columns the view joins in ---
@@ -121,7 +123,7 @@ export interface StockOnHandRow {
   item_type: string;
   base_unit: string;
   category_id: string | null;
-  reorder_level: string | null;
+  reorder_level: number | null;
   // Computed in the view so the list can filter on it SERVER-SIDE (rule 1b).
   // FALSE — never null — for an item with no reorder level: unmonitored is not
   // low, and a filter must not silently drop unmonitored items.
@@ -143,29 +145,29 @@ export interface StockLedgerRow {
   inventory_item_id: string;
   seq: number;
   movement_type: MovementType;
-  quantity: string;
-  unit_cost: string | null;
+  quantity: number;
+  unit_cost: number | null;
   business_date: string;
   reason: string | null;
   note: string | null;
   source: string;
   created_at: string;
   created_by: string | null;
-  running_quantity: string;
-  running_average_cost: string;
+  running_quantity: number;
+  running_average_cost: number;
   // Signed value this movement moved: a reversal moves its carried basis, a
   // stock-in its own cost, a stock-out the cost it actually carried out.
-  movement_value: string;
+  movement_value: number;
 
   // --- added by 038 --------------------------------------------------------
-  // numeric(14,4) as a string. What this stock cost ON THE WAY OUT, stamped at
-  // the moment it left. Present on every negative-quantity movement and on
-  // every reversal (where it is the basis being unwound); NULL on a stock-in,
-  // which states its cost in unit_cost instead.
+  // numeric(14,4). What this stock cost ON THE WAY OUT, stamped at the moment
+  // it left. Present on every negative-quantity movement and on every reversal
+  // (where it is the basis being unwound); NULL on a stock-in, which states its
+  // cost in unit_cost instead.
   //
   // COST OF SALE IS READ FROM THIS AND NEVER RECOMPUTED (CLAUDE.md §6). No
   // screen may re-derive it from the movement history.
-  carried_unit_cost: string | null;
+  carried_unit_cost: number | null;
   // The movement THIS one undoes. Non-null exactly when movement_type is
   // 'reversal'.
   reverses_movement_id: string | null;
@@ -197,9 +199,9 @@ export interface StockNegativePositionRow {
   property_id: string;
   location_id: string;
   inventory_item_id: string;
-  quantity_on_hand: string;
-  moving_average_cost: string | null;
-  stock_value: string;
+  quantity_on_hand: number;
+  moving_average_cost: number | null;
+  stock_value: number;
   last_movement_date: string | null;
   item_name: string;
   item_code: string | null;

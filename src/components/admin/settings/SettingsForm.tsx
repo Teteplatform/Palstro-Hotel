@@ -11,6 +11,8 @@ import {
   type SettingsRows,
 } from '../../../lib/settings/values';
 import { validateTab } from '../../../lib/settings/validate';
+import { settingsRowParsers } from '../../../lib/settings/save';
+import type { RowBoundary } from '../../../lib/rowParse';
 import { applyBranding, clearThemeOverrides } from '../../../lib/theme';
 import { FieldControl } from './FieldControl';
 import type { SettingsMediaContext } from './mediaFieldContext';
@@ -133,13 +135,17 @@ export function SettingsForm({
     });
   }
 
+  // An RPC's RETURN is a read (rule 24): these four functions hand back the row
+  // they just wrote, and it is swapped straight into the form's baseline — so an
+  // unparsed one would leave a string where the next save compares a number.
   async function callRpc<T>(
     fn: string,
     args: Record<string, unknown>,
+    rows: RowBoundary<T>,
   ): Promise<T> {
     const { data, error } = await supabase.rpc(fn, args);
     if (error) throw error;
-    return data as T;
+    return rows.row(data);
   }
 
   async function handleSave() {
@@ -162,36 +168,52 @@ export function SettingsForm({
       // the token the first produced or it would trip its own concurrency check.
       let psUpdatedAt = rows.settings.updated_at;
       if (patches.branding) {
-        const row = await callRpc<PropertySettings>('update_property_branding', {
-          p_property_id: propertyId,
-          p_patch: patches.branding,
-          p_expected_updated_at: psUpdatedAt,
-        });
+        const row = await callRpc<PropertySettings>(
+          'update_property_branding',
+          {
+            p_property_id: propertyId,
+            p_patch: patches.branding,
+            p_expected_updated_at: psUpdatedAt,
+          },
+          settingsRowParsers.propertySettings,
+        );
         psUpdatedAt = row.updated_at;
         onSaved({ settings: row });
       }
       if (patches.config) {
-        const row = await callRpc<PropertySettings>('update_property_config', {
-          p_property_id: propertyId,
-          p_patch: patches.config,
-          p_expected_updated_at: psUpdatedAt,
-        });
+        const row = await callRpc<PropertySettings>(
+          'update_property_config',
+          {
+            p_property_id: propertyId,
+            p_patch: patches.config,
+            p_expected_updated_at: psUpdatedAt,
+          },
+          settingsRowParsers.propertySettings,
+        );
         onSaved({ settings: row });
       }
       if (patches.properties) {
-        const row = await callRpc<Property>('update_property_details', {
-          p_property_id: propertyId,
-          p_patch: patches.properties,
-          p_expected_updated_at: rows.property.updated_at,
-        });
+        const row = await callRpc<Property>(
+          'update_property_details',
+          {
+            p_property_id: propertyId,
+            p_patch: patches.properties,
+            p_expected_updated_at: rows.property.updated_at,
+          },
+          settingsRowParsers.properties,
+        );
         onSaved({ property: row });
       }
       if (patches.tenant) {
-        const row = await callRpc<TenantSettings>('update_tenant_settings', {
-          p_tenant_id: tenantId,
-          p_patch: patches.tenant,
-          p_expected_updated_at: rows.tenant.updated_at,
-        });
+        const row = await callRpc<TenantSettings>(
+          'update_tenant_settings',
+          {
+            p_tenant_id: tenantId,
+            p_patch: patches.tenant,
+            p_expected_updated_at: rows.tenant.updated_at,
+          },
+          settingsRowParsers.tenantSettings,
+        );
         onSaved({ tenant: row });
       }
       // property_finance_settings (023 §3): its own row, its own token.
@@ -203,6 +225,7 @@ export function SettingsForm({
             p_patch: patches.finance,
             p_expected_updated_at: rows.finance.updated_at,
           },
+          settingsRowParsers.financeSettings,
         );
         onSaved({ finance: row });
       }

@@ -32,9 +32,9 @@ the right order.
 
 ---
 
-## 2. Engineering non-negotiables (23)
+## 2. Engineering non-negotiables (25)
 
-Every one of these came from a real bug — most from a prior product, the last three
+Every one of these came from a real bug — most from a prior product, the last five
 from this one. They are binding.
 
 ### 1. Every list read is bounded correctly — two cases, split below
@@ -372,6 +372,79 @@ position against whatever was there on the previous pass.
 a table is the case that breaks, so it is the case to check — both in the render
 proof and on the live site.
 
+### 24. Parse at the boundary
+PostgREST returns `numeric` as a **string**, and `int8`, `float` and JSON nulls as
+**numbers**. Every read parses its numeric fields **once, in the data layer**, into
+the type the app declares. **No component may call a string method on a value that
+came from the database.** This has caused three identical crashes; the fix is the
+boundary, never the call site.
+
+*Why: the shape a numeric arrives in is decided by a column type and by casts
+inside a view — `stock_take_progress` casts its counts to `integer` so they arrive
+as numbers while the quantities beside them stay strings — and none of that is
+visible from a component. A row type that describes the transport is a guess that
+nothing re-checks, so it is right until the day a migration changes and then it is
+wrong silently. The three crashes (`signedQuantity` in the item ledger,
+`counted_quantity` in the count sheet, `row.quantity` in the adjustments list) were
+the same bug at three call sites, and fixing a call site leaves the next one
+waiting.*
+
+The rule in four parts:
+
+1. **The row types stop claiming `string` for something that arrives as either.**
+   If a field is a number in the app, type it `number` and parse it on the way in.
+   A string method on it is then a **compile error**, not a crash a storekeeper
+   finds.
+2. **Every read goes through `boundary<T>()`** (`src/lib/rowParse.ts`) — a select,
+   an RPC's return, a jsonb payload, an embed. `fetchAllPagedRows` is the paged
+   form, `scalarNumber` the one for an RPC that returns a bare numeric.
+3. **The field lists are checked by the compiler.** `boundary<T>()` demands every
+   numeric key of `T`, split by nullability; add a numeric column and the build
+   fails, naming the field. A read with no numeric column declares
+   `passthrough<T>()` — which itself refuses to compile if `T` turns out to have
+   one. **No read is exempt by judgement**, because that is how the next one gets
+   missed.
+4. **Then delete the defensive parses.** A `parseNumeric` on a value the data layer
+   already parsed is a second source of truth about the shape; keep the ones
+   parsing genuine input (a form field) and the ones inside formatters.
+
+```ts
+// The declaration IS the check — this fails to compile until every numeric is listed.
+const movementRows = boundary<StockMovement>('stock_movements')(
+  ['seq', 'quantity'] as const,   // required — a missing one throws, naming the read
+  ['unit_cost'] as const,         // nullable — null stays null, never 0
+);
+```
+A required numeric that arrives absent or unparseable **throws**, and the fetch's
+existing error path carries it to the user (rule 11). The two alternatives are
+worse: a 0 is a wrong figure presented with confidence, and a NaN spreads through
+every total it touches without erroring.
+
+### 25. Screens are for doing, the guide is for explaining
+**One line of purpose per page, then the controls.** Longer explanation lives
+behind a single ⓘ and in [`docs/USER-GUIDE.md`](docs/USER-GUIDE.md). **No
+paragraphs under buttons, no prose inside tables**, and field hints only where a
+label genuinely cannot carry the meaning. Write the explanation as well as you
+like — then put it where someone can choose to read it.
+
+*Why: a screen that teaches is teaching the wrong person. The person who opens the
+stock take came to work, and they read the same three paragraphs every morning
+until they stop reading anything on the page — including the sentence that
+mattered. The reasoning is not lost when it moves; it becomes findable in a second
+by the one person who wants it, and invisible to the fifty who do not.*
+
+In practice:
+
+- **The ⓘ is one icon, one panel, all of it.** Not three tooltips in three places.
+  It links to the matching section of the guide, so the panel can stay short.
+- **A paragraph under a button means the label is wrong.** Fix the label.
+- **A field hint earns its place or goes.** "Count date — the day you walked the
+  shelves" earns it. "A count covers one location's shelves" does not; the label
+  already said Location.
+- **Tables show headings and values.** Nothing else, and nothing above them.
+- **Anything taken off a screen goes into the guide**, in the same commit. Moving
+  it is the point; deleting it is not.
+
 ---
 
 ## 3. Multi-tenancy model
@@ -614,6 +687,11 @@ first.
 13. **Touching a screen?** It ships a render proof, and you have made that proof
     fail before trusting it (rule 22). A passing SQL proof says nothing about
     what the browser does with the JSON.
+14. **Reading from the database?** The read declares a boundary and parses its
+    numerics there (rule 24) — never in the component, and never a string method
+    on a value that came off the wire.
+15. **Writing words on a screen?** One line of purpose, then the controls; the
+    rest goes behind the ⓘ and into `docs/USER-GUIDE.md` (rule 25).
 
 ---
 

@@ -1,5 +1,12 @@
 import { supabase } from './supabase';
+import { passthrough } from './rowParse';
 import type { Guest } from '../types/guest';
+
+// The boundary (rule 24). A guest record carries no numeric column — every
+// figure about a guest is money on their folios — and it still crosses the
+// boundary, because "every read is parsed" has to be checkable rather than
+// judged case by case.
+const guests = passthrough<Guest>('guests');
 
 // Data layer for guests as the booking flow (6b) uses them: SEARCH an existing
 // returning guest (front desk finds them by name or phone before creating a
@@ -67,7 +74,7 @@ export async function searchGuests(
   const { data, error } = await q;
   if (error) throw error;
 
-  const all = (data ?? []) as Guest[];
+  const all = guests.rows(data);
   const capped = all.length > GUEST_SEARCH_LIMIT;
   return { rows: capped ? all.slice(0, GUEST_SEARCH_LIMIT) : all, capped };
 }
@@ -113,7 +120,7 @@ export async function createGuest(
   });
 
   if (error) throw error;
-  return data as Guest;
+  return guests.row(data);
 }
 
 // Correct an existing guest's details (build A §2 — the Guest Details tab).
@@ -179,7 +186,7 @@ export async function updateGuest(
     .single();
 
   if (error) throw error;
-  return data as Guest;
+  return guests.row(data);
 }
 
 // One guest by id, for the guest detail page (2.txt §2). Scoped to the active
@@ -227,7 +234,7 @@ export async function updateGuestPreferences(
     .single();
 
   if (error) throw error;
-  return data as Guest;
+  return guests.row(data);
 }
 
 // Save just the email address, from the "send the statement by email" dialog
@@ -254,7 +261,7 @@ export async function updateGuestEmail(
     .single();
 
   if (error) throw error;
-  return data as Guest;
+  return guests.row(data);
 }
 
 function emptyToNull(value: string | null | undefined): string | null {

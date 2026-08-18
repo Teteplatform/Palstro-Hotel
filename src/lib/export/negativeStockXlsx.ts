@@ -1,5 +1,4 @@
-import { buildSheetXlsx, type SheetCell } from './simpleSheet';
-import { parseNumeric } from '../format';
+import { buildSheetXlsx, numberCell, type SheetCell } from './simpleSheet';
 import { isUncorrectable } from '../stock';
 import type { StockNegativePositionRow } from '../../types/stock';
 
@@ -84,11 +83,3 @@ function correctableCell(row: StockNegativePositionRow): string {
 // §6: numeric columns arrive as STRINGS. Parsed explicitly — an unparseable or
 // absent value becomes an EMPTY cell rather than a zero, because a zero here is
 // a claim and a blank is the truth.
-function numberCell(
-  value: string | null,
-  format: 'money' | 'quantity',
-): SheetCell {
-  const n = parseNumeric(value);
-  if (n === null) return null;
-  return { kind: 'number', value: n, format };
-}

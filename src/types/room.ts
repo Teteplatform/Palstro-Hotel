@@ -12,13 +12,11 @@ export interface RoomType {
   property_id: string;
   name: string;
   description: string | null;
-  // numeric(14,2) columns. PostgREST returns numeric as STRINGS (e.g.
-  // "45000.00"), never JS numbers, to preserve precision — parse with
-  // parseNumeric before any arithmetic or formatting (CLAUDE.md §6, Money).
-  base_rate: string; // RACK RATE — the advertised nightly "from" price (012)
+  // numeric(14,2) columns, parsed at the boundary (rule 24).
+  base_rate: number; // RACK RATE — the advertised nightly "from" price (012)
   // weekend_rate: numeric(14,2), nullable. NULL means "no weekend premium" (fall
-  // back to base_rate), NOT zero (012). String from PostgREST — parse before use.
-  weekend_rate: string | null;
+  // back to base_rate), NOT zero (012).
+  weekend_rate: number | null;
   // ISO weekday numbers that count as a weekend night for this type (Mon=1 ..
   // Fri=5, Sat=6, Sun=7). Postgres integer[] -> JS number[]; not null, default
   // {5,6} (012). Read by resolve_room_rate on the server; shown/edited in admin.
@@ -26,7 +24,7 @@ export interface RoomType {
   max_adults: number;
   max_children: number;
   bed_configuration: string | null;
-  size_sqm: string | null;
+  size_sqm: number | null;
   // Room amenity flags (002). Omitted from this type before build 5 because the
   // guest card did not read them; the admin editor does, so they are typed now.
   has_air_conditioning: boolean;
@@ -54,8 +52,8 @@ export interface SeasonalRate {
   // sql `date` columns arrive as 'YYYY-MM-DD' strings.
   start_date: string;
   end_date: string;
-  // numeric(14,2) -> string from PostgREST; parse with parseNumeric before use.
-  rate: string;
+  // numeric(14,2), parsed at the boundary (rule 24).
+  rate: number;
   deleted_at: string | null;
   created_at: string;
   updated_at: string;

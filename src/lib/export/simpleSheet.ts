@@ -34,6 +34,21 @@ export type SheetCell =
   | { kind: 'number'; value: number; format?: 'plain' | 'money' | 'quantity' }
   | null;
 
+// A numeric cell, or an empty one when there is no figure. THREE IDENTICAL
+// PRIVATE COPIES of this lived in stockXlsx, productsXlsx and negativeStockXlsx,
+// each re-parsing a value the data layer had already parsed — the defensive
+// habit rule 24 exists to end. One copy, and it takes the number it is given.
+//
+// null (no figure) leaves the cell EMPTY rather than writing 0: a blank reads as
+// "nothing recorded", while a zero is a measurement somebody took.
+export function numberCell(
+  value: number | null,
+  format: 'money' | 'quantity',
+): SheetCell {
+  if (value === null) return null;
+  return { kind: 'number', value, format };
+}
+
 export interface SheetColumn {
   label: string;
   // Character width, as Excel counts them.

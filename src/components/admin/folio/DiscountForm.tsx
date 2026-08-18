@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { CurrencyField, TextArea } from '../../ui/form';
 import { useToast } from '../../ui/Toast';
 import { LockIcon } from '../../ui/icons';
-import { formatMoney, parseNumeric } from '../../../lib/format';
+import { formatMoney } from '../../../lib/format';
 import {
   applyChargeDiscount,
   folioErrorMessage,
@@ -76,8 +76,9 @@ export function DiscountForm({
 
   // numeric(14,2) arrives as a STRING (§6) — parse before comparing. `typeof
   // charge.gross_amount === 'number'` is always false.
-  const gross = parseNumeric(charge.gross_amount) ?? 0;
-  const existing = parseNumeric(charge.discount_amount) ?? 0;
+  // Already numbers (rule 24) — parsed when the folio's charges were read.
+  const gross = charge.gross_amount;
+  const existing = charge.discount_amount;
 
   // The single prediction of what the RPC will decide, recomputed on every
   // keystroke and shared by the meter, the PIN field and the submit button.

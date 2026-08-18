@@ -42,11 +42,9 @@ export interface Property {
   state: string | null;
   postal_code: string | null;
   country: string; // not null, defaults to 'Nigeria'
-  // numeric(10,7). PostgREST returns numeric columns as STRINGS (e.g.
-  // "4.3968311"), never JS numbers, to preserve precision — parse with
-  // parseNumeric before any arithmetic (CLAUDE.md §6, Money).
-  latitude: string | null;
-  longitude: string | null;
+  // numeric(10,7), parsed at the boundary (rule 24).
+  latitude: number | null;
+  longitude: number | null;
   phone: string | null;
   email: string | null;
   status: PropertyStatus;
@@ -60,7 +58,10 @@ export interface Property {
 // tenant_settings (company-wide; accounting-level, not guest-facing)
 export interface TenantSettings {
   tenant_id: string;
-  default_vat_rate: number; // numeric(5,4)
+  // numeric(5,4) — a FRACTION, not a percent. It arrives from PostgREST as a
+  // string and is parsed at the boundary (rule 24); this field claimed `number`
+  // for a year while holding a string, which is the bug class in miniature.
+  default_vat_rate: number;
   // Which admin modules this tenant sees (006). Values are AdminModule keys
   // (adminNav.ts); typed as string[] here to keep this row type free of a
   // components import, and narrowed by useEnabledModules. Never empty of
@@ -93,16 +94,15 @@ export interface PropertySettings {
 // property is guaranteed by an AFTER INSERT trigger.
 export interface PropertyFinanceSettings {
   property_id: string;
-  // numeric(14,2) — a STRING over PostgREST (§6). Parse with parseNumeric before
-  // any arithmetic or comparison. 0 means EVERY discount needs a manager PIN.
-  discount_threshold: string;
+  // numeric(14,2), parsed at the boundary (rule 24). 0 means EVERY discount
+  // needs a manager PIN.
+  discount_threshold: number;
   // 039 §1. The VALUE of variance above which finishing a stock take needs a
-  // manager PIN — numeric(14,2), so a STRING over PostgREST. Money, never a
-  // quantity: 3 kg of saffron and 3 kg of rice are not the same event, and
+  // manager PIN — numeric(14,2). Money, never a quantity: 3 kg of saffron and 3 kg of rice are not the same event, and
   // quantities across units cannot be compared at all. Measured as the sum of
   // the ABSOLUTE value of every counted line's variance. 0 (the default) means
   // every count with any variance at all needs a manager.
-  count_variance_threshold: string;
+  count_variance_threshold: number;
   // 038 §4. The last CLOSED business date: every posting RPC refuses a movement
   // dated on or before it, naming both the lock and the attempted date. A
   // Postgres `date` arrives as an ISO 'YYYY-MM-DD' string. NULL — the default —

@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
-import { fetchAllPaged } from './fetchAllPaged';
-import { parseNumeric } from './format';
+import { fetchAllPagedRows } from './fetchAllPaged';
+import { boundary, passthrough } from './rowParse';
 import type { Folio } from '../types/folio';
 import type {
   GuestAccountSummary,
@@ -31,8 +31,8 @@ import type {
 //     and every standalone item, never the visible page.
 //   - Rule 1a: the ledger goes through fetchAllPaged; nothing is capped.
 //   - Rule 11: every call is awaited and throws; the caller surfaces the error.
-//   - §6: every numeric column arrives as a STRING — parse with parseNumeric
-//     before any arithmetic or comparison.
+//   - Rule 24: every read parses its money at the boundary, so the running
+//     balance a screen prints is the number the database computed.
 
 // ---------------------------------------------------------------------------
 // The stays table (rule 1b)
@@ -53,6 +53,47 @@ export interface GuestStaysPage {
 // over the guest's whole account — stays and standalone items together — before
 // this .range() takes a slice of it. So page 2 shows the same allocation page 1
 // does, and a different sort order shows the same allocation again.
+// ---------------------------------------------------------------------------
+// The boundaries (rule 24) — completeness checked by the compiler
+// ---------------------------------------------------------------------------
+
+const stays = boundary<GuestStayRow>('guest_stays')(
+  [
+    'reserved_nights',
+    'display_nights',
+    'charges_total',
+    'payments_total',
+    'balance',
+    'guest_charges_total',
+    'guest_payments_pool',
+    'charges_before',
+    'allocated_amount',
+    'unallocated_amount',
+  ] as const,
+  ['actual_nights'] as const,
+);
+
+const summaries = boundary<GuestAccountSummaryRow>('guest_account_summary')(
+  [
+    'stay_count',
+    'standalone_count',
+    'total_nights',
+    'total_charged',
+    'total_paid',
+    'guest_balance',
+    'outstanding',
+    'credit_balance',
+  ] as const,
+  [] as const,
+);
+
+const ledgerEntries = boundary<GuestLedgerEntry>('guest_ledger')(
+  ['entry_rank', 'charge_amount', 'payment_amount', 'running_balance'] as const,
+  ['reserved_nights', 'actual_nights', 'display_nights'] as const,
+);
+
+const folios = passthrough<Folio>('folios');
+
 export async function fetchGuestStaysPage(
   guestId: string,
   tenantId: string,
@@ -75,7 +116,7 @@ export async function fetchGuestStaysPage(
     .returns<GuestStayRow[]>();
 
   if (error) throw error;
-  return { rows: data ?? [], count: count ?? 0 };
+  return { rows: stays.rows(data), count: count ?? 0 };
 }
 
 // ---------------------------------------------------------------------------
@@ -105,7 +146,7 @@ export async function fetchGuestAccountSummary(
 
   if (error) throw error;
 
-  const row = (data ?? null) as GuestAccountSummaryRow | null;
+  const row = summaries.maybeRow(data);
   if (!row) {
     return {
       stayCount: 0,
@@ -121,19 +162,19 @@ export async function fetchGuestAccountSummary(
     };
   }
 
-  // Parsed once, here at the edge. Integer counts arrive as JS numbers already;
-  // every numeric(14,2) arrives as a string and is parsed explicitly (§6).
+  // Renamed, not re-parsed: the boundary did the parsing on the way in (rule
+  // 24), so this is the view model taking the row's own numbers.
   return {
     stayCount: row.stay_count,
     standaloneCount: row.standalone_count,
     firstStay: row.first_stay,
     lastStay: row.last_stay,
     totalNights: row.total_nights,
-    totalCharged: parseNumeric(row.total_charged) ?? 0,
-    totalPaid: parseNumeric(row.total_paid) ?? 0,
-    guestBalance: parseNumeric(row.guest_balance) ?? 0,
-    outstanding: parseNumeric(row.outstanding) ?? 0,
-    creditBalance: parseNumeric(row.credit_balance) ?? 0,
+    totalCharged: row.total_charged,
+    totalPaid: row.total_paid,
+    guestBalance: row.guest_balance,
+    outstanding: row.outstanding,
+    creditBalance: row.credit_balance,
   };
 }
 
@@ -160,7 +201,7 @@ export async function fetchGuestLedger(
   tenantId: string,
   propertyId: string,
 ): Promise<GuestLedgerEntry[]> {
-  return fetchAllPaged<GuestLedgerEntry>((from, to) =>
+  return fetchAllPagedRows<GuestLedgerEntry>(ledgerEntries, (from, to) =>
     supabase
       .from('guest_ledger')
       .select('*')
@@ -204,5 +245,5 @@ export async function openGuestFolio(
     p_idempotency_key: idempotencyKey,
   });
   if (error) throw error;
-  return data as Folio;
+  return folios.row(data);
 }

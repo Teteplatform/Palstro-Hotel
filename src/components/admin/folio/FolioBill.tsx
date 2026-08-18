@@ -9,7 +9,6 @@ import {
   formatQuantity,
   formatRatePercent,
   MISSING_VALUE,
-  parseNumeric,
 } from '../../../lib/format';
 import { formatDisplayDate, isoDateInZone } from '../../../lib/date';
 import { paymentMethodLabel } from '../../../lib/folioLabels';
@@ -245,8 +244,10 @@ export function FolioBill({
   const currentUserId = user?.id ?? null;
   const folioOpen = folio.status === 'open';
   const folioClosed = folio.status === 'closed';
-  const balance = parseNumeric(totals?.balance) ?? 0;
-  const discountTotal = parseNumeric(totals?.discount_total) ?? 0;
+  // The totals row is parsed at the boundary (rule 24); it is `undefined` only
+  // while the folio is still loading, which is what the ?? 0 covers.
+  const balance = totals?.balance ?? 0;
+  const discountTotal = totals?.discount_total ?? 0;
 
   // ONE tax fetch, aggregated per tax code so each tax prints ONCE beneath the
   // rows. This is the one place the screen adds anything up, and it adds up the
@@ -254,9 +255,10 @@ export function FolioBill({
   // section and folio_totals.tax_total are the same numbers by construction.
   // Sorted by code because the view projects no display_order — an arbitrary row
   // order must not shuffle the printed bill between reads.
-  const taxesByCode = new Map<string, { name: string; rate: string; total: number }>();
+  const taxesByCode = new Map<string, { name: string; rate: number; total: number }>();
   for (const row of chargeTaxes) {
-    const amount = parseNumeric(row.amount) ?? 0;
+    // Already a number (rule 24) — parsed when folio_charge_taxes was read.
+    const amount = row.amount;
     const bucket = taxesByCode.get(row.code);
     if (bucket) bucket.total += amount;
     else taxesByCode.set(row.code, { name: row.name, rate: row.rate, total: amount });
@@ -513,7 +515,7 @@ export function FolioBill({
                 <>
                   <FigureRow
                     label="Charges before discount"
-                    amount={parseNumeric(totals?.gross_total)}
+                    amount={totals?.gross_total ?? null}
                     currency={currency}
                     muted
                   />
@@ -528,7 +530,7 @@ export function FolioBill({
               ) : null}
               <FigureRow
                 label="Subtotal"
-                amount={parseNumeric(totals?.net_total)}
+                amount={totals?.net_total ?? null}
                 currency={currency}
               />
 
@@ -548,7 +550,7 @@ export function FolioBill({
 
               <FigureRow
                 label="Total charges"
-                amount={parseNumeric(totals?.charges_total)}
+                amount={totals?.charges_total ?? null}
                 currency={currency}
                 strong
               />
@@ -569,7 +571,7 @@ export function FolioBill({
               ))}
               <FigureRow
                 label="Payments received"
-                amount={parseNumeric(totals?.payments_total)}
+                amount={totals?.payments_total ?? null}
                 currency={currency}
                 signed="minus"
               />
@@ -676,8 +678,8 @@ function buildChargeRows({
 
   return charges.map((charge) => {
     const voided = charge.is_voided === true;
-    const quantity = parseNumeric(charge.quantity) ?? 1;
-    const discount = parseNumeric(charge.discount_amount) ?? 0;
+    const quantity = charge.quantity;
+    const discount = charge.discount_amount;
     const postedDate = isoDateInZone(charge.created_at, timezone);
 
     // Which side of a reversal, if any, this line is.
@@ -823,8 +825,8 @@ function buildChargeRows({
       // The category no longer prefixes it — that is the Type column's job.
       description: charge.description?.trim() || MISSING_VALUE,
       meta: parts.length > 0 ? joinMeta(parts) : null,
-      amount: voided ? null : parseNumeric(charge.net_amount),
-      figure: parseNumeric(charge.net_amount),
+      amount: voided ? null : charge.net_amount,
+      figure: charge.net_amount,
       voided,
       actions,
     } satisfies BillRow;
@@ -884,7 +886,7 @@ function buildPaymentRows({
 
   return payments.map((payment) => {
     const voided = payment.is_voided === true;
-    const amount = parseNumeric(payment.amount) ?? 0;
+    const amount = payment.amount;
     const postedDate = isoDateInZone(payment.created_at, timezone);
 
     // Which side of a reversal, if any, this line is.

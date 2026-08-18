@@ -2,6 +2,10 @@
 // (supabase/migrations/035_inventory_catalogue.sql). Keep in sync with the
 // migration — no fields the schema does not have.
 //
+// EVERY NUMERIC FIELD BELOW IS A `number`, ALREADY PARSED (rule 24) —
+// src/lib/inventory.ts parses each read at the boundary, so no component ever
+// sees the string a numeric column arrives as.
+//
 // THE SCOPING SPLIT, repeated here because it decides every query in
 // src/lib/inventory.ts: the CATALOGUE (units, categories, items) is TENANT-level
 // — one definition of "Rice" shared by every property. LOCATIONS are
@@ -77,9 +81,8 @@ export interface InventoryItem {
   is_perishable: boolean;
   // 038: every stock-IN of this item must record a batch code and expiry date.
   tracks_expiry: boolean;
-  // numeric(14,4) — PostgREST returns numeric as a STRING to preserve precision
-  // (CLAUDE.md §6). Parse with parseNumeric before any arithmetic or comparison.
-  reorder_level: string | null;
+  // numeric(14,4). The on-hand level at or below which this item reads as low.
+  reorder_level: number | null;
 
   // --- the standard field set (037) ---------------------------------------
   // The manufacturer's scanned code, separate from `code` (the hotel's own short
@@ -89,15 +92,15 @@ export interface InventoryItem {
   // numeric here would be read as a purchase-to-base conversion factor, and this
   // module deliberately has none (035: everything is entered in the base unit).
   pack_size: string | null;
-  // numeric(14,2) as a STRING (§6). The standard BUY cost of one base unit,
-  // informational only — valuation is the moving average folded from the
-  // movements (036 §2) and nothing reads this to value anything.
-  purchase_cost: string | null;
-  // numeric(14,4) as STRINGS (§6). The ordering par range. NEITHER is the alert:
-  // the low-stock flag compares on-hand against reorder_level (036 §3.2). These
-  // are read by purchasing (2c) to suggest an order quantity.
-  min_stock_level: string | null;
-  max_stock_level: string | null;
+  // numeric(14,2). The standard BUY cost of one base unit, informational only —
+  // valuation is the moving average folded from the movements (036 §2) and
+  // nothing reads this to value anything.
+  purchase_cost: number | null;
+  // numeric(14,4). The ordering par range. NEITHER is the alert: the low-stock
+  // flag compares on-hand against reorder_level (036 §3.2). These are read by
+  // purchasing (2c) to suggest an order quantity.
+  min_stock_level: number | null;
+  max_stock_level: number | null;
 
   is_active: boolean;
   display_order: number;

@@ -32,12 +32,11 @@ export interface CompanyRate {
   company_id: string;
   room_type_id: string;
   rate_mode: CompanyRateMode;
-  // numeric(14,2) / numeric(5,2) — PostgREST returns numeric as STRINGS to
-  // preserve precision (§6). Parse with parseNumeric before any arithmetic.
-  // Exactly one of these is set per the 016 check constraint: fixed_rate when
-  // mode='fixed', discount_percent when mode='percentage'.
-  fixed_rate: string | null;
-  discount_percent: string | null;
+  // numeric(14,2) / numeric(5,2), parsed at the boundary (rule 24). Exactly one
+  // of these is set per the 016 check constraint: fixed_rate when mode='fixed',
+  // discount_percent when mode='percentage'.
+  fixed_rate: number | null;
+  discount_percent: number | null;
   deleted_at: string | null;
   created_at: string;
   updated_at: string;

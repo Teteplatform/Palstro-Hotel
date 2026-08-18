@@ -1,5 +1,4 @@
-import { buildSheetXlsx, type SheetCell } from './simpleSheet';
-import { parseNumeric } from '../format';
+import { buildSheetXlsx, numberCell, type SheetCell } from './simpleSheet';
 import { itemTypeLabel } from '../inventoryLabels';
 import type { ProductRow } from '../inventoryProducts';
 
@@ -75,11 +74,3 @@ export function buildProductsXlsx(
 // absent value becomes an EMPTY cell rather than a zero, because a zero in a
 // count sheet is a claim ("there is none") and a blank is the truth ("we have no
 // figure"). The same distinction the MISSING_VALUE dash makes on screen.
-function numberCell(
-  value: string | null,
-  format: 'money' | 'quantity',
-): SheetCell {
-  const n = parseNumeric(value);
-  if (n === null) return null;
-  return { kind: 'number', value: n, format };
-}

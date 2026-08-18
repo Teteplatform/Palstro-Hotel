@@ -1,4 +1,5 @@
 import { supabase } from '../../../lib/supabase';
+import { settingsRowParsers } from '../../../lib/settings/save';
 import type { MediaAssetMap } from '../../../lib/mediaUrl';
 import type { PropertyBranding, PropertySettings } from '../../../types/tenant';
 
@@ -49,7 +50,7 @@ export async function commitBrandingPatch(
     p_expected_updated_at: ctx.settingsUpdatedAt,
   });
   if (error) throw error;
-  ctx.onBrandingCommitted(data as PropertySettings);
+  ctx.onBrandingCommitted(settingsRowParsers.propertySettings.row(data));
 }
 
 // Human-friendly message for the custom SQLSTATEs migration 008 raises (mirrors

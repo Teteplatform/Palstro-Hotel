@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { TextArea } from '../../ui/form';
 import { useToast } from '../../ui/Toast';
 import { LockIcon } from '../../ui/icons';
-import { formatMoney, parseNumeric } from '../../../lib/format';
+import { formatMoney } from '../../../lib/format';
 import { formatDisplayDate } from '../../../lib/date';
 import {
   folioErrorMessage,
@@ -81,9 +81,10 @@ export function ReverseChargeForm({
   const canSubmit = reason.trim().length > 0 && pin.trim().length > 0;
 
   // §6: every numeric column arrives as a STRING — parse before any arithmetic.
-  const gross = parseNumeric(charge.gross_amount) ?? 0;
-  const discount = parseNumeric(charge.discount_amount) ?? 0;
-  const net = parseNumeric(charge.net_amount) ?? 0;
+  // Already numbers (rule 24) — parsed when the folio's charges were read.
+  const gross = charge.gross_amount;
+  const discount = charge.discount_amount;
+  const net = charge.net_amount;
   const isDiscountMode = mode === 'discount';
 
   // THE FIGURE THAT WILL MOVE. Shown before the tax, because the tax follows the

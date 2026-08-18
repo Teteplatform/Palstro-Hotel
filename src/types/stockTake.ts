@@ -1,11 +1,12 @@
 // Row types for the stock take (migration 039).
 //
-// §6, and rule 22's corollary: Postgres `numeric` columns arrive over PostgREST
-// as STRINGS, never JS numbers — so every quantity and every money figure below
-// is typed `string` and must be parsed with parseNumeric before any arithmetic
-// or comparison. The counts in stock_take_progress are cast to `integer` in the
-// view precisely so they arrive as JSON NUMBERS; int8 would also arrive as a
-// number, while numeric would not, and that mismatch is what crashed 1.1c.
+// EVERY NUMERIC FIELD BELOW IS A `number`, ALREADY PARSED (rule 24). This file
+// is the clearest illustration of why the parse belongs at the boundary: the
+// counts in stock_take_progress are cast to `integer` in the view so they
+// arrive as JSON NUMBERS, while the quantities beside them are numeric and
+// arrive as STRINGS — two shapes, one row, decided by a cast in a migration
+// that no component can see. src/lib/stockTake.ts parses both on the way in, so
+// the difference stops at the data layer where it belongs.
 //
 // ---------------------------------------------------------------------------
 // THE NULLS IN HERE ARE THE FEATURE, NOT AN ABSENCE OF DATA
@@ -113,13 +114,13 @@ export interface StockTakeProgressRow {
   // and the reason they are separate numbers rather than a boolean.
   movement_count: number;
   reversed_movement_count: number;
-  // NULL until finished (blind). Numbers/strings per the note at the top.
+  // NULL until finished (blind) — see the note at the top.
   variance_count: number | null;
-  // numeric(14,2) → STRING. Signed: what the count changed the stock value by.
-  net_variance_value: string | null;
+  // numeric(14,2). Signed: what the count changed the stock value by.
+  net_variance_value: number | null;
   // The size of the discrepancy regardless of direction — the figure the
   // property's approval threshold is measured against.
-  absolute_variance_value: string | null;
+  absolute_variance_value: number | null;
 }
 
 // stock_take_sheet — one row per line, for BOTH faces of the sheet (039 §4.1).
@@ -144,7 +145,7 @@ export interface StockTakeSheetRow {
 
   // ALWAYS SENT. What the counter typed is theirs to read back — that is what
   // makes a resumed count possible at all. NULL means NOT COUNTED.
-  counted_quantity: string | null;
+  counted_quantity: number | null;
   // Derived in the view from NULL-ness, so a counted ZERO is `true` here. It is
   // a real column so the "still to count" filter runs server-side (rule 1b).
   is_counted: boolean;
@@ -153,10 +154,10 @@ export interface StockTakeSheetRow {
 
   // BLIND UNTIL FINISHED. All four are NULL while the count is open and stay
   // NULL forever on a cancelled count (039 §4).
-  expected_quantity: string | null;
-  variance_quantity: string | null;
-  variance_unit_cost: string | null;
-  variance_value: string | null;
+  expected_quantity: number | null;
+  variance_quantity: number | null;
+  variance_unit_cost: number | null;
+  variance_value: number | null;
 
   movement_id: string | null;
   // 040. Whether this line's posting has since been undone — by the whole count
@@ -172,7 +173,7 @@ export interface CountLineResult {
   line_id: string;
   stock_take_id: string;
   inventory_item_id: string;
-  counted_quantity: string | null;
+  counted_quantity: number | null;
   counted_at: string | null;
   counted_by: string | null;
 }

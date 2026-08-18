@@ -6,6 +6,7 @@ import {
   fetchFolioTotals,
 } from './folio';
 import { supabase } from './supabase';
+import { passthrough } from './rowParse';
 import { assembleStatement, type StatementData } from './statement';
 import { fetchBookingDetail } from './bookings';
 import { fetchGuestById } from './guests';
@@ -15,6 +16,16 @@ import { buildMediaMap, mediaUrl } from './mediaUrl';
 import { todayIsoInZone } from './date';
 import type { Folio } from '../types/folio';
 import type { Property, PropertyBranding, PropertySettings } from '../types/tenant';
+
+// The boundaries (rule 24). None of these three reads carries a numeric column —
+// a folio holds no balance (021 §5), and the other two select one text field
+// each — and they are declared anyway, because a read exempted by judgement is
+// how the next one gets missed.
+const folios = passthrough<Folio>('folios (standalone)');
+const guestIds = passthrough<{ guest_id: string | null }>('bookings (guest id)');
+const brandingRows = passthrough<Pick<PropertySettings, 'branding'>>(
+  'property_settings (branding)',
+);
 
 // READING ONE STATEMENT, ONCE, FOR EVERY SURFACE THAT NEEDS IT.
 //
@@ -169,7 +180,7 @@ export async function fetchStandaloneFolioForGuest(
     .maybeSingle();
 
   if (error) throw error;
-  return (data ?? null) as Folio | null;
+  return folios.maybeRow(data);
 }
 
 // WHOSE record a statement belongs to. A standalone statement IS a guest's
@@ -195,10 +206,10 @@ export async function resolveStatementGuestId(
     .eq('tenant_id', tenantId) // rule 19
     .eq('property_id', propertyId) // rule 19
     .is('deleted_at', null) // rule 5
-    .maybeSingle<{ guest_id: string | null }>();
+    .maybeSingle();
 
   if (error) throw error;
-  return data?.guest_id ?? null;
+  return guestIds.maybeRow(data)?.guest_id ?? null;
 }
 
 export interface StatementBranding {
@@ -226,12 +237,13 @@ export async function fetchStatementBranding(
       .from('property_settings')
       .select('branding')
       .eq('property_id', propertyId)
-      .maybeSingle<Pick<PropertySettings, 'branding'>>(),
+      .maybeSingle(),
     fetchPropertyMedia(propertyId, tenantId),
   ]);
   if (settingsRes.error) throw settingsRes.error;
 
-  const branding: PropertyBranding = settingsRes.data?.branding ?? {};
+  const branding: PropertyBranding =
+    brandingRows.maybeRow(settingsRes.data)?.branding ?? {};
   const logoId = brandingString(branding, 'logo_url');
   return {
     branding,

@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
-import { fetchAllPaged } from './fetchAllPaged';
-import { parseNumeric } from './format';
+import { fetchAllPagedRows } from './fetchAllPaged';
+import { boundary } from './rowParse';
 import type { InventoryItem, ItemType } from '../types/inventory';
 
 // THE DATA LAYER FOR THE CONSOLIDATED INVENTORY PAGE — one list that is the
@@ -32,7 +32,8 @@ import type { InventoryItem, ItemType } from '../types/inventory';
 //   - Rule 19: RLS restricts to the user's tenants; every read ADDITIONALLY
 //     scopes to the active tenant and — for anything physical — the property.
 //   - Rule 20: totals and exports span the whole FILTERED set, never the page.
-//   - §6: numeric columns arrive as STRINGS; parse with parseNumeric.
+//   - Rule 24: every read parses its numeric fields at the boundary, so the
+//     ProductRow this module hands out carries numbers and never a wire value.
 
 // ---------------------------------------------------------------------------
 // Filters
@@ -160,10 +161,10 @@ function applyPositionFilters(
 export interface ProductLocationStock {
   locationId: string;
   locationName: string;
-  // numeric(14,4)/(14,2) as STRINGS (§6) — parse before arithmetic.
-  quantity: string;
-  averageCost: string;
-  value: string;
+  // numeric(14,4)/(14,2), parsed at the boundary (rule 24).
+  quantity: number;
+  averageCost: number;
+  value: number;
   isBelowReorder: boolean;
 }
 
@@ -175,16 +176,16 @@ export interface ProductRow {
   baseUnit: string;
   categoryId: string | null;
   categoryName: string | null;
-  reorderLevel: string | null;
+  reorderLevel: number | null;
   isActive: boolean;
 
   // The position AT THE CURRENT SCOPE — the selected location, or the property
   // roll-up when "all locations" is active. NULL (not zero) when the item has
   // never moved at that scope: "we have no figure" is not "there is none", and
   // the screen renders the two differently.
-  quantity: string | null;
-  averageCost: string | null;
-  value: string | null;
+  quantity: number | null;
+  averageCost: number | null;
+  value: number | null;
   isBelowReorder: boolean;
 
   // Every location holding this item, for the "Main Store: 62 · Kitchen: 1"
@@ -224,9 +225,9 @@ interface PositionRow {
   inventory_item_id: string;
   location_id: string;
   location_name: string;
-  quantity_on_hand: string;
-  moving_average_cost: string;
-  stock_value: string;
+  quantity_on_hand: number;
+  moving_average_cost: number;
+  stock_value: number;
   is_below_reorder: boolean;
   item_name: string;
   item_code: string | null;
@@ -245,12 +246,34 @@ const POSITION_COLUMNS = 'inventory_item_id,location_id,location_name,quantity_o
 
 interface RollupRow {
   inventory_item_id: string;
-  quantity_on_hand: string;
-  stock_value: string;
+  quantity_on_hand: number;
+  stock_value: number;
   // NULL when nothing is on hand: with no quantity there is no meaningful unit
   // cost, and the view returns NULL rather than dividing by zero (036 §3.3).
-  moving_average_cost: string | null;
+  moving_average_cost: number | null;
 }
+
+// ---------------------------------------------------------------------------
+// The boundaries (rule 24)
+// ---------------------------------------------------------------------------
+// One per READ, not one per table: each of these selects a different projection,
+// and a boundary naming a column its query never asked for would throw on every
+// row. The compiler checks each list covers every numeric key of its shape.
+
+const positionRows = boundary<PositionRow>('stock_on_hand_items (product list)')(
+  ['quantity_on_hand', 'moving_average_cost', 'stock_value'] as const,
+  [] as const,
+);
+
+const rollupRows = boundary<RollupRow>('stock_on_hand_by_item')(
+  ['quantity_on_hand', 'stock_value'] as const,
+  ['moving_average_cost'] as const,
+);
+
+const itemRows = boundary<ItemRow>('inventory_items (product list)')(
+  [] as const,
+  ['reorder_level'] as const,
+);
 
 // ---------------------------------------------------------------------------
 // The list (rule 1b)
@@ -298,7 +321,7 @@ export async function fetchProductsPage(
       .range(from, to);
 
     if (error) throw error;
-    const positions = (data ?? []) as PositionRow[];
+    const positions = positionRows.rows(data);
     return {
       rows: positions.map(rowFromPosition),
       count: count ?? 0,
@@ -316,7 +339,7 @@ export async function fetchProductsPage(
     .range(from, to);
 
   if (error) throw error;
-  const items = (data ?? []) as ItemRow[];
+  const items = itemRows.rows(data);
 
   const rows = await attachStock(tenantId, propertyId, locationId, items);
   return { rows, count: count ?? 0, byPosition: false };
@@ -340,7 +363,7 @@ async function attachStock(
 
   // The per-location breakdown, always — it is what the Locations column shows,
   // and at a single location it is also the position itself.
-  const positionsPromise = fetchAllPaged<PositionRow>((from, to) => {
+  const positionsPromise = fetchAllPagedRows<PositionRow>(positionRows, (from, to) => {
     let q = supabase
       .from('stock_on_hand_items')
       .select(POSITION_COLUMNS)
@@ -361,7 +384,7 @@ async function attachStock(
   // the view means there is exactly one implementation of that rule.
   const rollupPromise = locationId
     ? Promise.resolve([] as RollupRow[])
-    : fetchAllPaged<RollupRow>((from, to) =>
+    : fetchAllPagedRows<RollupRow>(rollupRows, (from, to) =>
         supabase
           .from('stock_on_hand_by_item')
           .select('inventory_item_id,quantity_on_hand,stock_value,moving_average_cost')
@@ -489,14 +512,19 @@ export async function fetchProductsSummary(
 ): Promise<ProductsSummary> {
   interface SummaryRow {
     inventory_item_id: string;
-    quantity_on_hand: string;
-    stock_value: string;
+    quantity_on_hand: number;
+    stock_value: number;
     is_below_reorder: boolean;
   }
 
-  // fetchAllPaged, not a capped read (rule 1a): a total must cover every
-  // matching row, so nothing may be truncated at a row cap.
-  const positionsPromise = fetchAllPaged<SummaryRow>((from, to) =>
+  const summaryRows = boundary<SummaryRow>('stock_on_hand_items (product summary)')(
+    ['quantity_on_hand', 'stock_value'] as const,
+    [] as const,
+  );
+
+  // Paged, not a capped read (rule 1a): a total must cover every matching row,
+  // so nothing may be truncated at a row cap.
+  const positionsPromise = fetchAllPagedRows<SummaryRow>(summaryRows, (from, to) =>
     applyPositionFilters(
       supabase
         .from('stock_on_hand_items')
@@ -538,11 +566,10 @@ export async function fetchProductsSummary(
   const itemsSeen = new Set<string>();
 
   for (const row of positions) {
-    // §6: numeric → STRING. Parsed before adding; a bad value contributes 0
-    // rather than turning the whole total into NaN.
-    const quantity = parseNumeric(row.quantity_on_hand) ?? 0;
+    // Already numbers — parsed at the boundary on the way in (rule 24).
+    const quantity = row.quantity_on_hand;
     totalUnits += quantity;
-    totalValue += parseNumeric(row.stock_value) ?? 0;
+    totalValue += row.stock_value;
     if (quantity !== 0) itemsHolding.add(row.inventory_item_id);
     if (quantity < 0) negativeCount += 1;
     if (row.is_below_reorder) belowReorderCount += 1;
@@ -574,7 +601,7 @@ export async function fetchProductsForExport(
   filters: ProductFilters = EMPTY_PRODUCT_FILTERS,
 ): Promise<ProductRow[]> {
   if (filters.state) {
-    const positions = await fetchAllPaged<PositionRow>((from, to) =>
+    const positions = await fetchAllPagedRows<PositionRow>(positionRows, (from, to) =>
       applyPositionFilters(
         supabase.from('stock_on_hand_items').select(POSITION_COLUMNS),
         tenantId,
@@ -590,7 +617,7 @@ export async function fetchProductsForExport(
     return positions.map(rowFromPosition);
   }
 
-  const items = await fetchAllPaged<ItemRow>((from, to) =>
+  const items = await fetchAllPagedRows<ItemRow>(itemRows, (from, to) =>
     applyCatalogueFilters(
       supabase.from('inventory_items').select(ITEM_COLUMNS),
       tenantId,

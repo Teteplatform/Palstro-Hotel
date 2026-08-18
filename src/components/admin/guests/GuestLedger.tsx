@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { describeError } from '../../../lib/errors';
-import { formatMoney, MISSING_VALUE, parseNumeric } from '../../../lib/format';
+import { formatMoney, MISSING_VALUE } from '../../../lib/format';
 import { formatDisplayDate } from '../../../lib/date';
 import { formatNights } from '../../../lib/bookingLabels';
 import { paymentMethodLabel } from '../../../lib/folioLabels';
@@ -139,15 +139,15 @@ export function GuestLedger({
   let totalCharges = 0;
   let totalPayments = 0;
   for (const entry of entries) {
-    totalCharges += parseNumeric(entry.charge_amount) ?? 0;
-    totalPayments += parseNumeric(entry.payment_amount) ?? 0;
+    totalCharges += entry.charge_amount;
+    totalPayments += entry.payment_amount;
   }
 
   // The outstanding balance is the LAST line's running balance — the database's
   // own cumulative figure, not totalCharges − totalPayments recomputed here.
   const outstanding =
     entries.length > 0
-      ? parseNumeric(entries[entries.length - 1].running_balance)
+      ? entries[entries.length - 1].running_balance
       : 0;
 
   return (
@@ -310,8 +310,9 @@ function LedgerRow({
 }) {
   const isCharge =
     entry.entry_type === 'stay' || entry.entry_type === 'standalone_charge';
-  const charge = parseNumeric(entry.charge_amount) ?? 0;
-  const payment = parseNumeric(entry.payment_amount) ?? 0;
+  // Already numbers (rule 24) — parsed when guest_ledger was read.
+  const charge = entry.charge_amount;
+  const payment = entry.payment_amount;
   const dateText = formatDisplayDate(entry.entry_date);
 
   // "Stay · Executive Suite · 1 night" — the room type is the tenant's own name

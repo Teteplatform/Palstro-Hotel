@@ -4,7 +4,6 @@ import {
   formatMoney,
   formatOccupancy,
   MISSING_VALUE,
-  parseNumeric,
 } from '../../../lib/format';
 import { formatDisplayDate, nightsBetween } from '../../../lib/date';
 import { bookingTotal } from '../../../lib/bookings';
@@ -378,10 +377,12 @@ function BalanceCell({
   balance,
   currency,
 }: {
-  balance: string | null;
+  balance: number | null;
   currency: string;
 }) {
-  const value = parseNumeric(balance);
+  // Already a number, or genuinely absent — the view's row is parsed at the
+  // boundary (rule 24), so null here means "no folio row", never "unparseable".
+  const value = balance;
 
   if (value === null) {
     return (

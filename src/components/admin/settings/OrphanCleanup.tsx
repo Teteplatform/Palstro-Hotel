@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../../../lib/supabase';
-import { fetchAllPaged } from '../../../lib/fetchAllPaged';
+import { fetchAllPagedRows } from '../../../lib/fetchAllPaged';
+import { passthrough } from '../../../lib/rowParse';
 import { useToast } from '../../ui/Toast';
 import { mediaVariantUrl } from '../../../lib/mediaUrl';
 import {
@@ -11,6 +12,10 @@ import {
 } from '../../../lib/mediaAssets';
 import type { MediaAsset } from '../../../types/media';
 import type { PropertyBranding } from '../../../types/tenant';
+
+// The boundary (rule 24). One jsonb column, validated below by toStringArray —
+// declared rather than judged exempt.
+const imageRows = passthrough<{ images: unknown }>('room_types (images)');
 
 // Orphaned-media cleanup (build 4 §4). Finds media_assets for this property that
 // NO branding key and NO room type still references — files a replaced or removed
@@ -72,7 +77,7 @@ export function OrphanCleanup({
     (async () => {
       setScanning(true);
       try {
-        const rows = await fetchAllPaged<{ images: unknown }>((from, to) =>
+        const rows = await fetchAllPagedRows<{ images: unknown }>(imageRows, (from, to) =>
           supabase
             .from('room_types')
             .select('images')

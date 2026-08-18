@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useToast } from '../../ui/Toast';
 import { TextField, CurrencyField, controlClasses } from '../../ui/form';
 import { PlusIcon, EditIcon, CloseIcon } from '../../ui/icons';
-import { formatCurrency, parseNumeric } from '../../../lib/format';
+import { formatCurrency } from '../../../lib/format';
 import { humanizeError } from '../../../lib/errors';
 import {
   fetchSeasonalRates,
@@ -103,7 +103,7 @@ export function SeasonalRatesEditor({
       name: rate.name,
       start_date: rate.start_date,
       end_date: rate.end_date,
-      rate: parseNumeric(rate.rate),
+      rate: rate.rate,
     });
     setErrors({});
     setEditing(rate.id);

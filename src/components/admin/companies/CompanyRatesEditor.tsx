@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useToast } from '../../ui/Toast';
 import { CurrencyField, NumberField, Select } from '../../ui/form';
 import { humanizeError } from '../../../lib/errors';
-import { formatCurrency, parseNumeric, MISSING_VALUE } from '../../../lib/format';
+import { formatCurrency, MISSING_VALUE } from '../../../lib/format';
 import {
   createCompanyRate,
   updateCompanyRate,
@@ -92,18 +92,18 @@ function RateRow({
   const [mode, setMode] = useState<CompanyRateMode>(
     existing?.rate_mode ?? 'percentage',
   );
-  const [fixed, setFixed] = useState<number | null>(
-    parseNumeric(existing?.fixed_rate ?? null),
-  );
+  // The rate row is parsed at the boundary (rule 24), so the form starts from
+  // the numbers themselves.
+  const [fixed, setFixed] = useState<number | null>(existing?.fixed_rate ?? null);
   const [percent, setPercent] = useState<number | null>(
-    parseNumeric(existing?.discount_percent ?? null),
+    existing?.discount_percent ?? null,
   );
   const [busy, setBusy] = useState(false);
 
   function openEdit() {
     setMode(existing?.rate_mode ?? 'percentage');
-    setFixed(parseNumeric(existing?.fixed_rate ?? null));
-    setPercent(parseNumeric(existing?.discount_percent ?? null));
+    setFixed(existing?.fixed_rate ?? null);
+    setPercent(existing?.discount_percent ?? null);
     setEditing(true);
   }
 
@@ -276,11 +276,11 @@ function RateRow({
 function existingSummary(rate: CompanyRate | null, currency: string): string {
   if (!rate) return 'Pays rack';
   if (rate.rate_mode === 'fixed') {
-    const v = parseNumeric(rate.fixed_rate);
+    const v = rate.fixed_rate;
     return v === null
       ? MISSING_VALUE
       : `Fixed ${formatCurrency(v, currency)}/night`;
   }
-  const p = parseNumeric(rate.discount_percent);
+  const p = rate.discount_percent;
   return p === null ? MISSING_VALUE : `${p}% off rack`;
 }

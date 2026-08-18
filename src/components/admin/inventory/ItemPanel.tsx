@@ -11,7 +11,6 @@ import { useToast } from '../../ui/Toast';
 import { CloseIcon } from '../../ui/icons';
 import { useFocusTrap } from '../../../hooks/useFocusTrap';
 import { todayIsoInZone } from '../../../lib/date';
-import { parseNumeric } from '../../../lib/format';
 import { humanizeError } from '../../../lib/errors';
 import {
   createCategory,
@@ -123,10 +122,6 @@ const EMPTY_ITEM_FORM: ItemFormValues = {
 // nullable, where NULL means "not stated". parseNumeric is the one place that
 // distinction is handled correctly — Number('') is 0, which would turn an
 // unstated cost into a claim that the item is free.
-function toNumber(value: string | null): number | null {
-  return parseNumeric(value);
-}
-
 function toForm(item: InventoryItem): ItemFormValues {
   return {
     name: item.name,
@@ -136,12 +131,14 @@ function toForm(item: InventoryItem): ItemFormValues {
     categoryId: item.category_id ?? '',
     isPerishable: item.is_perishable,
     tracksExpiry: item.tracks_expiry,
-    reorderLevel: toNumber(item.reorder_level),
+    // The catalogue's figures are numbers by the time they reach a component
+    // (rule 24), so the form takes them as they are.
+    reorderLevel: item.reorder_level,
     barcode: item.barcode ?? '',
     packSize: item.pack_size ?? '',
-    purchaseCost: toNumber(item.purchase_cost),
-    minStockLevel: toNumber(item.min_stock_level),
-    maxStockLevel: toNumber(item.max_stock_level),
+    purchaseCost: item.purchase_cost,
+    minStockLevel: item.min_stock_level,
+    maxStockLevel: item.max_stock_level,
     isActive: item.is_active,
   };
 }

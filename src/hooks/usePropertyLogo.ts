@@ -3,7 +3,14 @@ import { supabase } from '../lib/supabase';
 import { fetchPropertyMedia } from '../lib/mediaAssets';
 import { buildMediaMap, mediaUrl } from '../lib/mediaUrl';
 import { brandingString } from '../lib/branding';
+import { passthrough } from '../lib/rowParse';
 import type { PropertySettings } from '../types/tenant';
+
+// The boundary (rule 24). One text column, no numeric — declared rather than
+// judged exempt.
+const brandingRows = passthrough<Pick<PropertySettings, 'branding'>>(
+  'property_settings (logo)',
+);
 
 // Resolves the active property's logo to a THUMB URL for the admin sidebar
 // (3.txt §3). Branding stores a media_asset id (009), so this loads that id from
@@ -41,15 +48,14 @@ export function usePropertyLogo(
             .from('property_settings')
             .select('branding')
             .eq('property_id', propertyId)
-            .maybeSingle<Pick<PropertySettings, 'branding'>>(),
+            .maybeSingle(),
           fetchPropertyMedia(propertyId, tenantId),
         ]);
         if (cancelled) return;
         if (settingsRes.error) throw settingsRes.error;
 
-        const id = settingsRes.data
-          ? brandingString(settingsRes.data.branding, 'logo_url')
-          : null;
+        const row = brandingRows.maybeRow(settingsRes.data);
+        const id = row ? brandingString(row.branding, 'logo_url') : null;
         setLogoUrl(mediaUrl(buildMediaMap(mediaRows), id, 'thumb'));
       } catch {
         // A failed lookup must never yield a broken image — fall back to the

@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
-import { fetchAllPaged } from './fetchAllPaged';
+import { fetchAllPagedRows } from './fetchAllPaged';
+import { boundary } from './rowParse';
 import type {
   InventoryCategory,
   InventoryItem,
@@ -25,9 +26,34 @@ import type {
 //   - Rule 1b: the items list pages SERVER-SIDE via .range() with an exact
 //     count, and its filters are applied server-side, so paging a filtered set
 //     is correct rather than paging-then-filtering.
-//   - §6: numeric columns arrive as STRINGS (reorder_level); parse with
-//     parseNumeric before any arithmetic. This module writes numbers and reads
-//     strings, deliberately.
+//   - Rule 24: every read parses its numeric fields at the boundary, so what
+//     this module hands out is what its row types promise. It WRITES numbers
+//     and now also READS numbers, which is the point: the asymmetry is what
+//     used to make a row type a guess.
+
+// ---------------------------------------------------------------------------
+// The boundaries (rule 24) — one per row type, completeness checked by tsc.
+// ---------------------------------------------------------------------------
+
+const units = boundary<UnitOfMeasure>('units_of_measure')(
+  ['display_order'] as const,
+  [] as const,
+);
+
+const categories = boundary<InventoryCategory>('inventory_categories')(
+  ['display_order'] as const,
+  [] as const,
+);
+
+const items = boundary<InventoryItem>('inventory_items')(
+  ['display_order'] as const,
+  ['reorder_level', 'purchase_cost', 'min_stock_level', 'max_stock_level'] as const,
+);
+
+const locations = boundary<StockLocation>('locations')(
+  ['display_order'] as const,
+  [] as const,
+);
 //
 // WRITES GO DIRECT TO THE TABLES, NOT THROUGH RPCs — matching roomTypes.ts and
 // companies.ts, and for the same reason. These are ADMIN-GATED CONFIGURATION
@@ -56,7 +82,7 @@ import type {
 export async function fetchAllUnits(
   tenantId: string,
 ): Promise<UnitOfMeasure[]> {
-  return fetchAllPaged<UnitOfMeasure>((from, to) =>
+  return fetchAllPagedRows<UnitOfMeasure>(units, (from, to) =>
     supabase
       .from('units_of_measure')
       .select('*')
@@ -107,7 +133,7 @@ export async function createUnit(
     .single();
 
   if (error) throw error;
-  return data as UnitOfMeasure;
+  return units.row(data);
 }
 
 // ===========================================================================
@@ -117,7 +143,7 @@ export async function createUnit(
 export async function fetchAllCategories(
   tenantId: string,
 ): Promise<InventoryCategory[]> {
-  return fetchAllPaged<InventoryCategory>((from, to) =>
+  return fetchAllPagedRows<InventoryCategory>(categories, (from, to) =>
     supabase
       .from('inventory_categories')
       .select('*')
@@ -146,7 +172,7 @@ export async function createCategory(
     .single();
 
   if (error) throw error;
-  return data as InventoryCategory;
+  return categories.row(data);
 }
 
 export async function updateCategory(
@@ -164,7 +190,7 @@ export async function updateCategory(
     .single();
 
   if (error) throw error;
-  return data as InventoryCategory;
+  return categories.row(data);
 }
 
 // Soft-delete a category. Items filed under it KEEP their category_id — the FK
@@ -252,7 +278,7 @@ export async function fetchInventoryItemsPage(
 
   const { data, error, count } = await q.range(from, to);
   if (error) throw error;
-  return { rows: (data ?? []) as InventoryItem[], count: count ?? 0 };
+  return { rows: items.rows(data), count: count ?? 0 };
 }
 
 // The whole live catalogue for a tenant — for later parts that need every item
@@ -262,7 +288,7 @@ export async function fetchAllInventoryItems(
   tenantId: string,
   activeOnly = false,
 ): Promise<InventoryItem[]> {
-  return fetchAllPaged<InventoryItem>((from, to) => {
+  return fetchAllPagedRows<InventoryItem>(items, (from, to) => {
     let q = supabase
       .from('inventory_items')
       .select('*')
@@ -287,7 +313,7 @@ export async function fetchInventoryItemsByIds(
   ids: string[],
 ): Promise<InventoryItem[]> {
   if (ids.length === 0) return [];
-  return fetchAllPaged<InventoryItem>((from, to) =>
+  return fetchAllPagedRows<InventoryItem>(items, (from, to) =>
     supabase
       .from('inventory_items')
       .select('*')
@@ -343,7 +369,7 @@ export async function createInventoryItem(
     .single();
 
   if (error) throw error;
-  return data as InventoryItem;
+  return items.row(data);
 }
 
 export async function updateInventoryItem(
@@ -361,7 +387,7 @@ export async function updateInventoryItem(
     .single();
 
   if (error) throw error;
-  return data as InventoryItem;
+  return items.row(data);
 }
 
 // Soft-delete an item (§6: master data is never hard-deleted, and 035 ships no
@@ -395,7 +421,7 @@ export async function fetchLocations(
   propertyId: string,
   tenantId: string,
 ): Promise<StockLocation[]> {
-  return fetchAllPaged<StockLocation>((from, to) =>
+  return fetchAllPagedRows<StockLocation>(locations, (from, to) =>
     supabase
       .from('locations')
       .select('*')
@@ -437,7 +463,7 @@ export async function createLocation(
     .single();
 
   if (error) throw error;
-  return data as StockLocation;
+  return locations.row(data);
 }
 
 export async function updateLocation(
@@ -457,7 +483,7 @@ export async function updateLocation(
     .single();
 
   if (error) throw error;
-  return data as StockLocation;
+  return locations.row(data);
 }
 
 // Soft-delete a location. Part 2 will refuse this outright while the location

@@ -4,7 +4,6 @@ import {
   formatCurrency,
   formatOccupancy,
   firstImageUrl,
-  parseNumeric,
 } from '../lib/format';
 import { mediaUrl, type MediaAssetMap } from '../lib/mediaUrl';
 import { useEditMode } from '../hooks/useEditMode';
@@ -153,7 +152,7 @@ function RoomCard({
   const image = resolveRoomImage(room.images, mediaMap);
   // size_sqm arrives as a numeric string ("25.00"); parse it so the display
   // reads "25 m²", not "25.00 m²", and so the guard tests a real number.
-  const sizeSqm = parseNumeric(room.size_sqm);
+  const sizeSqm = room.size_sqm;
 
   return (
     <article className="flex flex-col overflow-hidden rounded-2xl border border-sand-border bg-white/60">

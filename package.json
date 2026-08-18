@@ -8,9 +8,11 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "proof:render": "npm run proof:ledger && npm run proof:stocktake && npm run proof:popover",
+    "proof:types": "tsc -p tsconfig.proofs.json",
+    "proof:render": "npm run proof:types && npm run proof:ledger && npm run proof:stocktake && npm run proof:popover && npm run proof:movements",
     "proof:ledger": "vite build --ssr proofs/ledgerRender.tsx --outDir node_modules/.tmp/proofdist --logLevel error && node node_modules/.tmp/proofdist/ledgerRender.js",
     "proof:stocktake": "vite build --ssr proofs/stockTakeRender.tsx --outDir node_modules/.tmp/proofdist --logLevel error && node node_modules/.tmp/proofdist/stockTakeRender.js",
+    "proof:movements": "vite build --ssr proofs/movementsRender.tsx --outDir node_modules/.tmp/movementsdist --logLevel error && node node_modules/.tmp/movementsdist/movementsRender.js",
     "proof:popover": "vite build --ssr proofs/popoverRender.tsx --outDir node_modules/.tmp/popoverdist --logLevel error && node node_modules/.tmp/popoverdist/popoverRender.js"
   },
   "dependencies": {

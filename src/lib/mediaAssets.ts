@@ -1,11 +1,20 @@
 import { supabase } from './supabase';
 import { MEDIA_BUCKET, variantPath, bucketPathFamily } from './mediaUrl';
 import { SIZE_VARIANTS } from './imageProcessing';
-import { fetchAllPaged } from './fetchAllPaged';
+import { fetchAllPagedRows } from './fetchAllPaged';
+import { boundary } from './rowParse';
 import { brandingString, brandingStringArray } from './branding';
 import type { ProcessedImage } from './imageProcessing';
 import type { MediaAsset, MediaCategory } from '../types/media';
 import type { PropertyBranding } from '../types/tenant';
+
+// The boundary (rule 24). byte_size is int8 and width/height are int4, so all
+// three arrive as JSON numbers today — which is exactly the assumption that had
+// to stop being made in a comment and start being enforced in code.
+const assets = boundary<MediaAsset>('media_assets')(
+  ['byte_size'] as const,
+  ['width', 'height'] as const,
+);
 
 // The branding keys that hold media_asset ids (build 4). One list, shared by the
 // orphan reference-collector below and the 009 migration's clear. `single` keys
@@ -126,7 +135,7 @@ export async function uploadProcessedImage(
       .insert(rows)
       .select();
     if (error) throw error;
-    return (data ?? []) as MediaAsset[];
+    return assets.rows(data);
   } catch (e) {
     if (uploaded.length > 0) {
       try {
@@ -161,7 +170,7 @@ export async function fetchPropertyMedia(
   propertyId: string,
   tenantId: string,
 ): Promise<MediaAsset[]> {
-  return fetchAllPaged<MediaAsset>((from, to) =>
+  return fetchAllPagedRows<MediaAsset>(assets, (from, to) =>
     supabase
       .from('media_assets')
       .select('*')

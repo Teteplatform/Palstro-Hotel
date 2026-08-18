@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { boundary } from './rowParse';
 import type {
   Property,
   PropertySettings,
@@ -11,6 +12,13 @@ type PropertyRow = Property & {
   settings: PropertySettings | null;
   tenant: Tenant | null;
 };
+
+// The boundary (rule 24). The coordinates are numeric(10,7) and arrive as
+// strings; the two embeds carry no numeric of their own.
+const propertyRows = boundary<PropertyRow>('properties (guest site)')(
+  [] as const,
+  ['latitude', 'longitude'] as const,
+);
 
 /**
  * Resolve the property this app instance is rendering.
@@ -47,11 +55,12 @@ export async function resolveProperty(): Promise<PropertyContext | null> {
 
     // Single-row lookup. limit(1) keeps maybeSingle() from erroring if a dev
     // slug (unique only per tenant) ever matches more than one visible row.
-    const { data, error } = await query.limit(1).maybeSingle<PropertyRow>();
+    const { data, error } = await query.limit(1).maybeSingle();
     if (error) throw error;
-    if (!data) return null;
+    const row = propertyRows.maybeRow(data);
+    if (!row) return null;
 
-    const { settings, tenant, ...property } = data;
+    const { settings, tenant, ...property } = row;
     // A visible property implies both are readable under the same policies; if
     // either is missing, treat it as no match rather than a partial context.
     if (!settings || !tenant) return null;

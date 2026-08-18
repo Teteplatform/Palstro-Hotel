@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
-import { fetchAllPaged } from './fetchAllPaged';
+import { fetchAllPagedRows } from './fetchAllPaged';
+import { boundary, passthrough } from './rowParse';
 import type { Property } from '../types/tenant';
 
 // The properties a given user may OPERATE in the admin — the same set
@@ -23,10 +24,19 @@ interface GrantRow {
   property: Property | null;
 }
 
+// The boundary (rule 24). The numeric here is one level down, in the embedded
+// property, so the embed is parsed as the rows are unwrapped below.
+const grants = passthrough<GrantRow>('user_properties');
+
+const properties = boundary<Property>('properties (accessible)')(
+  [] as const,
+  ['latitude', 'longitude'] as const,
+);
+
 export async function fetchAccessibleProperties(
   userId: string,
 ): Promise<Property[]> {
-  const rows = await fetchAllPaged<GrantRow>((from, to) =>
+  const rows = await fetchAllPagedRows<GrantRow>(grants, (from, to) =>
     supabase
       .from('user_properties')
       .select(
@@ -51,5 +61,8 @@ export async function fetchAccessibleProperties(
   // belongs to exactly one tenant), so no dedup is needed.
   return rows
     .map((r) => r.property)
-    .filter((p): p is Property => p !== null);
+    .filter((p): p is Property => p !== null)
+    // The embed carries the coordinates, and the top-level parse cannot see
+    // into it — so it is parsed here, as the rows are unwrapped (rule 24).
+    .map((p) => properties.row(p));
 }

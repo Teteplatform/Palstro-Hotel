@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
-import { fetchAllPaged } from './fetchAllPaged';
-import { parseNumeric } from './format';
+import { fetchAllPagedRows } from './fetchAllPaged';
+import { boundary } from './rowParse';
 // ONE definition of the rule-2 key for the whole app. Re-declaring
 // crypto.randomUUID() here would be a second place for the "fresh key per submit
 // intent" convention to drift from, and rules 2/3 are the last thing that should
@@ -46,7 +46,49 @@ export { newIdempotencyKey };
 //   - Rule 20: the totals span the WHOLE FILTERED SET, computed by a separate
 //     query using the SAME filter builder — never summed from the visible page.
 //   - Rule 11: every call is awaited and throws; the caller surfaces the error.
-//   - §6: numeric columns arrive as STRINGS; parse with parseNumeric.
+//   - Rule 24: every read below parses its numeric fields HERE, once, so no
+//     component ever holds a raw PostgREST value.
+
+// ---------------------------------------------------------------------------
+// The boundaries (rule 24)
+// ---------------------------------------------------------------------------
+//
+// Each names its READ, then every numeric key of the row type, split by whether
+// the type admits null. The lists are checked for completeness by the compiler:
+// add a numeric column to one of these row types and the build fails here until
+// it is parsed. See src/lib/rowParse.ts.
+//
+// TWO OF THEM ARE EXPORTED, and that is the seam rule 22 asks for rather than a
+// copy: proofs/movementsRender and proofs/ledgerRender push RAW WIRE ROWS —
+// numerics as strings, then the same numerics as JSON numbers — through THESE
+// parsers and render the result with the real components. A proof that declared
+// its own boundary would prove its own boundary.
+
+export const movementRows = boundary<StockMovement>('stock_movements')(
+  ['seq', 'quantity'] as const,
+  ['unit_cost'] as const,
+);
+
+export const onHandRows = boundary<StockOnHandRow>('stock_on_hand_items')(
+  ['quantity_on_hand', 'moving_average_cost', 'stock_value', 'movement_count'] as const,
+  ['reorder_level'] as const,
+);
+
+export const ledgerRows = boundary<StockLedgerRow>('stock_movement_ledger')(
+  [
+    'seq',
+    'quantity',
+    'running_quantity',
+    'running_average_cost',
+    'movement_value',
+  ] as const,
+  ['unit_cost', 'carried_unit_cost'] as const,
+);
+
+const negativeRows = boundary<StockNegativePositionRow>('stock_negative_positions')(
+  ['quantity_on_hand', 'stock_value'] as const,
+  ['moving_average_cost'] as const,
+);
 
 // ---------------------------------------------------------------------------
 // Errors — the stock surfaces must show the RPC's OWN message
@@ -235,7 +277,7 @@ export async function fetchStockPage(
     .range(from, to);
 
   if (error) throw error;
-  return { rows: (data ?? []) as StockOnHandRow[], count: count ?? 0 };
+  return { rows: onHandRows.rows(data), count: count ?? 0 };
 }
 
 // ---------------------------------------------------------------------------
@@ -269,14 +311,22 @@ export async function fetchStockSummary(
 ): Promise<StockSummary> {
   interface SummaryRow {
     inventory_item_id: string;
-    quantity_on_hand: string;
-    stock_value: string;
+    quantity_on_hand: number;
+    stock_value: number;
     is_below_reorder: boolean;
   }
 
-  // fetchAllPaged, not a capped read (rule 1a): the total must cover every
-  // matching row, so nothing may be truncated at a row cap.
-  const rows = await fetchAllPaged<SummaryRow>((from, to) => {
+  // The narrow projection gets its OWN boundary rather than borrowing onHand's:
+  // a boundary describes the columns a read actually selects, and one naming
+  // columns this query never asked for would throw on every row.
+  const summaryRows = boundary<SummaryRow>('stock_on_hand_items (summary)')(
+    ['quantity_on_hand', 'stock_value'] as const,
+    [] as const,
+  );
+
+  // Paged, not a capped read (rule 1a): the total must cover every matching
+  // row, so nothing may be truncated at a row cap.
+  const rows = await fetchAllPagedRows<SummaryRow>(summaryRows, (from, to) => {
     const base = supabase
       .from('stock_on_hand_items')
       // Only the columns the aggregate needs.
@@ -291,10 +341,10 @@ export async function fetchStockSummary(
   let belowReorderCount = 0;
 
   for (const row of rows) {
-    // §6: numeric → STRING. Parse before adding; a bad value contributes 0
-    // rather than turning the whole total into NaN.
-    totalValue += parseNumeric(row.stock_value) ?? 0;
-    if ((parseNumeric(row.quantity_on_hand) ?? 0) < 0) negativeCount += 1;
+    // Already numbers — the boundary parsed them on the way in (rule 24), and a
+    // row whose figures could not be parsed never reached this loop.
+    totalValue += row.stock_value;
+    if (row.quantity_on_hand < 0) negativeCount += 1;
     if (row.is_below_reorder) belowReorderCount += 1;
   }
 
@@ -316,7 +366,7 @@ export async function fetchStockForExport(
   locationId: string,
   filters: StockFilters = EMPTY_STOCK_FILTERS,
 ): Promise<StockOnHandRow[]> {
-  return fetchAllPaged<StockOnHandRow>((from, to) => {
+  return fetchAllPagedRows<StockOnHandRow>(onHandRows, (from, to) => {
     const base = supabase.from('stock_on_hand_items').select('*');
     return applyStockFilters(base, tenantId, propertyId, locationId, filters)
       .order('item_name', { ascending: true })
@@ -350,7 +400,7 @@ export async function fetchItemPosition(
     .maybeSingle();
 
   if (error) throw error;
-  return (data as StockOnHandRow | null) ?? null;
+  return onHandRows.maybeRow(data);
 }
 
 // Every movement of ONE item in ONE location, oldest first, each carrying the
@@ -370,7 +420,7 @@ export async function fetchItemLedger(
   locationId: string,
   inventoryItemId: string,
 ): Promise<StockLedgerRow[]> {
-  return fetchAllPaged<StockLedgerRow>((from, to) =>
+  return fetchAllPagedRows<StockLedgerRow>(ledgerRows, (from, to) =>
     supabase
       .from('stock_movement_ledger')
       .select('*')
@@ -426,7 +476,9 @@ export async function postOpeningBalance(
   });
 
   if (error) throw error; // rule 11 — never swallowed; the caller surfaces it
-  return data as StockMovement;
+  // An RPC's return crosses the same boundary as a select: post_opening_balance
+  // returns the stock_movements row, quantity and all (rule 24).
+  return movementRows.row(data);
 }
 
 export interface StockAdjustmentInput {
@@ -473,7 +525,7 @@ export async function postStockAdjustment(
   });
 
   if (error) throw error;
-  return data as StockMovement;
+  return movementRows.row(data);
 }
 
 // ---------------------------------------------------------------------------
@@ -509,7 +561,7 @@ export async function reverseStockMovement(
   });
 
   if (error) throw error; // rule 11 — the caller surfaces the server's own words
-  return data as StockMovement;
+  return movementRows.row(data);
 }
 
 // ---------------------------------------------------------------------------
@@ -598,7 +650,7 @@ export async function fetchMovementsPage(
     .range(from, to);
 
   if (error) throw error;
-  return { rows: (data ?? []) as StockMovement[], count: count ?? 0 };
+  return { rows: movementRows.rows(data), count: count ?? 0 };
 }
 
 // Every movement matching the filter, across all pages — what Export writes
@@ -609,7 +661,7 @@ export async function fetchMovementsForExport(
   movementType: MovementType,
   filters: MovementFilters = EMPTY_MOVEMENT_FILTERS,
 ): Promise<StockMovement[]> {
-  return fetchAllPaged<StockMovement>((from, to) => {
+  return fetchAllPagedRows<StockMovement>(movementRows, (from, to) => {
     let q = supabase
       .from('stock_movements')
       .select('*')
@@ -660,7 +712,10 @@ export async function fetchOpeningBalanceKeys(
     location_id: string;
     inventory_item_id: string;
   }
-  const rows = await fetchAllPaged<Row>((from, to) =>
+  // No numeric column in the projection, and the boundary still runs: it is
+  // what makes "every read is parsed" checkable rather than a habit.
+  const keys = boundary<Row>('stock_movements (opening keys)')([] as const, [] as const);
+  const rows = await fetchAllPagedRows<Row>(keys, (from, to) =>
     supabase
       .from('stock_movements')
       .select('location_id, inventory_item_id')
@@ -799,10 +854,7 @@ export async function fetchNegativePositionsPage(
     .range(from, to);
 
   if (error) throw error;
-  return {
-    rows: (data ?? []) as StockNegativePositionRow[],
-    count: count ?? 0,
-  };
+  return { rows: negativeRows.rows(data), count: count ?? 0 };
 }
 
 export interface NegativeSummary {
@@ -827,16 +879,21 @@ export async function fetchNegativeSummary(
   interface SummaryRow {
     location_id: string;
     inventory_item_id: string;
-    stock_value: string;
+    stock_value: number;
     item_is_active: boolean;
     location_is_active: boolean;
     item_deleted_at: string | null;
     location_deleted_at: string | null;
   }
 
-  // fetchAllPaged (rule 1a): a total that stopped at a row cap would understate
-  // the shortfall, which is the one direction this figure must never err in.
-  const rows = await fetchAllPaged<SummaryRow>((from, to) => {
+  const summaryRows = boundary<SummaryRow>('stock_negative_positions (summary)')(
+    ['stock_value'] as const,
+    [] as const,
+  );
+
+  // Paged (rule 1a): a total that stopped at a row cap would understate the
+  // shortfall, which is the one direction this figure must never err in.
+  const rows = await fetchAllPagedRows<SummaryRow>(summaryRows, (from, to) => {
     const base = supabase
       .from('stock_negative_positions')
       .select(
@@ -853,9 +910,8 @@ export async function fetchNegativeSummary(
   let uncorrectableCount = 0;
 
   for (const row of rows) {
-    // §6: numeric → STRING. A bad value contributes 0 rather than NaN-ing the
-    // whole total.
-    totalValue += parseNumeric(row.stock_value) ?? 0;
+    // Already a number (rule 24).
+    totalValue += row.stock_value;
     if (isUncorrectable(row)) uncorrectableCount += 1;
   }
 
@@ -869,7 +925,7 @@ export async function fetchNegativePositionsForExport(
   propertyId: string,
   filters: NegativeFilters = EMPTY_NEGATIVE_FILTERS,
 ): Promise<StockNegativePositionRow[]> {
-  return fetchAllPaged<StockNegativePositionRow>((from, to) => {
+  return fetchAllPagedRows<StockNegativePositionRow>(negativeRows, (from, to) => {
     const base = supabase.from('stock_negative_positions').select('*');
     return applyNegativeFilters(base, tenantId, propertyId, filters)
       .order('quantity_on_hand', { ascending: true })

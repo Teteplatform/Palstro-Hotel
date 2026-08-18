@@ -31,8 +31,8 @@
 // COPIED from run_night_audit (024 §3) and check_out_booking (026 §1), so the
 // nights shown are exactly the nights charged.
 //
-// MONEY IS A STRING. Every numeric(14,2) column arrives from PostgREST as a
-// string (§6). Parse with parseNumeric before ANY arithmetic or comparison.
+// EVERY MONEY FIELD BELOW IS A `number`, ALREADY PARSED (rule 24) —
+// src/lib/guestLedger.ts parses each read at the boundary.
 
 import type { BookingStatus } from './booking';
 import type { FolioStatus, PaymentMethod } from './folio';
@@ -74,19 +74,19 @@ export interface GuestStayRow {
   folio_status: FolioStatus;
 
   // --- this stay's OWN folio (identical to the booking's own bill) -----------
-  charges_total: string;
-  payments_total: string;
+  charges_total: number;
+  payments_total: number;
   // What the stays table's Balance column prints. Positive = owed on this stay.
-  balance: string;
+  balance: number;
 
   // --- the guest-level working (exposed so the allocation is checkable) ------
-  guest_charges_total: string;      // Σ charges across stays AND standalone items
-  guest_payments_pool: string;      // Σ non-voided payments across ALL their folios
-  charges_before: string;           // Σ charges of every OLDER item — the frontier
+  guest_charges_total: number;      // Σ charges across stays AND standalone items
+  guest_payments_pool: number;      // Σ non-voided payments across ALL their folios
+  charges_before: number;           // Σ charges of every OLDER item — the frontier
 
   // --- the FIFO result ------------------------------------------------------
-  allocated_amount: string;         // clamp(pool − charges_before, 0, charges_total)
-  unallocated_amount: string;
+  allocated_amount: number;         // clamp(pool − charges_before, 0, charges_total)
+  unallocated_amount: number;
   settlement_status: StaySettlementStatus;
 }
 
@@ -134,21 +134,21 @@ export interface GuestLedgerEntry {
   reserved_nights: number | null;
   actual_nights: number | null;
   display_nights: number | null;
-  charge_amount: string;            // stay lines: the stay's charges_total
-  payment_amount: string;           // payment lines: the SIGNED amount
+  charge_amount: number;            // stay lines: the stay's charges_total
+  payment_amount: number;           // payment lines: the SIGNED amount
   payment_method: PaymentMethod | null;
   payment_reference: string | null;
   received_by: string | null;
   // Cumulative charge_amount − payment_amount to and including this line. The
   // LAST row's value is the guest's balance (see the invariant).
-  running_balance: string;
+  running_balance: number;
 }
 
 // One row of guest_account_summary — the guest home's six tiles. EVERY figure
 // spans all of the guest's stays and standalone items at this property, computed
 // server-side, never the visible page (rule 20).
 //
-// Money arrives as strings (§6); the hook parses them once, at the edge.
+// Parsed at the boundary (rule 24) like every other read.
 export interface GuestAccountSummaryRow {
   tenant_id: string;
   property_id: string;
@@ -159,11 +159,11 @@ export interface GuestAccountSummaryRow {
   total_nights: number;
   first_stay: string | null;        // "with us since"
   last_stay: string | null;
-  total_charged: string;
-  total_paid: string;
-  guest_balance: string;            // charged − paid; the reconciles-to figure
-  outstanding: string;              // greatest(0, guest_balance)
-  credit_balance: string;           // greatest(0, −guest_balance)
+  total_charged: number;
+  total_paid: number;
+  guest_balance: number;            // charged − paid; the reconciles-to figure
+  outstanding: number;              // greatest(0, guest_balance)
+  credit_balance: number;           // greatest(0, −guest_balance)
 }
 
 // The parsed form the tiles render from.

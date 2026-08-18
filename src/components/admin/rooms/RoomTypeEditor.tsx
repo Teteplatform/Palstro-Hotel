@@ -12,7 +12,6 @@ import { ArrowUpIcon, ArrowDownIcon, CloseIcon } from '../../ui/icons';
 import {
   formatCurrency,
   formatOccupancy,
-  parseNumeric,
   MISSING_VALUE,
 } from '../../../lib/format';
 import { humanizeError } from '../../../lib/errors';
@@ -74,15 +73,15 @@ function toDraft(rt: RoomType): Draft {
     name: rt.name,
     description: rt.description ?? '',
     bed_configuration: rt.bed_configuration ?? '',
-    size_sqm: parseNumeric(rt.size_sqm),
+    size_sqm: rt.size_sqm,
     max_adults: rt.max_adults,
     max_children: rt.max_children,
     amenities: rt.amenities ?? [],
     has_air_conditioning: rt.has_air_conditioning,
     is_smoking: rt.is_smoking,
     is_published: rt.is_published,
-    base_rate: parseNumeric(rt.base_rate),
-    weekend_rate: parseNumeric(rt.weekend_rate),
+    base_rate: rt.base_rate,
+    weekend_rate: rt.weekend_rate,
     weekend_days: rt.weekend_days ?? [],
   };
 }
@@ -183,7 +182,7 @@ export function RoomTypeEditor({
     if (covering) return `Seasonal: ${covering.name}`;
     const dow = isoDow(previewDate);
     if (
-      parseNumeric(roomType.weekend_rate) !== null &&
+      roomType.weekend_rate !== null &&
       dow !== null &&
       (roomType.weekend_days ?? []).includes(dow)
     ) {
@@ -544,15 +543,15 @@ function dirtyOf(draft: Draft, rt: RoomType): boolean {
     draft.name !== rt.name ||
     draft.description !== (rt.description ?? '') ||
     draft.bed_configuration !== (rt.bed_configuration ?? '') ||
-    draft.size_sqm !== parseNumeric(rt.size_sqm) ||
+    draft.size_sqm !== rt.size_sqm ||
     draft.max_adults !== rt.max_adults ||
     draft.max_children !== rt.max_children ||
     !arraysEqual(draft.amenities, rt.amenities ?? []) ||
     draft.has_air_conditioning !== rt.has_air_conditioning ||
     draft.is_smoking !== rt.is_smoking ||
     draft.is_published !== rt.is_published ||
-    draft.base_rate !== parseNumeric(rt.base_rate) ||
-    draft.weekend_rate !== parseNumeric(rt.weekend_rate) ||
+    draft.base_rate !== rt.base_rate ||
+    draft.weekend_rate !== rt.weekend_rate ||
     !arraysEqual(draft.weekend_days, rt.weekend_days ?? [])
   );
 }

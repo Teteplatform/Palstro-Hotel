@@ -1,0 +1,26 @@
+{
+  // THE PROOFS ARE TYPECHECKED TOO, and this file exists because they were not.
+  //
+  // `tsconfig.app.json` includes only `src`, so proofs/ was compiled by nothing:
+  // `vite build --ssr` strips types without checking them, and `tsc -b` never
+  // looked. That gap is not academic — it is how proofs/stockTakeRender came to
+  // be feeding `counted_quantity: '100.0000'` into a field the app had retyped
+  // as `number | null`. It built, it ran, and two assertions went red for a
+  // reason that had nothing to do with the component under test.
+  //
+  // A render proof that is not typechecked drifts from the types it claims to
+  // exercise, silently, which is the same failure mode rule 22 was written
+  // about one layer up.
+  //
+  // Separate from the app config rather than folded into it, because these files
+  // run under Node (process.exit, console) and the app must NOT have Node's
+  // globals in scope — a browser bundle that typechecks against `process` is a
+  // runtime error waiting for a deploy.
+  "extends": "./tsconfig.app.json",
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.proofs.tsbuildinfo",
+    "types": ["vite/client", "node"],
+    "noEmit": true
+  },
+  "include": ["proofs", "src"]
+}

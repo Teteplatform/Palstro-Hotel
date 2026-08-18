@@ -4,6 +4,7 @@ import {
   FinishConfirmation,
 } from '../src/components/admin/inventory/CountSheet';
 import { VarianceRow } from '../src/components/admin/inventory/CountVarianceReport';
+import { sheetRows } from '../src/lib/stockTake';
 import type { StockTakeSheetRow } from '../src/types/stockTake';
 
 // THE RENDER PROOF FOR THE COUNT SHEET (rule 22).
@@ -63,7 +64,14 @@ const strip = (h: string) => h.replace(/<[^>]+>/g, ' ').replace(/&#x27;/g, "'")
 // The exact shape PostgREST sends for a line of an OPEN count: every numeric is
 // a STRING, the blind columns are JSON nulls, and is_counted is a real boolean
 // computed by the view.
-const base: StockTakeSheetRow = {
+//
+// A WIRE FIXTURE, PARSED THROUGH THE REAL BOUNDARY (`line` below), not a row
+// literal. Since rule 24 the app's row type is what comes OUT of lib/stockTake's
+// parser; writing numbers here would prove the components against a shape the
+// wire never sends and skip the parse entirely. This file learned that the hard
+// way — it kept building and running with string literals in a `number | null`
+// field until the proofs were typechecked (tsconfig.proofs.json).
+const baseWire: Record<string, unknown> = {
   line_id: 'aaaaaaaa-0000-0000-0000-000000000001',
   tenant_id: 't',
   stock_take_id: 's',
@@ -90,6 +98,14 @@ const base: StockTakeSheetRow = {
   movement_id: null,
   movement_reversed: false,
 };
+
+// One wire row through the real parser. Every fixture below is built with this,
+// so nothing in this file can accidentally hand a component a shape the data
+// layer would never produce.
+const line = (patch: Record<string, unknown> = {}): StockTakeSheetRow =>
+  sheetRows.row({ ...baseWire, ...patch });
+
+const base: StockTakeSheetRow = line();
 
 const renderSheetRow = (
   row: StockTakeSheetRow,
@@ -127,23 +143,25 @@ ok('the row shows no quantity at all for it',
   !strip(notCounted).includes('Counted 0'));
 
 // THE ONE THAT CATCHES `|| ''`.
-const countedZero: StockTakeSheetRow = {
-  ...base,
+const countedZero: StockTakeSheetRow = line({
   counted_quantity: '0.0000',
   is_counted: true,
   counted_at: '2026-08-17T09:00:00Z',
   counted_by: 'u',
-};
+});
 const zeroHtml = renderSheetRow(countedZero);
 console.log(`  counted zero: ${strip(zeroHtml)}\n`);
 
+// The field holds the PARSED number rendered as text — '0', not the wire's
+// '0.0000'. What matters is unchanged and is the whole point of the assertion:
+// a counted zero reaches the input as a zero and not as an empty field.
 ok('a counted ZERO keeps its 0 in the field (the `|| \'\'` bug)',
-  /value="0\.0000"/.test(zeroHtml), zeroHtml.match(/value="[^"]*"/)?.[0] ?? '(no value attr)');
+  /value="0"/.test(zeroHtml), zeroHtml.match(/value="[^"]*"/)?.[0] ?? '(no value attr)');
 ok('and reads as COUNTED, not as an empty shelf',
   strip(zeroHtml).includes('Counted 0 kg'), strip(zeroHtml).slice(0, 80));
 ok('it never says "Not counted"', !strip(zeroHtml).includes('Not counted'));
 
-const counted = renderSheetRow({ ...base, counted_quantity: '12.5000', is_counted: true });
+const counted = renderSheetRow(line({ counted_quantity: '12.5000', is_counted: true }));
 ok('an ordinary counted line trims its trailing zeros',
   strip(counted).includes('Counted 12.5 kg'), strip(counted).slice(0, 80));
 
@@ -181,8 +199,7 @@ const renderVariance = (row: StockTakeSheetRow) =>
 
 // A counted ZERO against 40 expected: the full quantity written off. This is the
 // single most consequential line a count can produce.
-const wroteOff: StockTakeSheetRow = {
-  ...base,
+const wroteOff: StockTakeSheetRow = line({
   take_status: 'finished',
   item_name: 'London dry gin',
   base_unit: 'ltr',
@@ -193,7 +210,7 @@ const wroteOff: StockTakeSheetRow = {
   variance_unit_cost: '2000.0000',
   variance_value: '-80000.00',
   movement_id: 'm',
-};
+});
 const wroteOffHtml = renderVariance(wroteOff);
 console.log(`\n  wrote off: ${strip(wroteOffHtml)}\n`);
 
@@ -207,15 +224,14 @@ ok('and its value is formatted as money', /80,000\.00/.test(strip(wroteOffHtml))
 
 // A shelf nobody counted: no difference, no value — NOT a variance of its full
 // quantity, which is the whole partial-count rule.
-const skipped: StockTakeSheetRow = {
-  ...base,
+const skipped: StockTakeSheetRow = line({
   take_status: 'finished',
   counted_quantity: null,
   is_counted: false,
   expected_quantity: '10.0000',
   variance_quantity: null,
   variance_value: null,
-};
+});
 const skippedHtml = renderVariance(skipped);
 console.log(`  not counted: ${strip(skippedHtml)}\n`);
 ok('an uncounted line says "Not counted"', strip(skippedHtml).includes('Not counted'));
@@ -223,8 +239,7 @@ ok('its difference is the shared dash, NOT its full quantity',
   strip(skippedHtml).includes('—') && !strip(skippedHtml).includes('-10'));
 
 // A shelf that matched.
-const matched: StockTakeSheetRow = {
-  ...base,
+const matched: StockTakeSheetRow = line({
   take_status: 'finished',
   counted_quantity: '100.0000',
   is_counted: true,
@@ -232,22 +247,21 @@ const matched: StockTakeSheetRow = {
   variance_quantity: '0.0000',
   variance_unit_cost: '1.5000',
   variance_value: '0.00',
-};
+});
 ok('a line that agreed with the ledger reads "Matches"',
   strip(renderVariance(matched)).includes('Matches'));
 ok('and shows no value for it', strip(renderVariance(matched)).includes('—'));
 
 // THE BLIND CASE, in the report component: an ABANDONED count still renders
 // through this row, and its expected quantity is null forever (039 §4).
-const abandoned: StockTakeSheetRow = {
-  ...base,
+const abandoned: StockTakeSheetRow = line({
   take_status: 'cancelled',
   counted_quantity: '95.0000',
   is_counted: true,
   expected_quantity: null,
   variance_quantity: null,
   variance_value: null,
-};
+});
 const abandonedHtml = renderVariance(abandoned);
 console.log(`  abandoned: ${strip(abandonedHtml)}\n`);
 ok('a blind expected renders as the dash, never as 0',
@@ -274,17 +288,24 @@ ok('while an unreversed line says nothing of the kind',
 // ---------------------------------------------------------------------------
 console.log('=== 3. Numerics arriving as NUMBERS, which is what crashed 1.1c ===');
 
-// Rule 22's corollary: never re-narrow a boundary value's type. Every formatter
-// on these rows goes through parseNumeric, which accepts the full range
-// PostgREST emits — so a row whose numerics arrive as JS numbers must render,
-// not throw.
-const hostile = {
-  ...wroteOff,
-  counted_quantity: 0 as unknown as string,
-  expected_quantity: 40 as unknown as string,
-  variance_quantity: -40 as unknown as string,
-  variance_value: -80000 as unknown as string,
-} as StockTakeSheetRow;
+// THE SAME LINE, sent as JSON NUMBERS instead of strings. It used to need four
+// `as unknown as string` casts to express, because the row type insisted the
+// wire spoke strings; the fixture is wire-shaped now, so this is simply the
+// other thing the wire sends — and it goes through the same parser as the first.
+const hostileWire = {
+  ...baseWire,
+  take_status: 'finished',
+  item_name: 'London dry gin',
+  base_unit: 'ltr',
+  is_counted: true,
+  movement_id: 'm',
+  counted_quantity: 0,
+  expected_quantity: 40,
+  variance_quantity: -40,
+  variance_unit_cost: 2000,
+  variance_value: -80000,
+};
+const hostile = sheetRows.row(hostileWire);
 
 try {
   const html = renderVariance(hostile);
@@ -293,16 +314,24 @@ try {
     strip(html).slice(0, 90));
   ok('and a numeric ZERO is still not mistaken for "not counted"',
     !strip(html).includes('Not counted'));
+  // The assertion the cast-based version could not make: the two wire shapes are
+  // not merely both survivable, they are indistinguishable downstream.
+  ok('and renders BYTE-IDENTICALLY to the string-shaped line',
+    html === wroteOffHtml);
 } catch (e) {
   ok('a report row whose numerics arrive as NUMBERS still renders', false,
     (e as Error).message);
 }
 
 try {
-  const html = renderSheetRow({
-    ...countedZero,
-    counted_quantity: 0 as unknown as string,
-  } as StockTakeSheetRow);
+  const html = renderSheetRow(
+    line({
+      counted_quantity: 0,
+      is_counted: true,
+      counted_at: '2026-08-17T09:00:00Z',
+      counted_by: 'u',
+    }),
+  );
   ok('a sheet row with a NUMERIC zero still renders it as a counted 0',
     strip(html).includes('Counted 0 kg'), strip(html).slice(0, 80));
   // THE ASSERTION THAT CATCHES `|| ''`, and it took breaking the component to

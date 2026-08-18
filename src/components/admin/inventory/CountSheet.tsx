@@ -184,8 +184,12 @@ export function CountSheet({
   // the wrong shelf is undone without writing that shelf off to zero.
   async function commit(row: StockTakeSheetRow, raw: string) {
     const trimmed = raw.trim();
+    // parseNumeric STAYS on this line: `trimmed` is what a person typed, which
+    // is the one place a string genuinely has to become a number (rule 24 is
+    // about the database boundary, not the keyboard).
     const counted = trimmed === '' ? null : parseNumeric(trimmed);
-    const current = row.counted_quantity === null ? null : parseNumeric(row.counted_quantity);
+    // The saved value needs no parse — it crossed the boundary already.
+    const current = row.counted_quantity;
 
     if (counted === current) {
       setLine(setDrafts, row.line_id, null);
@@ -671,11 +675,11 @@ export function CountSheetRow({
   onDraftChange: (value: string) => void;
   onCommit: (value: string) => void;
 }) {
-  // §6: the column arrives as a STRING. The field shows the saved value, and a
-  // saved ZERO must survive this — `|| ''` would turn it into an empty field and
-  // silently un-count the shelf, which is exactly the class of bug rule 22 was
-  // written about.
-  const saved = row.counted_quantity === null ? '' : row.counted_quantity;
+  // A text field holds text, so the saved NUMBER is rendered as one. The
+  // null check is load-bearing and `|| ''` would not do: a saved ZERO must
+  // survive into the field, or the shelf silently un-counts itself — exactly the
+  // class of bug rule 22 was written about.
+  const saved = row.counted_quantity === null ? '' : String(row.counted_quantity);
   const value = draft !== undefined ? draft : saved;
 
   return (

@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
-import { fetchAllPaged } from './fetchAllPaged';
+import { fetchAllPagedRows } from './fetchAllPaged';
+import { passthrough } from './rowParse';
 
 // ===========================================================================
 // "HAVE WE ALREADY GOT ONE OF THESE?" — the duplicate check behind Add Product
@@ -93,6 +94,10 @@ export interface NameIndexEntry {
   is_active: boolean;
 }
 
+// The boundary (rule 24). This projection is four text/boolean columns and no
+// numeric — declared rather than judged exempt.
+const nameIndex = passthrough<NameIndexEntry>('inventory_items (name index)');
+
 // INACTIVE ITEMS ARE INCLUDED, and that is not an oversight. 035's unique index
 // is partial on `deleted_at is null` and says nothing about `is_active`, so an
 // item switched off still owns its name. Leaving those out would produce the
@@ -106,7 +111,7 @@ export async function fetchNameIndex(
 ): Promise<NameIndexEntry[]> {
   // Rule 1a: the whole result is consumed, so it is paged rather than read in
   // one unbounded select.
-  return fetchAllPaged<NameIndexEntry>((from, to) =>
+  return fetchAllPagedRows<NameIndexEntry>(nameIndex, (from, to) =>
     supabase
       .from('inventory_items')
       .select('id, name, code, is_active')

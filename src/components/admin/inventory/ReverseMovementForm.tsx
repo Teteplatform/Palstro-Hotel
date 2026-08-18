@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { TextArea } from '../../ui/form';
 import { useToast } from '../../ui/Toast';
 import { formatDisplayDate } from '../../../lib/date';
-import { formatQuantity, MISSING_VALUE, parseNumeric } from '../../../lib/format';
+import { formatQuantity, MISSING_VALUE } from '../../../lib/format';
 import { reverseStockMovement, stockErrorMessage } from '../../../lib/stock';
 import {
   movementTypeLabel,
@@ -81,8 +81,8 @@ export function ReverseMovementForm({
 
   const canSubmit = reason.trim().length > 0 && pin.trim().length > 0;
 
-  // §6: every numeric column arrives as a STRING — parse before any arithmetic.
-  const quantity = parseNumeric(movement.quantity) ?? 0;
+  // Already a number (rule 24) — parsed when the movement was read.
+  const quantity = movement.quantity;
   // The counter negates the original, so this is what will move and in which
   // direction. Stated as a quantity in the item's own unit, because that is what
   // the storekeeper can check against the shelf.

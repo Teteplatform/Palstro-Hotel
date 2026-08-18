@@ -19,10 +19,11 @@ export interface MediaAsset {
   bucket_path: string;
   category: MediaCategory;
   size_variant: SizeVariant;
-  // byte_size is bigint. PostgREST returns int8 (bigint) as a JS number — UNLIKE
-  // numeric, which comes back as a string (CLAUDE.md §6). A byte count is well
-  // within Number's safe-integer range (a 500MB quota is ~5.2e8), so number is
-  // correct here and needs no parseNumeric.
+  // byte_size is bigint, which PostgREST sends as a JS number today — and this
+  // comment used to end "so it needs no parse", which is precisely the reasoning
+  // rule 24 retired. It is parsed at the boundary like every other numeric, and
+  // the assumption is now enforced instead of documented. A byte count is well
+  // within Number's safe-integer range (a 500MB quota is ~5.2e8).
   byte_size: number;
   width: number | null;
   height: number | null;

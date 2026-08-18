@@ -1,5 +1,4 @@
 import { MapPinIcon, ArrowRightIcon } from './ui/icons';
-import { parseNumeric } from '../lib/format';
 import { osmEmbedSrc, osmDirectionsHref } from '../lib/osm';
 import { Editable } from './Editable';
 
@@ -7,8 +6,8 @@ interface LocationSectionProps {
   hotelName: string;
   address: string | null;
   directions: string | null;
-  latitude: string | number | null;
-  longitude: string | number | null;
+  latitude: number | null;
+  longitude: number | null;
 }
 
 // The schema keys the Location editable region edits (3.txt §3): the postal
@@ -37,13 +36,13 @@ export function LocationSection({
   latitude,
   longitude,
 }: LocationSectionProps) {
-  // Coordinates arrive as PostgREST numeric strings on the guest site, or as live
-  // JS numbers when the site editor overlays an in-progress edit; parseNumeric
-  // handles both. Either missing/unparseable/out-of-range -> no map, show the
+  // Numbers from both sources now: the guest site's property row is parsed at
+  // the boundary (rule 24), and the site editor's live overlay was already a
+  // number from the form. Either missing/out-of-range -> no map, show the
   // placeholder. The bbox maths and range guards live in the shared osm helper so
   // the editor's live pin preview and this map can never disagree.
-  const lat = parseNumeric(latitude);
-  const lng = parseNumeric(longitude);
+  const lat = latitude;
+  const lng = longitude;
   const mapSrc = osmEmbedSrc(lat, lng);
   const directionsHref = osmDirectionsHref(lat, lng);
   const hasMap = mapSrc !== null;

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { boundary, passthrough } from '../lib/rowParse';
 import type { SettingsRows } from '../lib/settings/values';
 import type {
   Property,
@@ -19,6 +20,23 @@ import type {
 // RLS — properties and tenant_settings filter tenant_id; property_settings and
 // property_finance_settings are keyed by the property_id (already tenant-bound).
 // Rule 5: the property's soft-delete is filtered NULL-safe.
+
+// The boundaries (rule 24) — completeness checked by the compiler.
+const properties = boundary<Property>('properties (settings)')(
+  [] as const,
+  ['latitude', 'longitude'] as const,
+);
+
+const propertySettings = passthrough<PropertySettings>('property_settings');
+
+const tenantSettings = boundary<TenantSettings>('tenant_settings')(
+  ['default_vat_rate'] as const,
+  [] as const,
+);
+
+const financeSettings = boundary<PropertyFinanceSettings>(
+  'property_finance_settings',
+)(['discount_threshold', 'count_variance_threshold'] as const, [] as const);
 
 interface SettingsData {
   // Non-null only once all four rows are present.
@@ -61,22 +79,22 @@ export function useSettingsData(
               .eq('id', propertyId)
               .eq('tenant_id', tenantId) // rule 19: active tenant, explicit
               .is('deleted_at', null) // rule 5: NULL-safe soft-delete
-              .maybeSingle<Property>(),
+              .maybeSingle(),
             supabase
               .from('property_settings')
               .select('*')
               .eq('property_id', propertyId)
-              .maybeSingle<PropertySettings>(),
+              .maybeSingle(),
             supabase
               .from('tenant_settings')
               .select('*')
               .eq('tenant_id', tenantId)
-              .maybeSingle<TenantSettings>(),
+              .maybeSingle(),
             supabase
               .from('property_finance_settings')
               .select('*')
               .eq('property_id', propertyId)
-              .maybeSingle<PropertyFinanceSettings>(),
+              .maybeSingle(),
           ]);
 
         if (propertyRes.error) throw propertyRes.error;
@@ -98,11 +116,16 @@ export function useSettingsData(
           throw new Error('Settings could not be loaded for this property.');
         }
 
+        // Parsed at the boundary (rule 24). Three of these four rows carry
+        // numeric columns — the property's coordinates, the tenant's VAT rate,
+        // the property's two thresholds — and every one of them arrives as a
+        // string. default_vat_rate was typed `number` while holding a string
+        // until this parse existed.
         setRows({
-          property: propertyRes.data,
-          settings: settingsRes.data,
-          tenant: tenantRes.data,
-          finance: financeRes.data,
+          property: properties.row(propertyRes.data),
+          settings: propertySettings.row(settingsRes.data),
+          tenant: tenantSettings.row(tenantRes.data),
+          finance: financeSettings.row(financeRes.data),
         });
       } catch (e) {
         if (cancelled) return;

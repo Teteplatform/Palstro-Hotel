@@ -1,6 +1,7 @@
 import { renderToString } from 'react-dom/server';
 import { LedgerRow } from '../src/components/admin/inventory/StockItemLedger';
 import { formatSignedQuantity } from '../src/lib/format';
+import { ledgerRows } from '../src/lib/stock';
 import type { StockLedgerRow } from '../src/types/stock';
 
 // THE PROOF THE SQL PROOFS COULD NOT BE.
@@ -64,7 +65,14 @@ console.log('\n=== 2. LedgerRow rendered against PostgREST-shaped rows ===');
 // seq is int8 → a NUMBER. Every numeric is a STRING. Absent values are null.
 // This is the exact shape the browser receives, and the shape the SQL proofs
 // could not observe.
-const original: StockLedgerRow = {
+//
+// TYPED `unknown` AND PARSED, rather than typed as the row: this fixture is what
+// the WIRE holds, and since rule 24 the app's row type is what comes out of
+// lib/stock's parser, not what goes into it. Building the fixture as a
+// StockLedgerRow would have meant writing numbers here — proving the component
+// against a shape nothing produces, and skipping the parse that is now the part
+// most worth proving.
+const originalWire: unknown = {
   id: 'aaaaaaaa-0000-0000-0000-000000000001',
   tenant_id: 't', property_id: 'p', location_id: 'l', inventory_item_id: 'i',
   seq: 330,                       // <-- NUMBER, not a string
@@ -84,8 +92,8 @@ const original: StockLedgerRow = {
 };
 
 // THE REVERSAL ROW the brief asked for explicitly.
-const counter: StockLedgerRow = {
-  ...original,
+const counterWire: unknown = {
+  ...(originalWire as Record<string, unknown>),
   id: 'aaaaaaaa-0000-0000-0000-000000000002',
   seq: 331,
   movement_type: 'reversal',
@@ -101,6 +109,10 @@ const counter: StockLedgerRow = {
   batch_code: 'LOT-4471',
   expiry_date: '2026-12-01',
 };
+
+// THE REAL PARSER, imported from the data layer (rule 22: a seam, not a copy).
+const original: StockLedgerRow = ledgerRows.row(originalWire);
+const counter: StockLedgerRow = ledgerRows.row(counterWire);
 
 const rows = [original, counter];
 const render = (row: StockLedgerRow, canReverse = true) =>
@@ -154,18 +166,27 @@ ok('and not when the ledger is read-only', !render(plain, false).includes('>Reve
 // PART 3 — the regression itself, pinned
 // ---------------------------------------------------------------------------
 console.log('=== 3. The exact regression, pinned ===');
-// Had ANY numeric field arrived as a number — which is what the crash proved was
-// happening — the old formatter threw here. The new one cannot.
-const hostile: StockLedgerRow = {
-  ...counter,
-  quantity: -50 as unknown as string,        // number where a string was assumed
-  running_quantity: 120 as unknown as string,
-  carried_unit_cost: 2100 as unknown as string,
+// THE SAME MOVEMENT, sent as JSON NUMBERS instead of strings — int8, a jsonb
+// payload, or any column a future view casts. This is what the crash proved was
+// actually happening, and it used to need an `as unknown as string` to express,
+// because the row type insisted the wire spoke strings. It does not need one now:
+// the fixture is wire-shaped, so this is simply the other thing the wire sends.
+const hostileWire: unknown = {
+  ...(counterWire as Record<string, unknown>),
+  quantity: -50,
+  running_quantity: 120,
+  running_average_cost: 1500,
+  movement_value: -105000,
+  carried_unit_cost: 2100,
 };
 try {
-  const html = render(hostile);
+  const html = render(ledgerRows.row(hostileWire));
   ok('a row whose numerics arrive as NUMBERS still renders', true);
   ok('and still shows the right sign', strip(html).includes('-50 kg'), strip(html).slice(0, 90));
+  // The assertion the earlier version could not make, because it had no
+  // string-shaped counterpart to compare against: the two wire shapes are not
+  // merely both survivable, they are indistinguishable downstream.
+  ok('and renders BYTE-IDENTICALLY to the string-shaped row', html === counterHtml);
 } catch (e) {
   ok('a row whose numerics arrive as NUMBERS still renders', false, (e as Error).message);
 }

@@ -13,7 +13,6 @@ import {
   formatQuantity,
   formatSignedQuantity,
   MISSING_VALUE,
-  parseNumeric,
 } from '../../../lib/format';
 import {
   newIdempotencyKey,
@@ -454,11 +453,11 @@ export function VarianceRow({
   row: StockTakeSheetRow;
   currency: string;
 }) {
-  // §6: every one of these arrives as a STRING or null. Parsed once, here, and
-  // only to decide the tone — the figures themselves are formatted from the raw
-  // column, and nothing on this row is recomputed from the other columns.
-  const difference = parseNumeric(row.variance_quantity);
-  const counted = row.counted_quantity === null ? null : row.counted_quantity;
+  // Numbers or null (rule 24). NULL is meaningful on both: a variance is blind
+  // until the count is finished, and an uncounted line has no counted quantity.
+  // Nothing here is recomputed from the other columns.
+  const difference = row.variance_quantity;
+  const counted = row.counted_quantity;
 
   return (
     <tr>

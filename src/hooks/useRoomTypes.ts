@@ -1,7 +1,15 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { fetchAllPaged } from '../lib/fetchAllPaged';
+import { fetchAllPagedRows } from '../lib/fetchAllPaged';
+import { boundary } from '../lib/rowParse';
 import type { RoomType } from '../types/room';
+
+// The boundary (rule 24) — the guest site's own read of room_types, so its own
+// declaration. The rates are numeric and arrive as strings.
+const roomTypeRows = boundary<RoomType>('room_types (guest site)')(
+  ['base_rate', 'max_adults', 'max_children', 'display_order'] as const,
+  ['weekend_rate', 'size_sqm'] as const,
+);
 
 export interface UseRoomTypesResult {
   roomTypes: RoomType[];
@@ -44,7 +52,7 @@ export function useRoomTypes(
       setLoading(true);
       setError(null);
       try {
-        const rows = await fetchAllPaged<RoomType>((from, to) =>
+        const rows = await fetchAllPagedRows<RoomType>(roomTypeRows, (from, to) =>
           supabase
             .from('room_types')
             .select('*')

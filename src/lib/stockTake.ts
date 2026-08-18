@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
-import { fetchAllPaged } from './fetchAllPaged';
+import { fetchAllPagedRows } from './fetchAllPaged';
+import { boundary } from './rowParse';
 import { newIdempotencyKey } from './folio';
 import type {
   CountLineResult,
@@ -36,7 +37,56 @@ export { newIdempotencyKey };
 //   - Rule 11: every call is awaited and throws; the caller surfaces the error.
 //   - Rule 21: errors are the server's own words. This file re-words nothing —
 //     stockErrorMessage (which appends the RAISE hint) is shared from lib/stock.
-//   - §6: numeric columns arrive as STRINGS; parse with parseNumeric.
+//   - Rule 24: every read below parses its numeric fields HERE, once. This
+//     module is where the parse earns its keep: stock_take_progress sends its
+//     counts as JSON NUMBERS (the view casts them to integer) and its variance
+//     values as STRINGS (numeric), in the same row.
+
+// ---------------------------------------------------------------------------
+// The boundaries (rule 24)
+// ---------------------------------------------------------------------------
+// Every numeric key of each row type, split by nullability, checked for
+// completeness by the compiler. See src/lib/rowParse.ts.
+
+// The four RPCs return a stock_takes row, which carries no numeric column at
+// all — every figure about a count is folded on read by the two views.
+const takes = boundary<StockTake>('stock_takes')([] as const, [] as const);
+
+const progress = boundary<StockTakeProgressRow>('stock_take_progress')(
+  [
+    'line_count',
+    'counted_count',
+    'uncounted_count',
+    'movement_count',
+    'reversed_movement_count',
+  ] as const,
+  [
+    'variance_count',
+    'net_variance_value',
+    'absolute_variance_value',
+  ] as const,
+);
+
+// EXPORTED as the seam proofs/stockTakeRender pushes raw wire rows through —
+// see the note in lib/stock.ts.
+export const sheetRows = boundary<StockTakeSheetRow>('stock_take_sheet')(
+  [] as const,
+  [
+    'counted_quantity',
+    'expected_quantity',
+    'variance_quantity',
+    'variance_unit_cost',
+    'variance_value',
+  ] as const,
+);
+
+// What record_count_line returns. counted_quantity is the ONE numeric it may
+// send back — and it is the field that crashed the count sheet, because the RPC
+// returns jsonb and a jsonb number is a number however the column was declared.
+const countLines = boundary<CountLineResult>('record_count_line')(
+  [] as const,
+  ['counted_quantity'] as const,
+);
 
 // ---------------------------------------------------------------------------
 // Errors
@@ -153,7 +203,7 @@ export async function fetchSheetPage(
     .range(from, to);
 
   if (error) throw error;
-  return { rows: (data ?? []) as StockTakeSheetRow[], count: count ?? 0 };
+  return { rows: sheetRows.rows(data), count: count ?? 0 };
 }
 
 // ---------------------------------------------------------------------------
@@ -182,7 +232,7 @@ export async function fetchOpenTake(
     .maybeSingle();
 
   if (error) throw error;
-  return (data as StockTakeProgressRow | null) ?? null;
+  return progress.maybeRow(data);
 }
 
 export async function fetchTakeProgress(
@@ -199,7 +249,7 @@ export async function fetchTakeProgress(
     .maybeSingle();
 
   if (error) throw error;
-  return (data as StockTakeProgressRow | null) ?? null;
+  return progress.maybeRow(data);
 }
 
 export interface TakeHistoryFilters {
@@ -245,7 +295,7 @@ export async function fetchTakesPage(
     .range(from, to);
 
   if (error) throw error;
-  return { rows: (data ?? []) as StockTakeProgressRow[], count: count ?? 0 };
+  return { rows: progress.rows(data), count: count ?? 0 };
 }
 
 // ---------------------------------------------------------------------------
@@ -275,7 +325,7 @@ export async function startStockTake(input: StartCountInput): Promise<StockTake>
   });
 
   if (error) throw error; // rule 11 — never swallowed; the caller surfaces it
-  return data as StockTake;
+  return takes.row(data);
 }
 
 export interface RecordCountInput {
@@ -304,7 +354,7 @@ export async function recordCountLine(
   if (error) throw error;
   // `returns table (...)` — PostgREST sends an array of rows, and this RPC
   // updates exactly one line.
-  const rows = (data ?? []) as CountLineResult[];
+  const rows = countLines.rows(data);
   return rows[0];
 }
 
@@ -343,7 +393,7 @@ export async function finishStockTake(input: FinishCountInput): Promise<StockTak
   });
 
   if (error) throw error;
-  return data as StockTake;
+  return takes.row(data);
 }
 
 export interface CancelCountInput {
@@ -363,7 +413,7 @@ export async function cancelStockTake(input: CancelCountInput): Promise<StockTak
   });
 
   if (error) throw error;
-  return data as StockTake;
+  return takes.row(data);
 }
 
 export interface ReverseCountInput {
@@ -389,7 +439,7 @@ export async function reverseStockTake(input: ReverseCountInput): Promise<StockT
   });
 
   if (error) throw error;
-  return data as StockTake;
+  return takes.row(data);
 }
 
 // ---------------------------------------------------------------------------
@@ -410,7 +460,7 @@ export async function fetchSheetForPrint(
   propertyId: string,
   stockTakeId: string,
 ): Promise<StockTakeSheetRow[]> {
-  return fetchAllPaged<StockTakeSheetRow>((from, to) =>
+  return fetchAllPagedRows<StockTakeSheetRow>(sheetRows, (from, to) =>
     supabase
       .from('stock_take_sheet')
       .select('*')

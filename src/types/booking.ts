@@ -81,8 +81,8 @@ export interface BookingNight {
   property_id: string;
   booking_id: string;
   stay_date: string;
-  // numeric(14,2) -> STRING from PostgREST (§6); parse before arithmetic.
-  rate: string;
+  // numeric(14,2), parsed at the boundary (rule 24).
+  rate: number;
   rate_source: RateSource | null;
   created_at: string;
   updated_at: string;
@@ -100,15 +100,16 @@ export interface BookingListRow extends Booking {
   room_type: { name: string } | null;
   company: { name: string } | null;
   // Only the rate is selected — the list sums these for the per-booking total.
-  booking_nights: { rate: string }[];
+  // Parsed with the row (rule 24): an embed is part of the read, so it crosses
+  // the boundary with everything else.
+  booking_nights: { rate: number }[];
   // The booking's LIVE folio balance, attached by fetchBookingsPage from the
   // booking_balances view (022) in ONE extra query for the whole page — never a
-  // folio_balance() call per row. numeric(14,2) -> STRING (§6); parse before any
-  // arithmetic or comparison. Positive = the guest owes; negative = a refund is
-  // due. null only if the view returned no row for this booking, which should be
-  // impossible (every booking has a folio) and is shown as a dash rather than as
-  // a confident zero.
-  balance: string | null;
+  // folio_balance() call per row. numeric(14,2), parsed at the boundary (rule
+  // 24). Positive = the guest owes; negative = a refund is due. null only if the
+  // view returned no row for this booking, which should be impossible (every
+  // booking has a folio) and is shown as a dash rather than as a confident zero.
+  balance: number | null;
 }
 
 // A booking's full detail: the row, its embeds, and every night ordered by date
@@ -137,7 +138,7 @@ export interface BookingDetail extends Booking {
   company: { name: string } | null;
   booking_nights: {
     stay_date: string;
-    rate: string;
+    rate: number;
     rate_source: RateSource | null;
   }[];
 }

@@ -8,7 +8,6 @@ import {
   formatQuantity,
   formatSignedQuantity,
   MISSING_VALUE,
-  parseNumeric,
 } from '../../lib/format';
 import {
   fetchSheetForPrint,
@@ -312,7 +311,7 @@ function PrintedVarianceReport({
             // §6: every figure arrives as a STRING. Parsed once, and only to
             // decide what to print — never to recompute the difference, which is
             // the server's own column.
-            const difference = parseNumeric(row.variance_quantity);
+            const difference = row.variance_quantity;
             return (
               <tr key={row.line_id} className="break-inside-avoid border-b border-sand-border">
                 <td className="py-1.5 pr-2 align-top">

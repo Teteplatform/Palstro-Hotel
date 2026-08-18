@@ -268,70 +268,19 @@ export function MovementsList({
                 </tr>
               </thead>
               <tbody className="divide-y divide-sand-border/50">
-                {rows.map((row) => {
-                  const item = names.get(row.inventory_item_id) ?? null;
-                  const location =
-                    locations.find((l) => l.id === row.location_id) ?? null;
-                  const outward = row.quantity.trim().startsWith('-');
-                  return (
-                    <tr key={row.id}>
-                      {/* Rules 8/12: the BUSINESS date — the operating day this
-                          movement belongs to, never created_at. */}
-                      <td className="whitespace-nowrap px-3 py-2.5 align-top text-charcoal sm:px-4">
-                        {formatDisplayDate(row.business_date)}
-                      </td>
-                      <td className="px-2 py-2.5 align-top">
-                        <span className="block font-medium text-charcoal">
-                          {item?.name ?? MISSING_VALUE}
-                        </span>
-                        {row.reason ? (
-                          <span className="mt-0.5 block text-xs text-charcoal-muted">
-                            {row.reason}
-                          </span>
-                        ) : null}
-                        {row.note ? (
-                          <span className="mt-0.5 block text-xs text-charcoal-muted">
-                            {row.note}
-                          </span>
-                        ) : null}
-                        <span className="mt-0.5 block text-xs text-charcoal-muted sm:hidden">
-                          {location?.name ?? MISSING_VALUE}
-                        </span>
-                      </td>
-                      <td className="hidden px-2 py-2.5 align-top text-xs text-charcoal-muted sm:table-cell">
-                        {location?.name ?? MISSING_VALUE}
-                      </td>
-                      <td
-                        className={`px-2 py-2.5 text-right align-top font-semibold tabular-nums ${
-                          outward ? 'text-accent' : 'text-charcoal'
-                        }`}
-                      >
-                        {formatSignedQuantity(row.quantity)}
-                        <span className="block text-xs font-normal text-charcoal-muted">
-                          {item?.base_unit ?? ''}
-                        </span>
-                      </td>
-                      <td className="hidden px-2 py-2.5 text-right align-top tabular-nums text-charcoal-muted lg:table-cell">
-                        {/* A stock-OUT states no cost by design (036 §2): it
-                            leaves at the average already there, so a figure here
-                            would be a second opinion about the same stock. */}
-                        {row.unit_cost === null
-                          ? MISSING_VALUE
-                          : formatMoney(row.unit_cost, currency)}
-                      </td>
-                      <td className="hidden px-2 py-2.5 align-top text-xs text-charcoal-muted lg:table-cell">
-                        {/* formatDisplayDateTimeInZone returns '' when it has
-                            nothing to render; format.ts owns the dash, so the
-                            fallback is supplied here rather than a silent gap. */}
-                        {formatDisplayDateTimeInZone(row.created_at, timezone) ||
-                          MISSING_VALUE}
-                        <span className="block">
-                          by {staffLabel(row.created_by, user?.id)}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
+                {rows.map((row) => (
+                  <MovementRow
+                    key={row.id}
+                    row={row}
+                    item={names.get(row.inventory_item_id) ?? null}
+                    location={
+                      locations.find((l) => l.id === row.location_id) ?? null
+                    }
+                    currency={currency}
+                    timezone={timezone}
+                    viewerId={user?.id}
+                  />
+                ))}
               </tbody>
             </table>
           </div>
@@ -358,3 +307,96 @@ export function MovementsList({
 // to the one in StockItemLedger. Both assumed their input was a string and
 // crashed on anything else; both are now the shared formatSignedQuantity in
 // lib/format.ts, which takes the sign from the parsed number instead.
+
+// ---------------------------------------------------------------------------
+// ONE MOVEMENT, as its own component — the seam the render proof renders
+// ---------------------------------------------------------------------------
+//
+// EXPORTED FOR proofs/movementsRender (rule 22: extract a seam rather than copy
+// it). The list around it owns fetching, filtering and paging, none of which a
+// proof can drive without a session; the row owns everything a wire value can
+// break. So the row comes out, and the proof renders THIS — not a copy of it
+// that would keep passing after this one changed.
+//
+// Its props are the row plus what the list resolved for it: stock_movements
+// carries an item id and a location id and no names, and `viewerId` is what
+// turns a created_by uuid into "you".
+export function MovementRow({
+  row,
+  item,
+  location,
+  currency,
+  timezone,
+  viewerId,
+}: {
+  row: StockMovement;
+  item: InventoryItem | null;
+  location: StockLocation | null;
+  currency: string;
+  timezone: string;
+  viewerId: string | undefined;
+}) {
+  // The sign comes from the NUMBER, because a number is what arrived (rule 24).
+  // This line used to ask the raw PostgREST value whether its text began with a
+  // minus — `row.quantity.trim().startsWith('-')` — and crashed with
+  // "row.quantity.trim is not a function" the day the wire sent a JSON number
+  // instead of a string. It is now impossible to write that here: `quantity` is
+  // typed `number`, so a string method on it does not compile.
+  const outward = row.quantity < 0;
+
+  return (
+    <tr>
+      {/* Rules 8/12: the BUSINESS date — the operating day this movement
+          belongs to, never created_at. */}
+      <td className="whitespace-nowrap px-3 py-2.5 align-top text-charcoal sm:px-4">
+        {formatDisplayDate(row.business_date)}
+      </td>
+      <td className="px-2 py-2.5 align-top">
+        <span className="block font-medium text-charcoal">
+          {item?.name ?? MISSING_VALUE}
+        </span>
+        {row.reason ? (
+          <span className="mt-0.5 block text-xs text-charcoal-muted">
+            {row.reason}
+          </span>
+        ) : null}
+        {row.note ? (
+          <span className="mt-0.5 block text-xs text-charcoal-muted">
+            {row.note}
+          </span>
+        ) : null}
+        <span className="mt-0.5 block text-xs text-charcoal-muted sm:hidden">
+          {location?.name ?? MISSING_VALUE}
+        </span>
+      </td>
+      <td className="hidden px-2 py-2.5 align-top text-xs text-charcoal-muted sm:table-cell">
+        {location?.name ?? MISSING_VALUE}
+      </td>
+      <td
+        className={`px-2 py-2.5 text-right align-top font-semibold tabular-nums ${
+          outward ? 'text-accent' : 'text-charcoal'
+        }`}
+      >
+        {formatSignedQuantity(row.quantity)}
+        <span className="block text-xs font-normal text-charcoal-muted">
+          {item?.base_unit ?? ''}
+        </span>
+      </td>
+      <td className="hidden px-2 py-2.5 text-right align-top tabular-nums text-charcoal-muted lg:table-cell">
+        {/* A stock-OUT states no cost by design (036 §2): it leaves at the
+            average already there, so a figure here would be a second opinion
+            about the same stock. */}
+        {row.unit_cost === null
+          ? MISSING_VALUE
+          : formatMoney(row.unit_cost, currency)}
+      </td>
+      <td className="hidden px-2 py-2.5 align-top text-xs text-charcoal-muted lg:table-cell">
+        {/* formatDisplayDateTimeInZone returns '' when it has nothing to
+            render; format.ts owns the dash, so the fallback is supplied here
+            rather than a silent gap. */}
+        {formatDisplayDateTimeInZone(row.created_at, timezone) || MISSING_VALUE}
+        <span className="block">by {staffLabel(row.created_by, viewerId)}</span>
+      </td>
+    </tr>
+  );
+}

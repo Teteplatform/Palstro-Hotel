@@ -1,4 +1,3 @@
-import { parseNumeric } from './format';
 import { brandingString } from './branding';
 import { formatPropertyAddress } from './address';
 import { paymentMethodLabel } from './folioLabels';
@@ -209,9 +208,9 @@ export interface StatementGroup {
 export interface StatementTaxLine {
   code: string;
   name: string;
-  // numeric(5,4) as the DB stores it: a FRACTION ('0.0750' = 7.5%). Kept raw so
-  // the renderer formats it through formatRatePercent like everywhere else.
-  rate: string;
+  // The rate as a FRACTION (0.0750 = 7.5%), carried through unchanged so the
+  // renderer formats it with formatRatePercent like everywhere else.
+  rate: number;
   amount: number;
 }
 
@@ -343,15 +342,15 @@ export function assembleStatement(source: StatementSource): StatementData {
       payment.reversal_of_payment_id !== null
         ? (payment.reference?.trim() || 'Payment reversal')
         : [
-            (parseNumeric(payment.amount) ?? 0) < 0 ? 'Refund' : null,
+            payment.amount < 0 ? 'Refund' : null,
             payment.reference ? `ref ${payment.reference}` : null,
           ]
             .filter(Boolean)
             .join(' · '),
-    amount: parseNumeric(payment.amount) ?? 0,
+    amount: payment.amount,
   }));
 
-  const balance = parseNumeric(totals.balance) ?? 0;
+  const balance = totals.balance;
 
   return {
     kind,
@@ -381,12 +380,12 @@ export function assembleStatement(source: StatementSource): StatementData {
     groups,
     payments,
     totals: {
-      gross: parseNumeric(totals.gross_total) ?? 0,
-      discount: parseNumeric(totals.discount_total) ?? 0,
-      subtotal: parseNumeric(totals.net_total) ?? 0,
+      gross: totals.gross_total,
+      discount: totals.discount_total,
+      subtotal: totals.net_total,
       taxes: buildTaxLines(source.chargeTaxes),
-      charges: parseNumeric(totals.charges_total) ?? 0,
-      payments: parseNumeric(totals.payments_total) ?? 0,
+      charges: totals.charges_total,
+      payments: totals.payments_total,
       balance,
     },
     balance: {
@@ -448,7 +447,7 @@ function buildChargeGroups(
       // internal working (rack rate, the discount, who approved it) is not on a
       // guest's bill; the totals block shows the discount as one figure when
       // there was one.
-      amount: parseNumeric(charge.net_amount) ?? 0,
+      amount: charge.net_amount,
     };
   };
 
@@ -490,7 +489,8 @@ function buildChargeGroups(
 function buildTaxLines(rows: FolioChargeTaxRow[]): StatementTaxLine[] {
   const byCode = new Map<string, StatementTaxLine>();
   for (const row of rows) {
-    const amount = parseNumeric(row.amount) ?? 0;
+    // Already a number (rule 24) — parsed when folio_charge_taxes was read.
+    const amount = row.amount;
     const bucket = byCode.get(row.code);
     if (bucket) bucket.amount += amount;
     else byCode.set(row.code, { code: row.code, name: row.name, rate: row.rate, amount });

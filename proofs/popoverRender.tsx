@@ -42,8 +42,15 @@ g.KeyboardEvent = win.KeyboardEvent;
 g.PointerEvent = win.PointerEvent ?? win.MouseEvent;
 g.Event = win.Event;
 g.getComputedStyle = win.getComputedStyle.bind(win);
-g.requestAnimationFrame = (cb: FrameRequestCallback) => win.setTimeout(() => cb(0), 0);
-g.cancelAnimationFrame = (id: number) => win.clearTimeout(id);
+// The DOM says a frame handle is a `number`; happy-dom's timers hand back a
+// Timeout object. The two casts are the shim admitting that, in the one place
+// the mismatch exists — this file is the adapter between the two, and an
+// adapter is where a cast belongs. (Only visible since the proofs began being
+// typechecked; it ran correctly all along.)
+g.requestAnimationFrame = (cb: FrameRequestCallback) =>
+  win.setTimeout(() => cb(0), 0) as unknown as number;
+g.cancelAnimationFrame = (id: number) =>
+  win.clearTimeout(id as unknown as ReturnType<typeof win.setTimeout>);
 
 const React = await import('react');
 const { flushSync } = await import('react-dom');
