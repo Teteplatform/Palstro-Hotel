@@ -11,6 +11,21 @@
 import type { StockTakeStatus } from '../types/stockTake';
 
 // ---------------------------------------------------------------------------
+// THE ⓘ PANELS (rule 25)
+// ---------------------------------------------------------------------------
+// The Stock Take tab used to open with three paragraphs and end with a fourth
+// under the Start button. Every word of it is still here — as the contents of
+// ONE ⓘ, and in full in docs/USER-GUIDE.md under "Counting a location", which
+// the panel links to. The screen itself now carries one line of purpose.
+//
+// An array per panel, because the panel renders one <p> per entry and the order
+// is the order somebody would ask the questions in: what does starting one do,
+// can I stop halfway, why only one at a time, and how is this different from
+// writing stock off.
+
+export const STOCK_TAKE_ABOUT_TITLE = 'About stock takes';
+
+// ---------------------------------------------------------------------------
 // The one thing everybody asks about this screen
 // ---------------------------------------------------------------------------
 
@@ -74,6 +89,15 @@ export const COUNT_VERSUS_ADJUSTMENT_NOTE =
   'A count says the count was wrong. A write-off says we lost it, and why. They ' +
   'are recorded as different things on purpose: blur them and the variance ' +
   'report stops meaning anything.';
+
+// The ⓘ on the Stock Take tab, in full. Assembled from the constants above
+// rather than re-worded, so there is still exactly one copy of each sentence.
+export const STOCK_TAKE_ABOUT: string[] = [
+  COUNT_START_EXPLANATION,
+  COUNT_RESUMABLE_EXPLANATION,
+  COUNT_ONE_AT_A_TIME_EXPLANATION,
+  COUNT_VERSUS_ADJUSTMENT_NOTE,
+];
 
 // ---------------------------------------------------------------------------
 // The manager PIN, on the two acts that can need one

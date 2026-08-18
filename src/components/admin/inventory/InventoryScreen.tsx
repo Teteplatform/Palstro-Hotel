@@ -2,7 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Select } from '../../ui/form';
 import type { SelectOption } from '../../ui/form';
+import { AboutNote } from '../../ui/AboutNote';
 import { CloseIcon } from '../../ui/icons';
+import { INVENTORY_ABOUT, INVENTORY_ABOUT_TITLE } from '../../../lib/stockLabels';
 import { useFocusTrap } from '../../../hooks/useFocusTrap';
 import { useLocations } from '../../../hooks/useLocations';
 import { useInventoryReference } from '../../../hooks/useInventoryReference';
@@ -149,15 +151,21 @@ export function InventoryScreen({
 
   return (
     <div className="mx-auto max-w-6xl">
-      <header className="mb-5">
+      {/* ONE LINE OF PURPOSE, then the controls (rule 25). The second half of
+          the old paragraph — that every figure is folded from the movements and
+          nothing is stored — is true, load-bearing and of no use to somebody
+          about to correct a shelf, so it is in the ⓘ and in the guide. */}
+      <header className="mb-5 flex items-center gap-2">
         <h1 className="text-2xl font-bold tracking-tight text-charcoal">
           Inventory
         </h1>
-        <p className="mt-1 max-w-3xl text-sm text-charcoal-muted">
-          Everything you hold, use or sell — what it is, where it is, and what it
-          is worth. Every quantity and every cost is added up from the movements
-          recorded against it, so nothing is stored and nothing can drift.
-        </p>
+        <AboutNote
+          title={INVENTORY_ABOUT_TITLE}
+          paragraphs={INVENTORY_ABOUT}
+          propertySlug={propertySlug}
+          guideAnchor="what-the-stock-figures-mean"
+          guideLabel="What the stock figures mean"
+        />
       </header>
 
       {locations.error ? (
@@ -195,11 +203,6 @@ export function InventoryScreen({
             onChange={setLocationId}
             options={locationOptions}
             disabled={locations.loading}
-            helpText={
-              locationId
-                ? 'One store, kitchen or bar — its own quantities and its own cost.'
-                : 'Every location in this hotel, rolled up. The Locations column shows where.'
-            }
           />
         </div>
         <button
@@ -219,7 +222,6 @@ export function InventoryScreen({
             rarely touch again. */}
         <Link
           to={`/admin/${propertySlug}/stock/import`}
-          title="Loads QUANTITIES into a location for items that are already in your catalogue. To create the items themselves, use Add product."
           className="rounded-lg border border-sand-border bg-white/70 px-4 py-2 text-sm font-semibold text-charcoal transition-colors hover:bg-sand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-cream"
         >
           Load opening stock
@@ -305,6 +307,7 @@ export function InventoryScreen({
           <AdjustmentsTab
             tenantId={tenantId}
             propertyId={propertyId}
+            propertySlug={propertySlug}
             currency={currency}
             timezone={timezone}
             locations={locations.rows}
@@ -331,6 +334,7 @@ export function InventoryScreen({
           <NegativeStockTab
             tenantId={tenantId}
             propertyId={propertyId}
+            propertySlug={propertySlug}
             currency={currency}
             timezone={timezone}
             locations={locations.rows}
@@ -355,6 +359,7 @@ export function InventoryScreen({
             title={tab.label}
             summary={tab.soonSummary ?? ''}
             detail={tab.soonDetail ?? ''}
+            propertySlug={propertySlug}
             needs={tab.soonNeeds}
             meanwhile={tab.soonMeanwhile}
           />

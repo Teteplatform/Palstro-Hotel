@@ -12,11 +12,22 @@
 //   1. what will this do?
 //   2. what has to exist before it can?
 //   3. what do I do today?
+//
+// RULE 25 APPLIES HERE TOO, with one adjustment. A screen with no actions cannot
+// put its explanation behind the controls, because there are none — so the three
+// answers stay on the panel, which is the whole reason it exists. What moved
+// behind the ⓘ is the fourth thing it used to say: the paragraph of REASONING
+// about why the feature cannot be faked from data already present. That is the
+// part written for somebody who asks "why not just work it out?", and they can
+// now ask.
 
 interface ComingSoonPanelProps {
   title: string;
   summary: string;
+  // The reasoning, behind the ⓘ. Not on the panel.
   detail: string;
+  // For the ⓘ's link into the staff guide.
+  propertySlug: string;
   // What must be built first, one item per line. Rendered as a list because it
   // is a list — prose hides how many things are actually outstanding.
   needs?: string[];
@@ -24,10 +35,13 @@ interface ComingSoonPanelProps {
   meanwhile?: string;
 }
 
+import { AboutNote } from '../../ui/AboutNote';
+
 export function ComingSoonPanel({
   title,
   summary,
   detail,
+  propertySlug,
   needs,
   meanwhile,
 }: ComingSoonPanelProps) {
@@ -36,9 +50,17 @@ export function ComingSoonPanel({
       <span className="rounded-full bg-sand px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-charcoal-muted">
         Not built yet
       </span>
-      <h2 className="mt-3 text-base font-semibold text-charcoal">{title}</h2>
+      <div className="mt-3 flex items-center gap-2">
+        <h2 className="text-base font-semibold text-charcoal">{title}</h2>
+        <AboutNote
+          title={`Why ${title.toLowerCase()} is not built yet`}
+          paragraphs={[detail]}
+          propertySlug={propertySlug}
+          guideAnchor="not-built-yet"
+          guideLabel="Not built yet"
+        />
+      </div>
       <p className="mt-1 max-w-2xl text-sm text-charcoal">{summary}</p>
-      <p className="mt-3 max-w-2xl text-sm text-charcoal-muted">{detail}</p>
 
       {needs && needs.length > 0 ? (
         <div className="mt-4 max-w-2xl">

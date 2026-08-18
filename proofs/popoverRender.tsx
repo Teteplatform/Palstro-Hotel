@@ -56,6 +56,8 @@ const React = await import('react');
 const { flushSync } = await import('react-dom');
 const { createRoot } = await import('react-dom/client');
 const { ActionMenu } = await import('../src/components/ui/ActionMenu');
+const { AboutNote } = await import('../src/components/ui/AboutNote');
+const { MemoryRouter } = await import('react-router-dom');
 const { placePopover } = await import('../src/components/ui/Popover');
 
 let pass = 0;
@@ -249,6 +251,79 @@ real.root.unmount();
 real.host.remove();
 chooser.root.unmount();
 chooser.host.remove();
+
+// ---------------------------------------------------------------------------
+// PART 6 — the ⓘ (rule 25), which is the same primitive with a different job
+// ---------------------------------------------------------------------------
+// It is proven HERE rather than in its own file because everything that can go
+// wrong with it is floating-layer behaviour, and this is where that lives. What
+// is specific to it: the panel holds PARAGRAPHS and a link into the staff guide,
+// and the link is the half most likely to be quietly dropped in a later edit —
+// a summary with nowhere to go is just a smaller wall of text.
+//
+// MADE TO FAIL: the <Link> was deleted from AboutNote and the proof re-run. RED
+// on 4 — the link is gone, its href is gone, and the two focus assertions go
+// with it, because with nothing focusable inside the panel Escape has nowhere to
+// return focus FROM and leaves it on <body>. That second consequence was not
+// designed for and is worth keeping: a panel with no way out is also a panel a
+// keyboard user cannot get into.
+console.log('\n=== 6. The ⓘ: a panel of paragraphs, and the way out of it ===');
+
+const about = mount(
+  <MemoryRouter>
+    <div style={{ overflow: 'hidden' }}>
+      <AboutNote
+        title="About stock takes"
+        paragraphs={['Starting a count takes a snapshot.', 'One count at a time per location.']}
+        propertySlug="heledon"
+        guideAnchor="counting-a-location"
+        guideLabel="Counting a location"
+      />
+    </div>
+  </MemoryRouter>,
+);
+
+const noteTrigger = doc.querySelector('button[aria-label="About stock takes"]') as HTMLElement;
+ok('the ⓘ is a real button, so touch and keyboard reach it', noteTrigger !== null);
+ok('and it is closed until asked', noteTrigger?.getAttribute('aria-expanded') === 'false');
+
+flushSync(() => noteTrigger.click());
+const notePanel = doc.querySelector('[role="dialog"][aria-label="About stock takes"]');
+ok('it opens', notePanel !== null);
+ok('OUTSIDE the clipping container, like every other floating layer',
+  notePanel !== null && !about.clip.contains(notePanel as Node));
+ok('it holds every paragraph it was given',
+  (notePanel?.querySelectorAll('p').length ?? 0) === 2,
+  `${notePanel?.querySelectorAll('p').length} paragraphs`);
+
+// THE LINK. Not decoration: the panel is a summary, and rule 25 says the full
+// text lives in the guide. This asserts the href lands on the SECTION, not on
+// the top of a 1,600-line document.
+const guideLink = notePanel?.querySelector('a') as HTMLAnchorElement | null;
+ok('it offers the guide', guideLink !== null);
+ok('and links to the right section of it',
+  guideLink?.getAttribute('href') === '/admin/heledon/help#counting-a-location',
+  guideLink?.getAttribute('href') ?? '(no href)');
+
+// A keyboard user tabs INTO the panel to reach the guide link. Escape from
+// there must put them back on the ⓘ, not drop them at the top of the document —
+// which is the whole reason the primitive tracks where focus was. Focus is moved
+// explicitly here because a synthetic .click() does not focus a button the way a
+// real pointer does, so asserting it without this would be asserting happy-dom.
+flushSync(() => guideLink?.focus());
+ok('(setup) focus can reach the guide link inside the panel',
+  doc.activeElement === guideLink);
+flushSync(() => {
+  doc.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }) as unknown as Event);
+});
+ok('Escape closes it',
+  doc.querySelector('[role="dialog"][aria-label="About stock takes"]') === null);
+ok('and hands focus back to the ⓘ, not to the document',
+  doc.activeElement === noteTrigger,
+  `focus on <${(doc.activeElement as HTMLElement)?.tagName?.toLowerCase()}>`);
+
+about.root.unmount();
+about.host.remove();
 
 console.log(`\n================  ${pass} PASSED, ${fail} FAILED  ================`);
 process.exit(fail ? 1 : 0);

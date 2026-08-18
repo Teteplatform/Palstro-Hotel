@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Pagination } from '../../ui/Pagination';
+import { AboutNote } from '../../ui/AboutNote';
 import { CalculationNote } from '../../ui/CalculationNote';
 import { Select } from '../../ui/form';
 import type { SelectOption } from '../../ui/form';
@@ -15,7 +16,8 @@ import {
   isUncorrectable,
 } from '../../../lib/stock';
 import {
-  NEGATIVE_STOCK_EXPLANATION,
+  NEGATIVE_STOCK_ABOUT,
+  NEGATIVE_STOCK_ABOUT_TITLE,
   NEGATIVE_STOCK_TOTAL_EXPLANATION,
   NEGATIVE_UNCORRECTABLE_NOTE,
 } from '../../../lib/stockLabels';
@@ -31,7 +33,9 @@ import type { StockNegativePositionRow } from '../../../types/stock';
 // that was never entered, an issue posted against the wrong location, or stock
 // that walked. Every one of those has a different answer, and none of them is
 // "the system is broken". So the screen opens by saying what a negative means
-// and what to check, and the rows are lines of enquiry rather than faults.
+// and what to check, and the rows are lines of enquiry rather than faults —
+// though that explanation now lives behind the ⓘ and in the staff guide (rule
+// 25), because it is the same paragraph every time and the rows are the point.
 //
 // Negative stock is never blocked and never floored (rule 7). 038 argues that at
 // length and this screen is the other half of it: a negative nobody looks at is
@@ -68,6 +72,7 @@ import type { StockNegativePositionRow } from '../../../types/stock';
 interface NegativeStockTabProps {
   tenantId: string;
   propertyId: string;
+  propertySlug: string;
   currency: string;
   timezone: string;
   locations: StockLocation[];
@@ -77,6 +82,7 @@ interface NegativeStockTabProps {
 export function NegativeStockTab({
   tenantId,
   propertyId,
+  propertySlug,
   currency,
   timezone,
   locations,
@@ -137,16 +143,21 @@ export function NegativeStockTab({
 
   return (
     <div className="space-y-4">
-      {/* WHAT A NEGATIVE MEANS, before the list of them. Someone opening this
-          screen for the first time should not have to work out whether they are
-          looking at a bug report. */}
-      <div className="rounded-2xl border border-sand-border bg-white/60 p-4">
+      {/* One line of purpose (rule 25). What a negative MEANS — that it is a
+          question worth asking rather than a fault, and that this screen sees
+          ones the Products tab cannot — is in the ⓘ, because somebody who opens
+          this screen twice a week already knows. */}
+      <div className="flex items-center gap-2 rounded-2xl border border-sand-border bg-white/60 p-4">
         <h2 className="text-base font-semibold text-charcoal">
-          Stock showing less than nothing
+          Stock showing less than nothing.
         </h2>
-        <p className="mt-1 max-w-3xl text-sm text-charcoal-muted">
-          {NEGATIVE_STOCK_EXPLANATION}
-        </p>
+        <AboutNote
+          title={NEGATIVE_STOCK_ABOUT_TITLE}
+          paragraphs={NEGATIVE_STOCK_ABOUT}
+          propertySlug={propertySlug}
+          guideAnchor="finding-stock-that-says-less-than-nothing"
+          guideLabel="Finding stock that says less than nothing"
+        />
       </div>
 
       {/* THE SUMMARY, across the whole filtered set (rule 20), each figure with

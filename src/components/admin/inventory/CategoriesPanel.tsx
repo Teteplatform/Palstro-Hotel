@@ -123,11 +123,16 @@ export function CategoriesPanel({
     <div className="rounded-2xl border border-sand-border bg-white/60">
       {alwaysOpen ? (
         <div className="p-4 pb-0">
-          <p className="text-sm font-semibold text-charcoal">Categories</p>
+          <p className="text-sm font-semibold text-charcoal">
+            The groups your stock reports are broken down by.
+          </p>
+          {/* A COUNT IS NOT PROSE. What is left under the heading is the number
+              of categories — a fact about what is on screen, which is what an
+              empty state has to say and a full one may (rule 25). */}
           <p className="text-xs text-charcoal-muted">
             {categories.length === 0
-              ? 'None yet — add the groups you want your reports broken down by.'
-              : `${categories.length} ${categories.length === 1 ? 'category' : 'categories'} · how your stock reports are grouped`}
+              ? 'None yet.'
+              : `${categories.length} ${categories.length === 1 ? 'category' : 'categories'}`}
           </p>
         </div>
       ) : (

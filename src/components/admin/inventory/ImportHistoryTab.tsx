@@ -1,5 +1,9 @@
 import { Link } from 'react-router-dom';
-import { IMPORT_HISTORY_NOTE } from '../../../lib/stockLabels';
+import { AboutNote } from '../../ui/AboutNote';
+import {
+  IMPORT_HISTORY_ABOUT,
+  IMPORT_HISTORY_ABOUT_TITLE,
+} from '../../../lib/stockLabels';
 import type { InventoryItem, StockLocation } from '../../../types/inventory';
 import { MovementsList } from './MovementsList';
 
@@ -45,13 +49,17 @@ export function ImportHistoryTab({
     <div className="space-y-4">
       <div className="rounded-2xl border border-sand-border bg-white/60 p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
+          <div className="flex min-w-0 items-center gap-2">
             <h2 className="text-base font-semibold text-charcoal">
-              Opening stock loaded
+              Every opening balance on file, newest first.
             </h2>
-            <p className="mt-1 max-w-2xl text-sm text-charcoal-muted">
-              {IMPORT_HISTORY_NOTE}
-            </p>
+            <AboutNote
+              title={IMPORT_HISTORY_ABOUT_TITLE}
+              paragraphs={IMPORT_HISTORY_ABOUT}
+              propertySlug={propertySlug}
+              guideAnchor="loading-your-opening-stock-from-a-spreadsheet"
+              guideLabel="Loading your opening stock"
+            />
           </div>
           <Link
             to={`/admin/${propertySlug}/stock/import`}

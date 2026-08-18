@@ -97,6 +97,14 @@ Notes:
 - **Top bar** — the property you are working in, a property switcher if you work
   at more than one, and your account menu.
 - **Help** — at the bottom of the sidebar. It opens this guide.
+- **The ⓘ beside a heading** — the explanation for that screen. Screens are kept
+  short on purpose: one line saying what the screen is for, then the buttons. If
+  you want to know *why* something works the way it does, tap the **ⓘ**. It opens
+  a panel with the reasoning, and a link straight to the matching part of this
+  guide.
+- **The small i beside a number** — what that figure counts and what it leaves
+  out. Different from the ⓘ above, which is about the screen; this one is about
+  one total.
 
 What works today: **Bookings**, **Room types**, **Companies**, **Site editor**,
 **Settings**, and the guest pages you reach from a booking.
@@ -1100,6 +1108,23 @@ The **Adjustments** tab lists every correction ever posted — what changed, whe
 why, and in whose name — filtered by location, item, date range, or direction.
 Nothing on that list can be edited, by anyone.
 
+The list starts at **every location**, not the one picked at the top of the page.
+Somebody scanning corrections usually wants the whole hotel's picture, and
+narrowing to one store is one click away.
+
+#### A correction is not a write-off
+
+> **An adjustment says the count was wrong. A write-off says we lost it, and
+> why** — spoilage, breakage, expiry, a staff meal, a complimentary drink.
+
+They are deliberately different kinds of event, because the variance report only
+means something if the two are kept apart: a month of "adjustment −4" tells you
+nothing about whether stock is being wasted or being stolen, while a month of
+write-offs with reasons tells you both. Write-offs as their own movement type
+arrive with the F&B module; until then, record one as an adjustment and **write
+the real reason out in full** — that reason is what a later report will be built
+from.
+
 ![screenshot: the Adjustments tab, with a correction being recorded above the list of past ones](/help/stock-adjustments.png)
 
 ### Reversing a stock movement
@@ -1258,6 +1283,14 @@ store, you are told which one and asked to carry on with it or abandon it. Two
 people counting the same shelves are measuring two different moments, and
 whichever finished second would post its differences against a snapshot the first
 had already moved.
+
+**A count and a write-off are different things**, and a count is not the way to
+record one. A count says *the count was wrong*; a write-off says *we lost it, and
+here is why*. If you know what happened to the missing stock — it spoiled, it
+broke, it went to a staff meal — record it as an adjustment with that reason
+rather than letting a count absorb it silently, or the variance report stops
+being able to tell waste from theft. See **A correction is not a write-off**
+under *Adding or correcting stock*.
 
 Only items that have moved in that location are on the sheet: an item with no
 history there has no cost to value a count against. If you find something on a

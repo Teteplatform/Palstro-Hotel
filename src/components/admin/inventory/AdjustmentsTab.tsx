@@ -1,8 +1,12 @@
 import { useState } from 'react';
 import { Select } from '../../ui/form';
 import type { SelectOption } from '../../ui/form';
+import { AboutNote } from '../../ui/AboutNote';
 import { PlusIcon } from '../../ui/icons';
-import { ADJUSTMENT_REASON_EXPLANATION } from '../../../lib/stockLabels';
+import {
+  ADJUSTMENTS_ABOUT,
+  ADJUSTMENTS_ABOUT_TITLE,
+} from '../../../lib/stockLabels';
 import type { InventoryItem, StockLocation } from '../../../types/inventory';
 import { MovementsList } from './MovementsList';
 import { StockEntryForm } from './StockEntryForm';
@@ -23,10 +27,15 @@ import { StockEntryForm } from './StockEntryForm';
 // The list defaults to EVERY location, not the one selected above, deliberately:
 // an owner scanning corrections wants the hotel's whole picture, and narrowing to
 // one store is one click away.
+//
+// Both of those facts USED TO BE PARAGRAPHS AT THE TOP OF THE SCREEN. They are in
+// the ⓘ now (rule 25) and in the staff guide under "Adding or correcting stock":
+// the person who opens this tab has a shelf that is wrong and wants the button.
 
 interface AdjustmentsTabProps {
   tenantId: string;
   propertyId: string;
+  propertySlug: string;
   currency: string;
   timezone: string;
   locations: StockLocation[];
@@ -39,6 +48,7 @@ interface AdjustmentsTabProps {
 export function AdjustmentsTab({
   tenantId,
   propertyId,
+  propertySlug,
   currency,
   timezone,
   locations,
@@ -63,11 +73,17 @@ export function AdjustmentsTab({
     <div className="space-y-4">
       <div className="rounded-2xl border border-sand-border bg-white/60 p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h2 className="text-base font-semibold text-charcoal">Adjustments</h2>
-            <p className="mt-1 max-w-2xl text-sm text-charcoal-muted">
-              {ADJUSTMENT_REASON_EXPLANATION}
-            </p>
+          <div className="flex min-w-0 items-center gap-2">
+            <h2 className="text-base font-semibold text-charcoal">
+              Correct a quantity that is wrong, with a reason on the record.
+            </h2>
+            <AboutNote
+              title={ADJUSTMENTS_ABOUT_TITLE}
+              paragraphs={ADJUSTMENTS_ABOUT}
+              propertySlug={propertySlug}
+              guideAnchor="adding-or-correcting-stock"
+              guideLabel="Adding or correcting stock"
+            />
           </div>
           {!formOpen ? (
             <button
@@ -91,7 +107,6 @@ export function AdjustmentsTab({
                 value={formLocationId}
                 onChange={setFormLocationId}
                 options={locationOptions}
-                helpText="Stock is physical — a correction belongs to one place."
               />
             </div>
             {formLocation ? (

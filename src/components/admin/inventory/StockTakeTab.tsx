@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Pagination } from '../../ui/Pagination';
+import { AboutNote } from '../../ui/AboutNote';
 import { CalculationNote } from '../../ui/CalculationNote';
 import { ActionMenu } from '../../ui/ActionMenu';
 import type { ActionMenuItem } from '../../ui/ActionMenu';
@@ -16,12 +17,10 @@ import {
   stockErrorMessage,
 } from '../../../lib/stockTake';
 import {
-  COUNT_ONE_AT_A_TIME_EXPLANATION,
   COUNT_PROGRESS_EXPLANATION,
-  COUNT_RESUMABLE_EXPLANATION,
-  COUNT_START_EXPLANATION,
   COUNT_VARIANCE_EXPLANATION,
-  COUNT_VERSUS_ADJUSTMENT_NOTE,
+  STOCK_TAKE_ABOUT,
+  STOCK_TAKE_ABOUT_TITLE,
   takeStatusLabel,
   takeStatusTone,
 } from '../../../lib/stockTakeLabels';
@@ -42,6 +41,19 @@ import type { StockTakeProgressRow } from '../../../types/stockTake';
 //
 // What is left here is what a tab is good at: starting the job, and listing the
 // jobs already done so any of them can be opened.
+//
+// ---------------------------------------------------------------------------
+// AND WHAT MOVED BEHIND THE ⓘ (rule 25)
+// ---------------------------------------------------------------------------
+// Before you could do anything here you read: a paragraph about snapshots, a
+// paragraph about saving as you go, a paragraph about one count per location,
+// three field hints, and a paragraph under the Start button about counts versus
+// write-offs. The screen was teaching when the person had come to work.
+//
+// All of it is intact — in ONE ⓘ beside the heading, and in the staff guide
+// under "Counting a location", which the panel links to. What is left on screen
+// is one line of purpose and the three fields, so the first thing you see is
+// the thing you came to press.
 //
 // ---------------------------------------------------------------------------
 // THE KEBAB, AND THE ONE ACTION IT WILL NEVER OFFER
@@ -198,13 +210,18 @@ export function StockTakeTab({
       {/* Starting one                                                  */}
       {/* ------------------------------------------------------------- */}
       <div className="rounded-2xl border border-sand-border bg-white/60 p-4">
-        <h2 className="text-base font-semibold text-charcoal">Stock take</h2>
-        <p className="mt-1 max-w-2xl text-sm text-charcoal-muted">
-          {COUNT_START_EXPLANATION}
-        </p>
-        <p className="mt-2 max-w-2xl text-xs text-charcoal-muted">
-          {COUNT_RESUMABLE_EXPLANATION} {COUNT_ONE_AT_A_TIME_EXPLANATION}
-        </p>
+        <div className="flex items-center gap-2">
+          <h2 className="text-base font-semibold text-charcoal">
+            Count a location’s shelves and post what you find.
+          </h2>
+          <AboutNote
+            title={STOCK_TAKE_ABOUT_TITLE}
+            paragraphs={STOCK_TAKE_ABOUT}
+            propertySlug={propertySlug}
+            guideAnchor="counting-a-location"
+            guideLabel="Counting a location"
+          />
+        </div>
 
         <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <Select
@@ -217,7 +234,6 @@ export function StockTakeTab({
             }}
             options={locationOptions}
             disabled={starting || open.loading}
-            helpText="A count covers one location's shelves."
           />
           <DateField
             label="Count date"
@@ -228,6 +244,12 @@ export function StockTakeTab({
             disabled={starting}
             helpText="The day you walked the shelves — not today, if they differ."
           />
+          {/* The two hints that survived. "Count date" genuinely cannot carry
+              "the day you walked the shelves, which may not be today", and
+              "Note" cannot carry "this is stamped permanently onto every
+              movement the count posts" — both change what a person types. The
+              Location hint above said "A count covers one location's shelves",
+              which the label already said. */}
           <TextField
             label="Note"
             value={note}
@@ -263,7 +285,10 @@ export function StockTakeTab({
             </button>
           </div>
         ) : (
-          <div className="mt-3 flex flex-wrap items-center gap-3">
+          // No paragraph under the button (rule 25): the note about counts
+          // versus write-offs is in the ⓘ above, where somebody can choose to
+          // read it, and the label says what pressing it does.
+          <div className="mt-3">
             <button
               type="button"
               onClick={() => void handleStart()}
@@ -274,9 +299,6 @@ export function StockTakeTab({
                 ? 'Starting…'
                 : `Start counting ${location?.name ?? ''}`.trim()}
             </button>
-            <span className="max-w-md text-xs text-charcoal-muted">
-              {COUNT_VERSUS_ADJUSTMENT_NOTE}
-            </span>
           </div>
         )}
       </div>

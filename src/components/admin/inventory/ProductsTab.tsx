@@ -18,7 +18,10 @@ import {
   type ProductRow,
   type ProductStockState,
 } from '../../../lib/inventoryProducts';
-import { NEGATIVE_FILTER_CROSS_REFERENCE } from '../../../lib/stockLabels';
+import {
+  PRODUCTS_ABOUT,
+  PRODUCTS_ABOUT_TITLE,
+} from '../../../lib/stockLabels';
 import type {
   InventoryCategory,
   InventoryItem,
@@ -26,6 +29,7 @@ import type {
   StockLocation,
   UnitOfMeasure,
 } from '../../../types/inventory';
+import { AboutNote } from '../../ui/AboutNote';
 import { AddProductChoiceDialog } from './AddProductChoiceDialog';
 import { InventorySummaryCard } from './InventorySummaryCard';
 import { ItemPanel } from './ItemPanel';
@@ -230,6 +234,23 @@ export function ProductsTab({
 
   return (
     <div className="space-y-4">
+      {/* The tab's own line of purpose sits on the page header above; what this
+          list is and how its figures are worked out is in the ⓘ (rule 25).
+          Placed beside the summary card because that is the first thing on the
+          tab and the figures are what people ask about. */}
+      <div className="flex items-center gap-2">
+        <h2 className="text-base font-semibold text-charcoal">
+          Your catalogue, with what is on the shelf beside it.
+        </h2>
+        <AboutNote
+          title={PRODUCTS_ABOUT_TITLE}
+          paragraphs={PRODUCTS_ABOUT}
+          propertySlug={propertySlug}
+          guideAnchor="products-the-item-list"
+          guideLabel="Products — the item list"
+        />
+      </div>
+
       <InventorySummaryCard
         summary={list.summary}
         loading={list.loading}
@@ -337,18 +358,6 @@ export function ProductsTab({
               list.setFilters({ ...list.filters, state: v as ProductStockState })
             }
             options={stateOptions}
-            helpText={
-              list.filters.state === 'negative'
-                ? // THE TWO NEGATIVE SURFACES MUST NOT BOTH CLAIM TO BE THE
-                  // LIST. This filter reads stock_on_hand_items, which joins
-                  // away soft-deleted items and locations; the Negative stock
-                  // screen reads stock_negative_positions, which deliberately
-                  // does not. The difference is real and decides which rows a
-                  // person can see, so it is stated on the page rather than left
-                  // in somebody's memory.
-                  NEGATIVE_FILTER_CROSS_REFERENCE
-                : 'Narrowing by stock lists one line per location.'
-            }
           />
           <Select
             label="Items switched off"
@@ -384,12 +393,16 @@ export function ProductsTab({
         </div>
       ) : null}
 
-      {/* When positions are the base of the list, an item held in two locations
-          is two rows. Said out loud rather than left to be puzzled over. */}
+      {/* THE ONE SENTENCE THAT STAYED, and the test for why. It is not an
+          explanation of the screen — it is a statement about what the rows in
+          front of you currently ARE: narrowed by stock, the list is one line per
+          LOCATION, so an item held in two places is two rows. Somebody counting
+          rows needs it to read the table correctly, and it appears only in the
+          mode where it is true. The two negative surfaces differing, and how the
+          figures are worked out, are in the ⓘ. */}
       {list.byPosition ? (
         <p className="text-xs text-charcoal-muted">
-          Showing one line per location, because the list is narrowed by stock. An
-          item held in two places appears twice.
+          One line per location, so an item held in two places appears twice.
         </p>
       ) : null}
 
@@ -530,7 +543,7 @@ function EmptyState({ filtered, onAdd }: { filtered: boolean; onAdd: () => void 
       <p className="mx-auto mt-1 max-w-md text-sm text-charcoal-muted">
         {filtered
           ? 'Try a different search, or clear the filters.'
-          : 'Start with what your kitchen and bar use most. Add one at a time, or bring the whole catalogue in from a spreadsheet — Add product offers both. What is on the shelves is loaded afterwards, once the items exist.'}
+          : 'Start with what your kitchen and bar use most. Add product takes one at a time, or the whole catalogue from a spreadsheet.'}
       </p>
       {!filtered ? (
         <button

@@ -189,3 +189,74 @@ export const ADJUSTMENT_REASON_EXPLANATION =
   'reason and your name are recorded permanently against it. It cannot be ' +
   'edited or deleted afterwards — a mistake is corrected with another ' +
   'adjustment, so the whole story stays visible.';
+
+// ---------------------------------------------------------------------------
+// THE ⓘ PANELS (rule 25)
+// ---------------------------------------------------------------------------
+// Each is the explanation ONE screen used to open with, moved behind a single
+// icon and written out in full in docs/USER-GUIDE.md, which each panel links to.
+// The screens keep one line of purpose apiece.
+//
+// Assembled from the constants in this file wherever the sentence already
+// existed, so moving the words did not fork them.
+
+export const INVENTORY_ABOUT_TITLE = 'About this page';
+
+export const INVENTORY_ABOUT: string[] = [
+  'Every quantity and every cost on this page is added up from the movements ' +
+    'recorded against an item — opening balances, adjustments, counts. Nothing ' +
+    'is stored as a running total, so nothing can quietly drift out of step ' +
+    'with the movements behind it.',
+  'Stock is physical, so it belongs to a place. Each location holds its own ' +
+    'quantity at its own cost; “All locations” adds those together for the ' +
+    'whole hotel, and the Locations column shows the breakdown so a roll-up is ' +
+    'never mistaken for one pile.',
+  MOVING_AVERAGE_EXPLANATION,
+  'Load opening stock is a day-one job, done once per location, AFTER the ' +
+    'items exist: it loads QUANTITIES for items already in your catalogue. To ' +
+    'create the items themselves, use Add product.',
+];
+
+export const ADJUSTMENTS_ABOUT_TITLE = 'About adjustments';
+
+export const ADJUSTMENTS_ABOUT: string[] = [
+  ADJUSTMENT_REASON_EXPLANATION,
+  'An adjustment says the count was wrong. A write-off says we lost it, and ' +
+    'why — spoilage, breakage, expiry, a staff meal. They are recorded as ' +
+    'different things on purpose: blur them and the variance report stops ' +
+    'meaning anything.',
+  'The list below covers every location by default, not the one selected at ' +
+    'the top of the page: somebody scanning corrections wants the hotel’s whole ' +
+    'picture, and narrowing to one store is one click away.',
+];
+
+export const IMPORT_HISTORY_ABOUT_TITLE = 'About opening stock';
+
+export const IMPORT_HISTORY_ABOUT: string[] = [
+  IMPORT_HISTORY_NOTE,
+  'An opening balance is a one-time event per item per location — the line the ' +
+    'ledger starts from. After it, stock only ever moves by a recorded ' +
+    'movement: a receipt, an issue, an adjustment, a count or a write-off.',
+];
+
+export const NEGATIVE_STOCK_ABOUT_TITLE = 'About negative stock';
+
+export const NEGATIVE_STOCK_ABOUT: string[] = [
+  NEGATIVE_STOCK_EXPLANATION,
+  'This screen shows negatives the Products tab cannot: the ones sitting ' +
+    'behind an item or a location that has been switched off or removed. Those ' +
+    'are also the ones that cannot be corrected until something is switched ' +
+    'back on, which is why they are worth a screen of their own.',
+];
+
+export const PRODUCTS_ABOUT_TITLE = 'About the product list';
+
+export const PRODUCTS_ABOUT: string[] = [
+  'This is your catalogue with its stock beside it, so an item with nothing on ' +
+    'hand is still a row — that is what makes this the screen you add stock ' +
+    'FROM, rather than one that only shows what you already have.',
+  MOVING_AVERAGE_EXPLANATION,
+  'The figures above the table cover the whole filtered set, across every ' +
+    'page — never just the rows in front of you. Export writes the same set.',
+  NEGATIVE_FILTER_CROSS_REFERENCE,
+];
