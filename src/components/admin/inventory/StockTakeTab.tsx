@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Pagination } from '../../ui/Pagination';
-import { AboutNote } from '../../ui/AboutNote';
+import { ScreenHeader } from '../../ui/ScreenHeader';
 import { CalculationNote } from '../../ui/CalculationNote';
 import { ActionMenu } from '../../ui/ActionMenu';
 import type { ActionMenuItem } from '../../ui/ActionMenu';
@@ -210,18 +210,18 @@ export function StockTakeTab({
       {/* Starting one                                                  */}
       {/* ------------------------------------------------------------- */}
       <div className="rounded-2xl border border-sand-border bg-white/60 p-4">
-        <div className="flex items-center gap-2">
-          <h2 className="text-base font-semibold text-charcoal">
-            Count a location’s shelves and post what you find.
-          </h2>
-          <AboutNote
-            title={STOCK_TAKE_ABOUT_TITLE}
-            paragraphs={STOCK_TAKE_ABOUT}
-            propertySlug={propertySlug}
-            guideAnchor="counting-a-location"
-            guideLabel="Counting a location"
-          />
-        </div>
+        <ScreenHeader
+          level={2}
+          title="Stock take"
+          purpose="Count a location’s shelves and post what you find."
+          about={{
+            title: STOCK_TAKE_ABOUT_TITLE,
+            paragraphs: STOCK_TAKE_ABOUT,
+            guideAnchor: 'counting-a-location',
+            guideLabel: 'Counting a location',
+          }}
+          propertySlug={propertySlug}
+        />
 
         <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <Select

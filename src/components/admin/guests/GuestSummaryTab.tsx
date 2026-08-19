@@ -46,6 +46,8 @@ import type { GuestAccountSummary, GuestStayRow } from '../../../types/guestLedg
 
 interface GuestSummaryTabProps {
   guestId: string;
+  // For the ⓘ's link into this property's copy of the staff guide.
+  propertySlug: string;
   guestName: string;
   tenantId: string;
   propertyId: string;
@@ -103,6 +105,7 @@ type PanelState =
 export function GuestSummaryTab({
   guestId,
   guestName,
+  propertySlug,
   tenantId,
   propertyId,
   summary,
@@ -451,7 +454,8 @@ export function GuestSummaryTab({
             currency={currency}
             timezone={timezone}
             title={`Take payment — ${panel.row.booking_number}`}
-            description="Recorded against this stay's folio. It joins the guest's payment pool and settles their oldest unpaid item first."
+            subject="Recorded against this stay's folio."
+            propertySlug={propertySlug}
             onDone={afterMutation}
             onCancel={() => setPanel(null)}
           />
@@ -543,6 +547,7 @@ export function GuestSummaryTab({
         {panel?.kind === 'standalone' ? (
           <StandaloneEntryPanel
             guestId={guestId}
+            propertySlug={propertySlug}
             guestName={guestName}
             tenantId={tenantId}
             propertyId={propertyId}

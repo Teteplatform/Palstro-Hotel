@@ -191,3 +191,45 @@ constantly. The three hooks that matter most:
   precisely what the `numeric(14,4)` quantity convention exists for — recipe
   measures like 0.0250 kg per plate must not round away, or the variance the
   report is built to surface disappears into rounding drift.
+
+---
+
+## What every screen in a new module looks like
+
+The layers above decide *what* a module contains. This decides what its screens
+look like on the day they are first written, and it is not a later polish pass —
+CLAUDE.md rules 24 and 25, restated here because this file is the one that gets
+read before a new module is started.
+
+**Every screen opens with `<ScreenHeader>`:** the module's name, ONE sentence of
+purpose, the primary action beside it, and a single **ⓘ** holding the
+explanation. The explanation is also written into `docs/USER-GUIDE.md`, which
+the ⓘ links to by section anchor.
+
+```tsx
+<ScreenHeader
+  title="Requisitions"
+  purpose="Ask the store for stock, and confirm what actually arrived."
+  about={{ title, paragraphs, guideAnchor, guideLabel }}
+  propertySlug={propertySlug}
+  actions={<button …>New requisition</button>}
+/>
+```
+
+Write the reasoning as well as you like — a module nobody understands is a module
+nobody uses — and then put it where a person can choose to read it. The screen
+itself is for doing the job. Three concrete consequences:
+
+- **A new page is built this way on its first commit.** Written long and tidied
+  later means never: the tidying is not scheduled, and in a diff three paragraphs
+  read as care rather than as clutter.
+- **An action form splits subject / effect / about.** What you are acting on and
+  what this act does to *this* record stay on screen with their real figures; the
+  general rule goes behind the ⓘ. `FolioActionCard` is the worked example.
+- **Every read parses its numerics at the boundary** (rule 24) before any of this
+  renders. A module's data layer declares `boundary<T>()` per read; the compiler
+  refuses the declaration until every numeric field is listed.
+
+The three affordances are different and a screen may carry all three: the **ⓘ**
+explains the screen, the **small i** (`CalculationNote`) explains one figure, and
+an **error or empty state** says what to do when there is nothing to do.

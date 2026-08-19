@@ -1,4 +1,8 @@
 import { useEffect, useState } from 'react';
+import {
+  CHARGE_ABOUT,
+  CHARGE_ABOUT_TITLE,
+} from '../../../lib/folioLabels';
 import { CurrencyField, DateField, NumberField, Select, TextField } from '../../ui/form';
 import { useToast } from '../../ui/Toast';
 import { todayIsoInZone } from '../../../lib/date';
@@ -47,7 +51,17 @@ interface AddChargeFormProps {
   // 'standalone' so the bill and every later report can tell the two apart
   // without inspecting the folio.
   title?: string;
-  description?: string;
+  // What this charge is being posted AGAINST, when it is not obvious from the
+  // screen around it. The general explanation of what a charge is lives behind
+  // the ⓘ (rule 25), not here.
+  subject?: string;
+  about?: {
+    title: string;
+    paragraphs: string[];
+    guideAnchor: string;
+    guideLabel: string;
+  };
+  propertySlug?: string;
   descriptionLabel?: string;
   descriptionHelp?: string;
   descriptionPlaceholder?: string;
@@ -64,7 +78,14 @@ export function AddChargeForm({
   currency,
   timezone,
   title = 'Add charge',
-  description: blurb = 'For extras signed to the room — food & beverage, laundry, internet, transport. Room nights post automatically at night audit and are never added here.',
+  subject,
+  about = {
+    title: CHARGE_ABOUT_TITLE,
+    paragraphs: CHARGE_ABOUT,
+    guideAnchor: 'adding-a-charge',
+    guideLabel: 'Adding a charge',
+  },
+  propertySlug,
   descriptionLabel = 'Description',
   descriptionHelp,
   descriptionPlaceholder = 'e.g. Dinner — table 4, laundry ticket 218',
@@ -164,7 +185,9 @@ export function AddChargeForm({
   return (
     <FolioActionCard
       title={title}
-      description={blurb}
+      subject={subject}
+      about={about}
+      propertySlug={propertySlug}
       submitLabel="Post charge"
       submittingLabel="Posting…"
       submitting={submitting}

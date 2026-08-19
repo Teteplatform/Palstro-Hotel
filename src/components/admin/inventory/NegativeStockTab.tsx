@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Pagination } from '../../ui/Pagination';
-import { AboutNote } from '../../ui/AboutNote';
+import { ScreenHeader } from '../../ui/ScreenHeader';
 import { CalculationNote } from '../../ui/CalculationNote';
 import { Select } from '../../ui/form';
 import type { SelectOption } from '../../ui/form';
@@ -147,18 +147,19 @@ export function NegativeStockTab({
           question worth asking rather than a fault, and that this screen sees
           ones the Products tab cannot — is in the ⓘ, because somebody who opens
           this screen twice a week already knows. */}
-      <div className="flex items-center gap-2 rounded-2xl border border-sand-border bg-white/60 p-4">
-        <h2 className="text-base font-semibold text-charcoal">
-          Stock showing less than nothing.
-        </h2>
-        <AboutNote
-          title={NEGATIVE_STOCK_ABOUT_TITLE}
-          paragraphs={NEGATIVE_STOCK_ABOUT}
-          propertySlug={propertySlug}
-          guideAnchor="finding-stock-that-says-less-than-nothing"
-          guideLabel="Finding stock that says less than nothing"
-        />
-      </div>
+      <ScreenHeader
+        className="rounded-2xl border border-sand-border bg-white/60 p-4"
+        level={2}
+        title="Negative stock"
+        purpose="Positions holding less than nothing, biggest hole first."
+        about={{
+          title: NEGATIVE_STOCK_ABOUT_TITLE,
+          paragraphs: NEGATIVE_STOCK_ABOUT,
+          guideAnchor: 'finding-stock-that-says-less-than-nothing',
+          guideLabel: 'Finding stock that says less than nothing',
+        }}
+        propertySlug={propertySlug}
+      />
 
       {/* THE SUMMARY, across the whole filtered set (rule 20), each figure with
           its own note (rule 16). */}

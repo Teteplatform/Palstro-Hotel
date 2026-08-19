@@ -193,6 +193,7 @@ export function GuestDetailScreen({
               >
                 <GuestSummaryTab
                   guestId={guestId}
+                  propertySlug={propertySlug}
                   guestName={guest.full_name}
                   tenantId={tenantId}
                   propertyId={propertyId}

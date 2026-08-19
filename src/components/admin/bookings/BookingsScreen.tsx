@@ -2,6 +2,11 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Pagination } from '../../ui/Pagination';
 import { PlusIcon } from '../../ui/icons';
+import { ScreenHeader } from '../../ui/ScreenHeader';
+import {
+  BOOKINGS_ABOUT,
+  BOOKINGS_ABOUT_TITLE,
+} from '../../../lib/bookingLabels';
 import { useBookings } from '../../../hooks/useBookings';
 import { describeError } from '../../../lib/errors';
 import { fetchAllCompanies } from '../../../lib/companies';
@@ -78,27 +83,30 @@ export function BookingsScreen({
 
   return (
     <div className="mx-auto max-w-6xl">
-      <header className="mb-6 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-charcoal">
-            Bookings
-          </h1>
-          <p className="mt-1 text-sm text-charcoal-muted">
-            Reservations for this property. Create a booking, manage its
-            lifecycle, and see what each stay is worth.
-          </p>
-        </div>
-        {/* A route, not a dialog (build B §1). An in-progress draft is picked up
-            by that page, so this is "go back to what I was filling in" as much
-            as "start a new one". */}
-        <Link
-          to={`/admin/${propertySlug}/bookings/new`}
-          className="inline-flex min-h-11 items-center gap-2 rounded-full bg-primary px-5 text-sm font-semibold text-white transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
-        >
-          <PlusIcon className="h-4 w-4" />
-          New booking
-        </Link>
-      </header>
+      <ScreenHeader
+        className="mb-6"
+        title="Bookings"
+        purpose="Every reservation for this property."
+        about={{
+          title: BOOKINGS_ABOUT_TITLE,
+          paragraphs: BOOKINGS_ABOUT,
+          guideAnchor: 'the-bookings-list',
+          guideLabel: 'The bookings list',
+        }}
+        propertySlug={propertySlug}
+        actions={
+          /* A route, not a dialog (build B §1). An in-progress draft is picked
+             up by that page, so this is "go back to what I was filling in" as
+             much as "start a new one". */
+          <Link
+            to={`/admin/${propertySlug}/bookings/new`}
+            className="inline-flex min-h-11 items-center gap-2 rounded-full bg-primary px-5 text-sm font-semibold text-white transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
+          >
+            <PlusIcon className="h-4 w-4" />
+            New booking
+          </Link>
+        }
+      />
 
       {list.error ? (
         <ErrorState

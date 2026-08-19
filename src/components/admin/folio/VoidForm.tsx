@@ -1,4 +1,8 @@
 import { useState } from 'react';
+import {
+  VOID_ABOUT,
+  VOID_ABOUT_TITLE,
+} from '../../../lib/folioLabels';
 import { TextArea } from '../../ui/form';
 import { useToast } from '../../ui/Toast';
 import {
@@ -27,12 +31,19 @@ import { FolioActionCard } from './FolioActionCard';
 // RPC also enforces, so a blank one is rejected by the database too.
 
 interface VoidFormProps {
+  // For the ⓘ's link into this property's copy of the staff guide.
+  propertySlug: string;
   target: { kind: 'charge' | 'payment'; id: string; summary: string };
   onDone: () => Promise<void> | void;
   onCancel: () => void;
 }
 
-export function VoidForm({ target, onDone, onCancel }: VoidFormProps) {
+export function VoidForm({
+  target,
+  propertySlug,
+  onDone,
+  onCancel,
+}: VoidFormProps) {
   const toast = useToast();
   const [reason, setReason] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -65,27 +76,19 @@ export function VoidForm({ target, onDone, onCancel }: VoidFormProps) {
   return (
     <FolioActionCard
       title={isCharge ? 'Void this charge' : 'Void this payment'}
-      description={
-        <>
-          {target.summary}
-          <br />
-          {isCharge
-            ? 'The line stays on the bill, marked as voided, and drops out of the totals. It is never deleted.'
-            : 'The payment stays on the bill, marked as voided, and stops counting towards what has been paid. It is never deleted.'}
-          {!isCharge ? (
-            <>
-              <br />
-              <strong>Void is for a mistake caught now</strong> — mistyped,
-              wrong folio, transfer never cleared. If this payment was real and
-              was relied upon (a receipt issued, a statement sent, a balance
-              quoted) and the money is going back, close this and use{' '}
-              <strong>Reverse</strong> instead: that posts a visible
-              counter-entry a manager approves, and leaves both lines on the
-              record.
-            </>
-          ) : null}
-        </>
+      subject={target.summary}
+      effect={
+        isCharge
+          ? 'It stays on the bill, marked as voided, and drops out of the totals.'
+          : 'It stays on the bill, marked as voided, and stops counting towards what has been paid.'
       }
+      about={{
+        title: VOID_ABOUT_TITLE,
+        paragraphs: VOID_ABOUT,
+        guideAnchor: 'void-or-reverse',
+        guideLabel: 'Void or Reverse?',
+      }}
+      propertySlug={propertySlug}
       submitLabel={isCharge ? 'Void charge' : 'Void payment'}
       submittingLabel="Voiding…"
       submitting={submitting}

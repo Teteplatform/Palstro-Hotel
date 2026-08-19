@@ -433,7 +433,35 @@ until they stop reading anything on the page — including the sentence that
 mattered. The reasoning is not lost when it moves; it becomes findable in a second
 by the one person who wants it, and invisible to the fifty who do not.*
 
-In practice:
+**THIS IS THE DEFAULT FOR EVERY PAGE FROM HERE, NOT A CLEAN-UP THAT HAPPENED
+ONCE.** A new screen is built this way on its first commit; it is not written
+long and tidied later, because the tidying never gets scheduled and the reviewer
+who would have asked for it is reading a diff, where three paragraphs look like
+care.
+
+### The shape, which is a component and not a convention
+
+Every screen's top is `<ScreenHeader>` (`src/components/ui/ScreenHeader.tsx`).
+Hand-rolling a header is how the Stock Take tab reached six things to read before
+the first button, one helpful addition at a time.
+
+```tsx
+<ScreenHeader
+  title="Bookings"                                   // a noun
+  purpose="Every reservation for this property."     // ONE sentence
+  about={{ title, paragraphs, guideAnchor, guideLabel }}  // the ⓘ
+  propertySlug={propertySlug}
+  actions={<Link …>New booking</Link>}               // level with the title
+/>
+```
+
+The component enforces what the rule asks for: `purpose` is one string, so there
+is nowhere to put a second paragraph; `about` cannot be given without a guide
+anchor, so a panel always says where the rest of it is; `actions` sit beside the
+title, so the thing you came to press is never below a wall of text. A tab is its
+own screen to the person using it — `level={2}`, same shape, smaller type.
+
+### In practice
 
 - **The ⓘ is one icon, one panel, all of it.** Not three tooltips in three places.
   It links to the matching section of the guide, so the panel can stay short.
@@ -444,6 +472,37 @@ In practice:
 - **Tables show headings and values.** Nothing else, and nothing above them.
 - **Anything taken off a screen goes into the guide**, in the same commit. Moving
   it is the point; deleting it is not.
+
+### The three things a form shows, which are not one thing
+
+An action form (`FolioActionCard` is the worked example) separates them, because
+conflating them is how a void form came to be five lines of teaching over the
+line it was voiding:
+
+| Slot | What it holds | Where it goes |
+| --- | --- | --- |
+| **subject** | What you are acting on, with its real figures — "Dinner · ₦12,500" | On screen, always |
+| **effect** | What this act does to THIS bill, in its numbers — "the balance goes down by ₦12,500 and its tax" | On screen, always |
+| **about** | The general rule — what a void is, when to reverse instead | Behind the ⓘ, and in the guide |
+
+The test between the last two: **if it names a figure from the record in front of
+you it is an effect; if it would read the same on a record you have never seen,
+it is an about.** An effect is never hidden behind an icon — somebody at the
+moment of an irreversible act is deciding on exactly that sentence.
+
+### What is NOT teaching, and stays on the screen
+
+The rule is about explanation, not about every word. These are not paragraphs to
+move, and stripping them makes a screen worse:
+
+- **Error and empty states.** "No counts yet. The first one starts above." tells
+  somebody what to do when there is nothing to do.
+- **Live consequences.** A line that appears only when the arrival date differs
+  from the reserved one, naming both dates.
+- **Warnings at the point of an irreversible action**, with the real figures in
+  them.
+- **Rule 16's per-figure note.** Different affordance, different job: the ⓘ is
+  about the screen, the small i is about one number. A screen may carry both.
 
 ---
 
@@ -690,8 +749,13 @@ first.
 14. **Reading from the database?** The read declares a boundary and parses its
     numerics there (rule 24) — never in the component, and never a string method
     on a value that came off the wire.
-15. **Writing words on a screen?** One line of purpose, then the controls; the
-    rest goes behind the ⓘ and into `docs/USER-GUIDE.md` (rule 25).
+15. **Building or touching a screen?** Its top is `<ScreenHeader>` — one line of
+    purpose, then the controls; the rest behind the ⓘ and in
+    `docs/USER-GUIDE.md` (rule 25). This applies to a NEW page on its first
+    commit, not as a later tidy-up.
+16. **Writing an action form?** Split subject / effect / about (rule 25). The
+    effect names this record's own figures and stays on screen; the general rule
+    goes behind the ⓘ.
 
 ---
 

@@ -19,7 +19,12 @@ import {
   isNoAvailabilityError,
   resolveBookingRate,
 } from '../../../lib/bookings';
-import { formatNights } from '../../../lib/bookingLabels';
+import {
+  formatNights,
+  NEW_BOOKING_ABOUT,
+  NEW_BOOKING_ABOUT_TITLE,
+} from '../../../lib/bookingLabels';
+import { ScreenHeader } from '../../ui/ScreenHeader';
 import { useBookingDraft } from '../../../hooks/useBookingDraft';
 import type { RoomType } from '../../../types/room';
 import type { Company } from '../../../types/company';
@@ -397,15 +402,18 @@ export function NewBookingScreen({
         </button>
       </div>
 
-      <header className="mt-4 mb-5">
-        <h1 className="text-2xl font-bold tracking-tight text-charcoal">
-          New booking
-        </h1>
-        <p className="mt-1 text-sm text-charcoal-muted">
-          Dates, then the room, then the guest. The price updates as you go, and
-          an unfinished booking is kept if you step away.
-        </p>
-      </header>
+      <ScreenHeader
+        className="mt-4 mb-5"
+        title="New booking"
+        purpose="Dates, then the room, then the guest."
+        about={{
+          title: NEW_BOOKING_ABOUT_TITLE,
+          paragraphs: NEW_BOOKING_ABOUT,
+          guideAnchor: 'taking-a-new-booking',
+          guideLabel: 'Taking a new booking',
+        }}
+        propertySlug={propertySlug}
+      />
 
       {loadError ? (
         <p className="mb-4 rounded-xl border border-sand-border bg-white/60 p-3 text-sm text-charcoal-muted">
@@ -471,7 +479,7 @@ export function NewBookingScreen({
                 value={expectedArrivalTime}
                 onChange={(v) => update({ expectedArrivalTime: v })}
                 disabled={submitting}
-                helpText="Optional, 24-hour. A heads-up for the front desk — it does not affect the price, availability, or no-show handling."
+                helpText="Optional. A heads-up for the desk — it changes nothing else."
               />
             </div>
           </Step>
@@ -518,7 +526,7 @@ export function NewBookingScreen({
                   ...companies.map((c) => ({ value: c.id, label: c.name })),
                 ]}
                 disabled={submitting}
-                helpText="Choosing a company switches pricing to its negotiated rate and bills the folio to the company."
+                helpText="Switches pricing to the company's rate, and bills them."
               />
 
               <GuestPicker

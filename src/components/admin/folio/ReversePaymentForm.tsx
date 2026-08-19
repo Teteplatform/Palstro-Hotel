@@ -4,7 +4,10 @@ import { useToast } from '../../ui/Toast';
 import { LockIcon } from '../../ui/icons';
 import { formatMoney } from '../../../lib/format';
 import { formatDisplayDate } from '../../../lib/date';
-import { paymentMethodLabel } from '../../../lib/folioLabels';
+import { paymentMethodLabel,
+  VOID_ABOUT,
+  VOID_ABOUT_TITLE,
+} from '../../../lib/folioLabels';
 import {
   folioErrorMessage,
   newIdempotencyKey,
@@ -44,6 +47,8 @@ import { FolioActionCard } from './FolioActionCard';
 // no browser storage anywhere in this app (constraint).
 
 interface ReversePaymentFormProps {
+  // For the ⓘ's link into this property's copy of the staff guide.
+  propertySlug: string;
   payment: FolioPayment;
   currency: string;
   onDone: () => Promise<void> | void;
@@ -52,6 +57,7 @@ interface ReversePaymentFormProps {
 
 export function ReversePaymentForm({
   payment,
+  propertySlug,
   currency,
   onDone,
   onCancel,
@@ -97,18 +103,27 @@ export function ReversePaymentForm({
   return (
     <FolioActionCard
       title="Reverse this payment"
-      description={
+      subject={
         <>
           {paymentMethodLabel(payment.method)} ·{' '}
           {formatMoney(payment.amount, currency)} ·{' '}
           {formatDisplayDate(payment.payment_date)}
           {payment.reference ? ` · ref ${payment.reference}` : ''}
-          <br />
-          The original line stays exactly as it is. A matching counter-entry is
-          posted against it, so the balance goes back up by this amount and both
-          lines stay on the bill permanently.
         </>
       }
+      effect={
+        <>
+          The balance goes back up by{' '}
+          <strong>{formatMoney(payment.amount, currency)}</strong>.
+        </>
+      }
+      about={{
+        title: VOID_ABOUT_TITLE,
+        paragraphs: VOID_ABOUT,
+        guideAnchor: 'reversing-a-payment',
+        guideLabel: 'Reversing a payment',
+      }}
+      propertySlug={propertySlug}
       submitLabel="Reverse payment"
       submittingLabel="Reversing…"
       submitting={submitting}

@@ -1,4 +1,8 @@
 import { useState } from 'react';
+import {
+  VOID_ABOUT,
+  VOID_ABOUT_TITLE,
+} from '../../../lib/folioLabels';
 import { TextArea } from '../../ui/form';
 import { useToast } from '../../ui/Toast';
 import { LockIcon } from '../../ui/icons';
@@ -59,6 +63,8 @@ import { FolioActionCard } from './FolioActionCard';
 export type ChargeReversalMode = 'charge' | 'discount';
 
 interface ReverseChargeFormProps {
+  // For the ⓘ's link into this property's copy of the staff guide.
+  propertySlug: string;
   mode: ChargeReversalMode;
   charge: FolioChargeWithCategory;
   currency: string;
@@ -68,6 +74,7 @@ interface ReverseChargeFormProps {
 
 export function ReverseChargeForm({
   mode,
+  propertySlug,
   charge,
   currency,
   onDone,
@@ -135,34 +142,39 @@ export function ReverseChargeForm({
   return (
     <FolioActionCard
       title={isDiscountMode ? 'Reverse the discount on this charge' : 'Reverse this charge'}
-      description={
-        <>
-          {lineSummary}
-          <br />
-          {isDiscountMode ? (
-            <>
-              The charge <strong>stays on the bill</strong> and goes back to its
-              full {formatMoney(gross, currency)}. Only the{' '}
-              {formatMoney(discount, currency)} discount is undone, so the
-              balance goes <strong>up</strong> by that amount and the tax on it.
-              The original discount, its reason and the manager who approved it
-              all stay on the record.
-            </>
-          ) : (
-            <>
-              The whole line comes off: a matching counter-entry of{' '}
-              {formatMoney(net, currency)}
-              {discount > 0
-                ? ` (the net after the ${formatMoney(discount, currency)} discount)`
-                : ''}{' '}
-              is posted against it, so the balance goes{' '}
-              <strong>down</strong> by that amount and its tax. Nothing is
-              deleted — the original line and the counter-entry both stay on the
-              bill permanently.
-            </>
-          )}
-        </>
+      subject={lineSummary}
+      /* THE EFFECT STAYS ON SCREEN, with this bill's own figures in it. The two
+         acts differ by exactly this sentence and by the direction the balance
+         moves, and somebody about to take a manager's PIN for it is deciding
+         between them right now. What moved behind the ⓘ is the general half —
+         that nothing is ever deleted, and how a reversal differs from a void —
+         which reads the same on every bill in the hotel. */
+      effect={
+        isDiscountMode ? (
+          <>
+            The charge stays on the bill and goes back to its full{' '}
+            {formatMoney(gross, currency)}: the balance goes{' '}
+            <strong>up</strong> by the {formatMoney(discount, currency)}{' '}
+            discount and the tax on it.
+          </>
+        ) : (
+          <>
+            The balance goes <strong>down</strong> by{' '}
+            {formatMoney(net, currency)}
+            {discount > 0
+              ? ` (the net after the ${formatMoney(discount, currency)} discount)`
+              : ''}{' '}
+            and its tax.
+          </>
+        )
       }
+      about={{
+        title: VOID_ABOUT_TITLE,
+        paragraphs: VOID_ABOUT,
+        guideAnchor: 'reversing-a-charge',
+        guideLabel: 'Reversing a charge',
+      }}
+      propertySlug={propertySlug}
       submitLabel={isDiscountMode ? 'Reverse discount' : 'Reverse charge'}
       submittingLabel="Reversing…"
       submitting={submitting}

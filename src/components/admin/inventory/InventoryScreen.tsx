@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Select } from '../../ui/form';
 import type { SelectOption } from '../../ui/form';
-import { AboutNote } from '../../ui/AboutNote';
+import { ScreenHeader } from '../../ui/ScreenHeader';
 import { CloseIcon } from '../../ui/icons';
 import { INVENTORY_ABOUT, INVENTORY_ABOUT_TITLE } from '../../../lib/stockLabels';
 import { useFocusTrap } from '../../../hooks/useFocusTrap';
@@ -155,18 +155,18 @@ export function InventoryScreen({
           the old paragraph — that every figure is folded from the movements and
           nothing is stored — is true, load-bearing and of no use to somebody
           about to correct a shelf, so it is in the ⓘ and in the guide. */}
-      <header className="mb-5 flex items-center gap-2">
-        <h1 className="text-2xl font-bold tracking-tight text-charcoal">
-          Inventory
-        </h1>
-        <AboutNote
-          title={INVENTORY_ABOUT_TITLE}
-          paragraphs={INVENTORY_ABOUT}
-          propertySlug={propertySlug}
-          guideAnchor="what-the-stock-figures-mean"
-          guideLabel="What the stock figures mean"
-        />
-      </header>
+      <ScreenHeader
+        className="mb-5"
+        title="Inventory"
+        purpose="What you hold, where it is, and what it is worth."
+        about={{
+          title: INVENTORY_ABOUT_TITLE,
+          paragraphs: INVENTORY_ABOUT,
+          guideAnchor: 'what-the-stock-figures-mean',
+          guideLabel: 'What the stock figures mean',
+        }}
+        propertySlug={propertySlug}
+      />
 
       {locations.error ? (
         <div className="mb-4 rounded-2xl border border-sand-border bg-white/60 p-4">

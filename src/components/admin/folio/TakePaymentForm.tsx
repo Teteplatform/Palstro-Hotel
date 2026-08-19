@@ -1,4 +1,8 @@
 import { useState } from 'react';
+import {
+  PAYMENT_ABOUT,
+  PAYMENT_ABOUT_TITLE,
+} from '../../../lib/folioLabels';
 import { CurrencyField, DateField, Select, TextField } from '../../ui/form';
 import { useToast } from '../../ui/Toast';
 import { todayIsoInZone } from '../../../lib/date';
@@ -38,7 +42,10 @@ interface TakePaymentFormProps {
   // becomes REQUIRED: a payment tied to no stay is unexplainable a month later
   // unless the person taking it says what it was for.
   title?: string;
-  description?: string;
+  // What the payment is being taken against, when the screen around it does
+  // not already say. The general explanation is behind the ⓘ (rule 25).
+  subject?: string;
+  propertySlug?: string;
   referenceLabel?: string;
   referenceHelp?: string;
   referencePlaceholder?: string;
@@ -52,7 +59,8 @@ export function TakePaymentForm({
   currency,
   timezone,
   title = 'Take payment',
-  description = 'A deposit taken before check-in is simply a payment on this folio — the same action serves both.',
+  subject,
+  propertySlug,
   referenceLabel = 'Reference',
   referenceHelp,
   referencePlaceholder = 'Optional — teller no., POS slip, transfer ref',
@@ -108,7 +116,14 @@ export function TakePaymentForm({
   return (
     <FolioActionCard
       title={title}
-      description={description}
+      subject={subject}
+      about={{
+        title: PAYMENT_ABOUT_TITLE,
+        paragraphs: PAYMENT_ABOUT,
+        guideAnchor: 'taking-a-payment-or-a-deposit',
+        guideLabel: 'Taking a payment or a deposit',
+      }}
+      propertySlug={propertySlug}
       submitLabel="Record payment"
       submittingLabel="Recording…"
       submitting={submitting}

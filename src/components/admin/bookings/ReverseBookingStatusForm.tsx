@@ -144,14 +144,15 @@ export function ReverseBookingStatusForm({
           ? `Reverse the no-show — ${bookingNumber}`
           : `Reverse the cancellation — ${bookingNumber}`
       }
-      description={
+      subject={
         <>
           {formatDisplayDate(checkIn)} → {formatDisplayDate(checkOut)}
           {roomTypeName ? ` · ${roomTypeName}` : ''}
-          <br />
+        </>
+      }
+      effect={
+        <>
           The booking goes back to <strong>confirmed</strong> — not checked in.
-          If the guest is here, check them in afterwards in the usual way, so
-          their arrival time is recorded and the right nights are billed.
         </>
       }
       submitLabel={isNoShow ? 'Reverse no-show' : 'Reverse cancellation'}

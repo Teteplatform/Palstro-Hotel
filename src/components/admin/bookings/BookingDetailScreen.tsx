@@ -285,6 +285,7 @@ export function BookingDetailScreen({
           <section aria-label="Stay">
             <StayTab
               detail={detail}
+              propertySlug={propertySlug}
               currency={currency}
               timezone={timezone}
               onChanged={load}
@@ -300,6 +301,7 @@ export function BookingDetailScreen({
           <section id="booking-folio" aria-label="Folio" className="scroll-mt-4">
             <FolioBill
               bookingId={bookingId}
+              propertySlug={propertySlug}
               tenantId={tenantId}
               propertyId={propertyId}
               currency={currency}

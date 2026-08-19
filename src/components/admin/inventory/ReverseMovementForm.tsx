@@ -124,7 +124,7 @@ export function ReverseMovementForm({
   return (
     <FolioActionCard
       title="Reverse this movement"
-      description={
+      subject={
         <>
           {movementTypeLabel(movement.movement_type)} of{' '}
           {formatQuantity(movement.quantity)} {baseUnit} · {itemName} ·{' '}

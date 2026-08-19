@@ -3,6 +3,10 @@ import { describeError } from '../../../lib/errors';
 import { newIdempotencyKey } from '../../../lib/folio';
 import { openGuestFolio } from '../../../lib/guestLedger';
 import { AddChargeForm } from '../folio/AddChargeForm';
+import {
+  STANDALONE_CHARGE_ABOUT,
+  STANDALONE_CHARGE_ABOUT_TITLE,
+} from '../../../lib/folioLabels';
 import { TakePaymentForm } from '../folio/TakePaymentForm';
 
 // STANDALONE CHARGE / PAYMENT (2.txt §2) — money that belongs to the GUEST but
@@ -47,6 +51,8 @@ type Mode = 'charge' | 'payment';
 
 interface StandaloneEntryPanelProps {
   guestId: string;
+  // For the ⓘ's link into this property's copy of the staff guide.
+  propertySlug: string;
   guestName: string;
   tenantId: string;
   propertyId: string;
@@ -59,6 +65,7 @@ interface StandaloneEntryPanelProps {
 export function StandaloneEntryPanel({
   guestId,
   guestName,
+  propertySlug,
   tenantId,
   propertyId,
   currency,
@@ -159,11 +166,18 @@ export function StandaloneEntryPanel({
           currency={currency}
           timezone={timezone}
           title="Standalone charge"
-          description={`Charged to ${guestName}'s account at this property, tied to no stay — a non-resident bar tab, a hall hire, a late charge after departure. It appears on their ledger as its own line and counts towards their outstanding balance.`}
+          subject={`Charged to ${guestName}'s account, tied to no stay.`}
+          about={{
+            title: STANDALONE_CHARGE_ABOUT_TITLE,
+            paragraphs: STANDALONE_CHARGE_ABOUT,
+            guideAnchor: 'charges-and-payments-outside-a-stay',
+            guideLabel: 'Charges and payments outside a stay',
+          }}
+          propertySlug={propertySlug}
           descriptionLabel="What this charge is for"
           descriptionRequired
           descriptionPlaceholder="e.g. Bar tab, 14 Aug — not staying"
-          descriptionHelp="Required. A charge tied to no stay is unexplainable a month later without it, and this is what prints on the guest's statement."
+          descriptionHelp="Required — it prints on the guest's statement."
           // Provenance: free text by design (021 §5), so a later report can tell
           // a non-resident charge from a front-desk extra without inspecting the
           // folio it landed on.
@@ -177,7 +191,8 @@ export function StandaloneEntryPanel({
           currency={currency}
           timezone={timezone}
           title="Standalone payment"
-          description={`Received from ${guestName} against their account at this property rather than against one stay. It joins their payment pool and settles their oldest unpaid item first, exactly as a payment taken at the desk does.`}
+          subject={`Received from ${guestName}, against their account rather than one stay.`}
+          propertySlug={propertySlug}
           referenceLabel="What this payment is for"
           referenceRequired
           referencePlaceholder="e.g. Settling the Aug bar tab — POS slip 8821"

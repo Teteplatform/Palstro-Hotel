@@ -37,6 +37,7 @@ interface ComingSoonPanelProps {
 
 import { AboutNote } from '../../ui/AboutNote';
 
+
 export function ComingSoonPanel({
   title,
   summary,

@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { AboutNote } from '../../ui/AboutNote';
+import { ScreenHeader } from '../../ui/ScreenHeader';
 import {
   IMPORT_HISTORY_ABOUT,
   IMPORT_HISTORY_ABOUT_TITLE,
@@ -48,26 +48,26 @@ export function ImportHistoryTab({
   return (
     <div className="space-y-4">
       <div className="rounded-2xl border border-sand-border bg-white/60 p-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-2">
-            <h2 className="text-base font-semibold text-charcoal">
-              Every opening balance on file, newest first.
-            </h2>
-            <AboutNote
-              title={IMPORT_HISTORY_ABOUT_TITLE}
-              paragraphs={IMPORT_HISTORY_ABOUT}
-              propertySlug={propertySlug}
-              guideAnchor="loading-your-opening-stock-from-a-spreadsheet"
-              guideLabel="Loading your opening stock"
-            />
-          </div>
-          <Link
-            to={`/admin/${propertySlug}/stock/import`}
-            className="rounded-full border border-sand-border bg-white/70 px-5 py-2.5 text-sm font-semibold text-charcoal transition-colors hover:bg-sand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
-          >
-            Load from a spreadsheet
-          </Link>
-        </div>
+        <ScreenHeader
+          level={2}
+          title="Opening stock"
+          purpose="Every opening balance on file, newest first."
+          about={{
+            title: IMPORT_HISTORY_ABOUT_TITLE,
+            paragraphs: IMPORT_HISTORY_ABOUT,
+            guideAnchor: 'loading-your-opening-stock-from-a-spreadsheet',
+            guideLabel: 'Loading your opening stock',
+          }}
+          propertySlug={propertySlug}
+          actions={
+            <Link
+              to={`/admin/${propertySlug}/stock/import`}
+              className="rounded-full border border-sand-border bg-white/70 px-5 py-2.5 text-sm font-semibold text-charcoal transition-colors hover:bg-sand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
+            >
+              Load from a spreadsheet
+            </Link>
+          }
+        />
       </div>
 
       <MovementsList

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Select } from '../../ui/form';
 import type { SelectOption } from '../../ui/form';
-import { AboutNote } from '../../ui/AboutNote';
+import { ScreenHeader } from '../../ui/ScreenHeader';
 import { PlusIcon } from '../../ui/icons';
 import {
   ADJUSTMENTS_ABOUT,
@@ -72,31 +72,31 @@ export function AdjustmentsTab({
   return (
     <div className="space-y-4">
       <div className="rounded-2xl border border-sand-border bg-white/60 p-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-2">
-            <h2 className="text-base font-semibold text-charcoal">
-              Correct a quantity that is wrong, with a reason on the record.
-            </h2>
-            <AboutNote
-              title={ADJUSTMENTS_ABOUT_TITLE}
-              paragraphs={ADJUSTMENTS_ABOUT}
-              propertySlug={propertySlug}
-              guideAnchor="adding-or-correcting-stock"
-              guideLabel="Adding or correcting stock"
-            />
-          </div>
-          {!formOpen ? (
-            <button
-              type="button"
-              onClick={() => setFormOpen(true)}
-              disabled={locations.length === 0 || items.length === 0}
-              className="inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-cream disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <PlusIcon className="h-4 w-4" />
-              New adjustment
-            </button>
-          ) : null}
-        </div>
+        <ScreenHeader
+          level={2}
+          title="Adjustments"
+          purpose="Correct a quantity that is wrong, with a reason on the record."
+          about={{
+            title: ADJUSTMENTS_ABOUT_TITLE,
+            paragraphs: ADJUSTMENTS_ABOUT,
+            guideAnchor: 'adding-or-correcting-stock',
+            guideLabel: 'Adding or correcting stock',
+          }}
+          propertySlug={propertySlug}
+          actions={
+            !formOpen ? (
+              <button
+                type="button"
+                onClick={() => setFormOpen(true)}
+                disabled={locations.length === 0 || items.length === 0}
+                className="inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-cream disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <PlusIcon className="h-4 w-4" />
+                New adjustment
+              </button>
+            ) : null
+          }
+        />
 
         {formOpen ? (
           <div className="mt-4 space-y-4">

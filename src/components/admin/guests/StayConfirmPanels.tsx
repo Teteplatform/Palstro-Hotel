@@ -106,7 +106,7 @@ export function CheckInPanel({
   return (
     <FolioActionCard
       title={`Record the arrival — ${row.booking_number}`}
-      description="Defaults to now in the hotel's own clock, but change it if the guest arrived earlier — a 2 a.m. arrival is routinely keyed in the next morning, and this is the date the room nights are charged from. The reserved check-in date is left untouched."
+      effect="Room nights are charged from this date. The reserved check-in is left untouched."
       submitLabel="Confirm check-in"
       submittingLabel="Checking in…"
       submitting={submitting}
@@ -197,7 +197,7 @@ export function CheckOutPanel({
   return (
     <FolioActionCard
       title={`Check out — ${row.booking_number}`}
-      description={`Room nights post automatically at checkout, from ${formatDisplayDate(
+      effect={`Room nights post automatically, from ${formatDisplayDate(
         row.charge_from,
       )} to ${formatDisplayDate(row.check_out)}.`}
       submitLabel="Confirm check-out"
@@ -279,7 +279,7 @@ export function CancelPanel({ row, onDone, onCancel }: CancelPanelProps) {
       // is a commercial decision a person makes under the hotel's policy, and
       // the system silently deciding it would be worse than the surprise (021
       // §10 sets this out in full).
-      description="A deposit already taken is left exactly where it is — refunding or forfeiting it is a separate, deliberate act on the folio."
+      effect="A deposit already taken is left where it is."
       submitLabel="Confirm cancellation"
       submittingLabel="Cancelling…"
       submitting={submitting}

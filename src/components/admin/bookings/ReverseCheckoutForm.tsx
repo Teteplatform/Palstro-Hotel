@@ -116,11 +116,14 @@ export function ReverseCheckoutForm({
   return (
     <FolioActionCard
       title={`Reverse the checkout — ${bookingNumber}`}
-      description={
+      subject={
         <>
           {formatDisplayDate(checkIn)} → {formatDisplayDate(checkOut)}
           {roomTypeName ? ` · ${roomTypeName}` : ''}
-          <br />
+        </>
+      }
+      effect={
+        <>
           Use this if the guest has <strong>not actually left</strong>.
         </>
       }

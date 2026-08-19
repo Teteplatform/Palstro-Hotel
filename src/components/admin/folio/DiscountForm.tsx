@@ -1,4 +1,7 @@
 import { useState } from 'react';
+import {
+  DISCOUNT_ABOUT,
+} from '../../../lib/folioLabels';
 import { CurrencyField, TextArea } from '../../ui/form';
 import { useToast } from '../../ui/Toast';
 import { LockIcon } from '../../ui/icons';
@@ -51,6 +54,8 @@ import { DiscountApprovalMeter } from './DiscountApprovalMeter';
 // this app (constraint).
 
 interface DiscountFormProps {
+  // For the ⓘ's link into this property's copy of the staff guide.
+  propertySlug: string;
   charge: FolioChargeWithCategory;
   // The property's PIN-free ceiling. 0 (the default) means EVERY discount needs a
   // manager PIN — the deliberately strict default of 021 §3.
@@ -61,6 +66,7 @@ interface DiscountFormProps {
 }
 
 export function DiscountForm({
+  propertySlug,
   charge,
   threshold,
   currency,
@@ -131,7 +137,7 @@ export function DiscountForm({
   return (
     <FolioActionCard
       title="Discount this charge"
-      description={
+      subject={
         <>
           {charge.category?.name ?? 'Charge'}
           {charge.description ? ` — ${charge.description}` : ''} ·{' '}
@@ -141,6 +147,13 @@ export function DiscountForm({
             : ''}
         </>
       }
+      about={{
+        title: 'About discounts',
+        paragraphs: DISCOUNT_ABOUT,
+        guideAnchor: 'giving-a-discount',
+        guideLabel: 'Giving a discount',
+      }}
+      propertySlug={propertySlug}
       submitLabel={pinRequired ? 'Approve discount' : 'Apply discount'}
       submittingLabel="Applying…"
       submitting={submitting}

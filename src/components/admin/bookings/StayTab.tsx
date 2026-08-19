@@ -29,7 +29,12 @@ import {
   type BookingStatusReversals,
   type CheckOutSummary,
 } from '../../../lib/bookings';
-import { rateSourceLabel } from '../../../lib/bookingLabels';
+import {
+  rateSourceLabel,
+  STAY_ABOUT,
+  STAY_ABOUT_TITLE,
+} from '../../../lib/bookingLabels';
+import { ScreenHeader } from '../../ui/ScreenHeader';
 import { staffLabel } from '../../../lib/staffLabel';
 import type { BookingDetail } from '../../../types/booking';
 import type { Reversal } from '../../../types/folio';
@@ -82,6 +87,8 @@ import { ReverseCheckoutForm } from './ReverseCheckoutForm';
 
 interface StayTabProps {
   detail: BookingDetail;
+  // For the ⓘ's link into this property's copy of the staff guide.
+  propertySlug: string;
   currency: string;
   // The PROPERTY's IANA timezone. Load-bearing, not cosmetic: the arrival the
   // desk types is a wall-clock reading in the HOTEL's timezone, and the server
@@ -119,6 +126,7 @@ type Panel =
 
 export function StayTab({
   detail,
+  propertySlug,
   currency,
   timezone,
   onChanged,
@@ -466,7 +474,22 @@ export function StayTab({
 
   return (
     <div className="space-y-4">
-      <h2 className="text-lg font-bold tracking-tight text-charcoal">Stay</h2>
+      {/* Level 2: a tab is its own screen to the person using it, and gets
+          the same shape as a page (rule 25). The three things this tab used to
+          explain in place — reserved versus billed nights, why the arrival time
+          can be back-dated, and what checkout posts — are in the ⓘ. */}
+      <ScreenHeader
+        level={2}
+        title="Stay"
+        purpose="Check the guest in, out, or off."
+        about={{
+          title: STAY_ABOUT_TITLE,
+          paragraphs: STAY_ABOUT,
+          guideAnchor: 'reserved-nights-and-nights-billed',
+          guideLabel: 'Reserved nights and nights billed',
+        }}
+        propertySlug={propertySlug}
+      />
 
       {/* WAS THIS BOOKING RESTORED? Read from the permanent reversals rows, so
           the answer is the audit trail itself and not a flag somebody could set.
@@ -629,12 +652,12 @@ export function StayTab({
               helpText="The hotel’s local time, 24-hour."
             />
           </div>
-          <p className="mt-3 text-xs text-charcoal-muted">
-            Defaults to now, but change it if the guest arrived earlier — a
-            2 a.m. arrival is routinely keyed in the next morning, and this is
-            the date the room nights are charged from. The reserved check-in date
-            is left untouched.
-          </p>
+          {/* The paragraph that used to sit here — why you would back-date an
+             arrival, and what it does to the reserved date — is in the ⓘ on the
+             tab heading. What is left is the LIVE consequence below, which
+             appears only when the two dates actually disagree and names the
+             real ones: that is not an explanation of the screen, it is what
+             this booking is about to do. */}
           {arrivalDate && arrivalDate !== detail.check_in ? (
             <p className="mt-2 text-xs font-medium text-charcoal">
               This differs from the reserved check-in of{' '}

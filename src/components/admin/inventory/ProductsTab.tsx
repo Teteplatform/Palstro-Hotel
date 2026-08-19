@@ -29,7 +29,7 @@ import type {
   StockLocation,
   UnitOfMeasure,
 } from '../../../types/inventory';
-import { AboutNote } from '../../ui/AboutNote';
+import { ScreenHeader } from '../../ui/ScreenHeader';
 import { AddProductChoiceDialog } from './AddProductChoiceDialog';
 import { InventorySummaryCard } from './InventorySummaryCard';
 import { ItemPanel } from './ItemPanel';
@@ -238,18 +238,18 @@ export function ProductsTab({
           list is and how its figures are worked out is in the ⓘ (rule 25).
           Placed beside the summary card because that is the first thing on the
           tab and the figures are what people ask about. */}
-      <div className="flex items-center gap-2">
-        <h2 className="text-base font-semibold text-charcoal">
-          Your catalogue, with what is on the shelf beside it.
-        </h2>
-        <AboutNote
-          title={PRODUCTS_ABOUT_TITLE}
-          paragraphs={PRODUCTS_ABOUT}
-          propertySlug={propertySlug}
-          guideAnchor="products-the-item-list"
-          guideLabel="Products — the item list"
-        />
-      </div>
+      <ScreenHeader
+        level={2}
+        title="Products"
+        purpose="Your catalogue, with what is on the shelf beside it."
+        about={{
+          title: PRODUCTS_ABOUT_TITLE,
+          paragraphs: PRODUCTS_ABOUT,
+          guideAnchor: 'products-the-item-list',
+          guideLabel: 'Products — the item list',
+        }}
+        propertySlug={propertySlug}
+      />
 
       <InventorySummaryCard
         summary={list.summary}

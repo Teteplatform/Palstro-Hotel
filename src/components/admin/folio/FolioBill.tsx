@@ -1,6 +1,8 @@
 import { useState, type ReactNode } from 'react';
 import { Popover } from '../../ui/Popover';
+import { AboutNote } from '../../ui/AboutNote';
 import { CalculationNote } from '../../ui/CalculationNote';
+import { FOLIO_ABOUT, FOLIO_ABOUT_TITLE } from '../../../lib/folioLabels';
 import { useAuth } from '../../../hooks/useAuth';
 import { useFolio } from '../../../hooks/useFolio';
 import { describeError } from '../../../lib/errors';
@@ -97,6 +99,8 @@ import { VoidForm } from './VoidForm';
 
 interface FolioBillProps {
   bookingId: string;
+  // Threaded to the action forms, whose ⓘ links into this property's guide.
+  propertySlug: string;
   tenantId: string;
   propertyId: string;
   currency: string;
@@ -173,6 +177,7 @@ const TOTALS_NOTE =
 
 export function FolioBill({
   bookingId,
+  propertySlug,
   tenantId,
   propertyId,
   currency,
@@ -303,8 +308,19 @@ export function FolioBill({
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <h2 className="text-lg font-bold tracking-tight text-charcoal">Folio</h2>
-          {/* Rule 16, beside the title and OUTSIDE the table — where the old
-              caption band used to break the header row. */}
+          {/* TWO AFFORDANCES, AND THEY ARE NOT THE SAME THING (rules 16 and 25).
+              The ⓘ is about the SCREEN: what a folio is, void versus reverse,
+              why the balance is never stored. The small i beside it is about
+              one FIGURE: what the totals include and exclude. Somebody
+              questioning a number wants the second; somebody meeting the folio
+              for the first time wants the first. */}
+          <AboutNote
+            title={FOLIO_ABOUT_TITLE}
+            paragraphs={FOLIO_ABOUT}
+            propertySlug={propertySlug}
+            guideAnchor="the-statement"
+            guideLabel="The bill and the statement"
+          />
           <CalculationNote note={TOTALS_NOTE} />
           {loading ? (
             <span className="text-xs text-charcoal-muted" aria-live="polite">
@@ -337,6 +353,7 @@ export function FolioBill({
       {/* The action forms — unchanged behaviour, only their place on the page. */}
       {action?.kind === 'payment' ? (
         <TakePaymentForm
+          propertySlug={propertySlug}
           folioId={folio.id}
           currency={currency}
           timezone={timezone}
@@ -346,6 +363,7 @@ export function FolioBill({
       ) : null}
       {action?.kind === 'charge' ? (
         <AddChargeForm
+          propertySlug={propertySlug}
           folioId={folio.id}
           tenantId={tenantId}
           propertyId={propertyId}
@@ -357,6 +375,7 @@ export function FolioBill({
       ) : null}
       {action?.kind === 'discount' ? (
         <DiscountForm
+          propertySlug={propertySlug}
           charge={action.charge}
           threshold={discountThreshold}
           currency={currency}
@@ -366,6 +385,7 @@ export function FolioBill({
       ) : null}
       {action?.kind === 'void-charge' ? (
         <VoidForm
+          propertySlug={propertySlug}
           target={{
             kind: 'charge',
             id: action.charge.id,
@@ -379,6 +399,7 @@ export function FolioBill({
       ) : null}
       {action?.kind === 'void-payment' ? (
         <VoidForm
+          propertySlug={propertySlug}
           target={{
             kind: 'payment',
             id: action.payment.id,
@@ -393,6 +414,7 @@ export function FolioBill({
       ) : null}
       {action?.kind === 'reverse-charge' ? (
         <ReverseChargeForm
+          propertySlug={propertySlug}
           mode={action.mode}
           charge={action.charge}
           currency={currency}
@@ -402,6 +424,7 @@ export function FolioBill({
       ) : null}
       {action?.kind === 'reverse-payment' ? (
         <ReversePaymentForm
+          propertySlug={propertySlug}
           payment={action.payment}
           currency={currency}
           onDone={afterMutation}
@@ -585,12 +608,15 @@ export function FolioBill({
         </table>
       </div>
 
+      {/* A STATE, NOT AN EXPLANATION, which is why it stays on the screen: it
+          appears only when this folio is not open, and it says what this folio
+          will and will not accept right now. */}
       {folio.status !== 'open' ? (
         <p className="text-xs text-charcoal-muted">
           This folio is {folio.status}.{' '}
           {folioClosed
-            ? 'A closed folio takes no further charges, payments or voids.'
-            : 'A settled folio still accepts payments and refunds, but no new charges.'}
+            ? 'No further charges, payments or voids.'
+            : 'Payments and refunds still accepted; no new charges.'}
         </p>
       ) : null}
     </div>
