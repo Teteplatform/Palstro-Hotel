@@ -1,94 +1,100 @@
-import { useState } from 'react';
-import { ChevronDownIcon } from '../../ui/icons';
+import { useNavigate } from 'react-router-dom';
+import { CameraIcon } from '../../ui/icons';
 import { formatMoney, formatQuantity, MISSING_VALUE } from '../../../lib/format';
 import { itemTypeLabel, itemTypeTone } from '../../../lib/inventoryLabels';
 import { mediaVariantUrl } from '../../../lib/mediaUrl';
 import type { ProductRow } from '../../../lib/inventoryProducts';
-import { StockItemLedger } from './StockItemLedger';
 
-// THE PRODUCTS TABLE — the ERP's dense, sharp layout carried over: a real
-// <table>, tight rows, right-aligned tabular numbers, one line per item.
+// THE PRODUCTS TABLE — one row per item, every figure under a heading, and two
+// ways in: the picture, and everything else.
 //
-// WHY A TABLE AND NOT CARDS, on a screen whose predecessor used cards for the
-// catalogue: these rows are FIGURES being compared down a column. Cost, quantity
-// and value only mean anything against each other, and a stack of cards makes a
-// reader scan left-right-down for a comparison a column gives away at a glance.
+// ---------------------------------------------------------------------------
+// WHAT 1.1f TOOK OUT OF IT, AND WHY THE TABLE IS BETTER FOR IT
+// ---------------------------------------------------------------------------
+// This row used to expand. Underneath it were the movement ledger, the
+// per-location breakdown, and three buttons — Edit item, Add or correct stock,
+// Remove item. All of that is now the ITEM'S OWN PAGE, which is where a
+// ten-minute job belongs rather than inside a paginated table inside a tab strip.
 //
-// AT 360px THE NUMERIC COLUMNS FOLD. Category, type, unit, cost and the location
-// breakdown move into the expanded panel; the row keeps item, on hand and value —
-// the three a storekeeper checks on a phone in the store. The table scrolls
-// sideways only above that fold, inside its own container, so the PAGE never
-// scrolls horizontally.
+// The row also used to carry values FLOATING UNDER THE NAME: category, code and
+// unit rode along in a sub-line, appearing and disappearing at breakpoints as the
+// real columns folded away. That is the pattern this shipment removes. Every value
+// is now under a labelled heading, at every width, and the table SCROLLS SIDEWAYS
+// inside its own container the way rule 23's note describes — the page never
+// scrolls horizontally, and a figure never has to be identified by its position
+// under a name.
 //
-// EVERY FIGURE IS THE SERVER'S. Nothing here multiplies a quantity by a cost or
-// averages an average: the values arrive already folded from the movements (036
-// §3), and recomputing one in the browser would be a second implementation of the
-// valuation that could disagree with the total above the table.
+// The badges stay on the item cell. A badge is a STATUS, not a value: "less than
+// nothing" and "no selling price" are flags on the row, and giving each a column
+// of its own would be nine columns of mostly-blank.
 //
-// A NEGATIVE QUANTITY IS SHOWN AS-IS AND NEVER FLOORED (rule 7). Minus three
-// kilos means three kilos left without a movement — a receipt never entered, or
-// stock that walked. That is the signal this whole module exists to surface, so
-// it is tinted, badged and never rounded away to a comfortable zero.
+// ---------------------------------------------------------------------------
+// TWO TARGETS ON ONE ROW, WHICH IS AS MANY AS A ROW CAN HAVE
+// ---------------------------------------------------------------------------
+// The PICTURE opens the picture. Everything else opens the item. That split works
+// because the tile is unambiguous — an empty tile with a camera on it plainly
+// wants a photograph, and a filled one plainly is one — and because adding
+// pictures to forty items through a form about names and thresholds is the kind of
+// friction that ends in a catalogue of grey squares.
+//
+// THE ROW IS NOT AN <a> WRAPPING A <tr>, which is invalid, and not a <tr onClick>
+// alone, which is unreachable by keyboard. Each row carries a real link in its
+// first cell for the keyboard and the screen reader, and the row's click handler
+// is a convenience on top of it for the mouse — so there is exactly one navigable
+// thing per row however you are driving it.
 
 interface ProductsTableProps {
   rows: ProductRow[];
-  tenantId: string;
-  propertyId: string;
+  propertySlug: string;
   currency: string;
-  // The location being viewed, or null for the whole property. Decides whether
-  // the expanded panel shows one location's movement ledger or the breakdown
-  // across every location holding the item.
+  // The location being viewed, or null for the whole property. Carried into the
+  // item page's URL so arriving there does not silently change the scope.
   locationId: string | null;
   // TRUE when a stock-state filter made positions the base of the list, so a row
   // is one location's holding rather than the item's whole position.
   byPosition: boolean;
-  onEdit: (row: ProductRow) => void;
-  onAdjust: (row: ProductRow, locationId: string) => void;
-  onRemove: (row: ProductRow) => void;
-  // Re-pull the page and its totals after a reversal posts from the expanded
-  // ledger: the on-hand figure and the location total have both just moved.
-  onReversed: () => Promise<void> | void;
-  busy: boolean;
+  // Open the picture dialog for this row.
+  onEditImage: (row: ProductRow) => void;
 }
 
 export function ProductsTable({
   rows,
-  tenantId,
-  propertyId,
+  propertySlug,
   currency,
   locationId,
   byPosition,
-  onEdit,
-  onAdjust,
-  onRemove,
-  onReversed,
-  busy,
+  onEditImage,
 }: ProductsTableProps) {
-  // One row open at a time: the panel is a detail view, and two open at once
-  // turns a comparison table into a scroll.
-  const [openKey, setOpenKey] = useState<string | null>(null);
+  const navigate = useNavigate();
+
+  const itemHref = (row: ProductRow) => {
+    // The row's OWN location when the list is by position — that row is one
+    // shelf's holding, and landing on the property roll-up would show a different
+    // number from the one just clicked.
+    const scope = byPosition ? (row.locations[0]?.locationId ?? locationId) : locationId;
+    return `/admin/${propertySlug}/inventory/items/${row.itemId}${
+      scope ? `?location=${scope}` : ''
+    }`;
+  };
 
   return (
     <div className="overflow-x-auto rounded-2xl border border-sand-border bg-white/60">
-      <table className="w-full border-collapse text-sm sm:min-w-[56rem]">
+      <table className="w-full min-w-[64rem] border-collapse text-sm">
         <thead>
           <tr className="border-b border-sand-border bg-sand/40 text-left">
-            <Th className="px-3 sm:px-4">Item</Th>
-            <Th className="hidden lg:table-cell">Category</Th>
-            <Th className="hidden xl:table-cell">Type</Th>
-            <Th className="hidden xl:table-cell">Unit</Th>
-            <Th className="hidden text-right sm:table-cell">Average cost</Th>
-            {/* SELLING PRICE SITS BESIDE AVERAGE COST, and the adjacency is the
-                point: the two numbers only mean anything against each other, and a
-                storekeeper scanning down them can see an item priced below what it
-                cost without doing any arithmetic. */}
-            <Th className="hidden text-right sm:table-cell">Selling price</Th>
+            <Th className="w-14 px-3 sm:px-4">
+              <span className="sr-only">Picture</span>
+            </Th>
+            <Th>Item</Th>
+            <Th>Code</Th>
+            <Th>Category</Th>
+            <Th>Type</Th>
+            <Th>Unit</Th>
+            <Th className="text-right">Average cost</Th>
+            <Th className="text-right">Selling price</Th>
             <Th className="text-right">On hand</Th>
-            <Th className="hidden lg:table-cell">Locations</Th>
+            <Th>Locations</Th>
             <Th className="text-right">Value</Th>
-            <th scope="col" className="w-10 px-0 py-2">
-              <span className="sr-only">Details</span>
-            </th>
           </tr>
         </thead>
 
@@ -103,18 +109,11 @@ export function ProductsTable({
               <ProductTableRow
                 key={key}
                 row={row}
-                open={openKey === key}
-                onToggle={() => setOpenKey(openKey === key ? null : key)}
-                tenantId={tenantId}
-                propertyId={propertyId}
+                href={itemHref(row)}
                 currency={currency}
                 locationId={locationId}
-                byPosition={byPosition}
-                onEdit={() => onEdit(row)}
-                onAdjust={onAdjust}
-                onRemove={() => onRemove(row)}
-                onReversed={onReversed}
-                busy={busy}
+                onEditImage={() => onEditImage(row)}
+                onOpen={() => navigate(itemHref(row))}
               />
             );
           })}
@@ -128,7 +127,7 @@ function Th({ children, className = '' }: { children: React.ReactNode; className
   return (
     <th
       scope="col"
-      className={`px-2 py-2 text-xs font-semibold text-charcoal-muted ${className}`}
+      className={`px-2 py-2 text-xs font-semibold whitespace-nowrap text-charcoal-muted ${className}`}
     >
       {children}
     </th>
@@ -137,331 +136,173 @@ function Th({ children, className = '' }: { children: React.ReactNode; className
 
 function ProductTableRow({
   row,
-  open,
-  onToggle,
-  tenantId,
-  propertyId,
+  href,
   currency,
   locationId,
-  byPosition,
-  onEdit,
-  onAdjust,
-  onRemove,
-  onReversed,
-  busy,
+  onEditImage,
+  onOpen,
 }: {
   row: ProductRow;
-  open: boolean;
-  onToggle: () => void;
-  tenantId: string;
-  propertyId: string;
+  href: string;
   currency: string;
   locationId: string | null;
-  byPosition: boolean;
-  onEdit: () => void;
-  onAdjust: (row: ProductRow, locationId: string) => void;
-  onRemove: () => void;
-  onReversed: () => Promise<void> | void;
-  busy: boolean;
+  onEditImage: () => void;
+  onOpen: () => void;
 }) {
   // Already a number, or genuinely absent (rule 24). null means NO POSITION at
-  // this scope, which is the distinction the next line depends on.
-  const quantity = row.quantity;
-  const negative = quantity !== null && quantity < 0;
-  // No movements at this scope at all. Rendered as the shared em-dash, never as
-  // a confident zero: "we hold none" and "we have no figure" are different
-  // statements, and only one of them is true here.
+  // this scope — "we hold none" and "we have no figure" are different statements.
+  const negative = row.quantity !== null && row.quantity < 0;
   const untracked = row.quantity === null;
-  // A Sold as-is or Both item is meant to have a price (042 §1.2). A raw
-  // ingredient is meant NOT to, so an empty price cell on one is correct and gets
-  // no badge — flagging it would train people to ignore the badge.
   const sellable = row.itemType === 'finished' || row.itemType === 'both';
 
-  // Which location an adjustment from this row should target. A single selected
-  // location, the row's own when the list is by position, else the only place it
-  // is held — and when it is held in several, the panel makes the person choose
-  // rather than picking one for them.
-  const soleLocationId =
-    locationId ??
-    row.locations[0]?.locationId ??
-    null;
-  const ambiguousLocation = !locationId && row.locations.length > 1;
-
   return (
-    <>
-      <tr className={negative ? 'bg-accent/5' : undefined}>
-        <td className="px-3 py-2.5 align-top sm:px-4">
-          <div className="flex items-start gap-2.5">
-            <ItemThumbnail row={row} />
-            <div className="min-w-0">
-              <span className="block font-medium text-charcoal">{row.name}</span>
-              <span className="mt-0.5 block text-xs text-charcoal-muted">
-                {/* The folded columns ride along here at narrow widths. */}
-                <span className="lg:hidden">
-                  {row.categoryName ? `${row.categoryName} · ` : ''}
-                </span>
-                {row.code ? `${row.code} · ` : ''}
-                tracked in {row.baseUnit}
-              </span>
-              <span className="mt-1 flex flex-wrap gap-1">
-                {row.isBelowReorder ? (
-                  <Badge tone="bg-accent/15 text-accent">At or below reorder level</Badge>
-                ) : null}
-                {negative ? <Badge tone="bg-accent/15 text-accent">Less than nothing</Badge> : null}
-                {/* SOLD WITH NO PRICE, on the row. The filter finds these in bulk;
-                    the badge is what stops one being scrolled past — and it is the
-                    only way the gap is visible to somebody who came here for
-                    something else. */}
-                {sellable && row.sellingPrice === null ? (
-                  <Badge tone="bg-accent/15 text-accent">No selling price</Badge>
-                ) : null}
-                {!row.isActive ? (
-                  <Badge tone="bg-sand text-charcoal-muted">Not in use</Badge>
-                ) : null}
-              </span>
-            </div>
-          </div>
-        </td>
-
-        <td className="hidden px-2 py-2.5 align-top text-xs text-charcoal-muted lg:table-cell">
-          {row.categoryName ?? MISSING_VALUE}
-        </td>
-
-        <td className="hidden px-2 py-2.5 align-top xl:table-cell">
-          <span
-            className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${itemTypeTone(
-              row.itemType,
-            )}`}
-          >
-            {itemTypeLabel(row.itemType)}
-          </span>
-        </td>
-
-        <td className="hidden px-2 py-2.5 align-top text-xs text-charcoal-muted xl:table-cell">
-          {row.baseUnit}
-        </td>
-
-        <td className="hidden px-2 py-2.5 text-right align-top tabular-nums text-charcoal sm:table-cell">
-          {row.averageCost === null ? (
-            <span className="text-charcoal-muted">{MISSING_VALUE}</span>
-          ) : (
-            <>
-              {formatMoney(row.averageCost, currency)}
-              <span className="block text-xs text-charcoal-muted">
-                per {row.baseUnit}
-              </span>
-            </>
-          )}
-        </td>
-
-        <td className="hidden px-2 py-2.5 text-right align-top tabular-nums sm:table-cell">
-          {row.sellingPrice === null ? (
-            // BLANK MEANS NOT SOLD, and the dash is the shared MISSING_VALUE — the
-            // same mark every other absent figure in the app uses, so it reads as
-            // "no value" rather than as a layout gap. Never a zero: 0 would be a
-            // price, and the database refuses one for exactly that reason.
-            <span className="text-charcoal-muted">{MISSING_VALUE}</span>
-          ) : (
-            <>
-              {formatMoney(row.sellingPrice, currency)}
-              <span className="block text-xs text-charcoal-muted">
-                per {row.baseUnit}
-              </span>
-            </>
-          )}
-        </td>
-
-        <td className="px-2 py-2.5 text-right align-top tabular-nums">
-          {untracked ? (
-            <span className="text-charcoal-muted">{MISSING_VALUE}</span>
-          ) : (
-            <span
-              className={`font-semibold ${negative ? 'text-accent' : 'text-charcoal'}`}
-            >
-              {formatQuantity(row.quantity)}
-            </span>
-          )}
-          <span className="block text-xs text-charcoal-muted">{row.baseUnit}</span>
-        </td>
-
-        <td className="hidden max-w-[16rem] px-2 py-2.5 align-top text-xs text-charcoal-muted lg:table-cell">
-          <LocationBreakdown row={row} locationId={locationId} />
-        </td>
-
-        <td className="px-2 py-2.5 text-right align-top font-semibold tabular-nums text-charcoal">
-          {row.value === null ? (
-            <span className="font-normal text-charcoal-muted">{MISSING_VALUE}</span>
-          ) : (
-            formatMoney(row.value, currency)
-          )}
-        </td>
-
-        <td className="w-10 px-0 py-2 align-top">
-          <button
-            type="button"
-            onClick={onToggle}
-            aria-expanded={open}
-            aria-label={open ? `Hide details for ${row.name}` : `Show details for ${row.name}`}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-charcoal-muted transition-colors hover:bg-sand hover:text-charcoal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-cream"
-          >
-            <ChevronDownIcon
-              className={`h-4 w-4 transition-transform ${open ? 'rotate-180' : ''}`}
+    <tr
+      onClick={onOpen}
+      className={`cursor-pointer transition-colors hover:bg-sand/40 ${
+        negative ? 'bg-accent/5' : ''
+      }`}
+    >
+      {/* THE PICTURE CELL — its own target, so the click does NOT fall through to
+          the row. stopPropagation is what keeps "change the picture" from also
+          meaning "leave this screen". */}
+      <td className="px-3 py-2.5 align-top sm:px-4">
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onEditImage();
+          }}
+          aria-label={
+            row.imagePath ? `Replace the picture for ${row.name}` : `Add a picture for ${row.name}`
+          }
+          title={row.imagePath ? 'Replace this picture' : 'Add a picture'}
+          className="group relative block h-10 w-10 overflow-hidden rounded-lg border border-sand-border bg-sand/60 transition-colors hover:border-primary focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-cream focus-visible:outline-none"
+        >
+          {row.imagePath ? (
+            <img
+              src={mediaVariantUrl(row.imagePath, 'thumb')}
+              alt=""
+              aria-hidden="true"
+              loading="lazy"
+              className="h-full w-full object-cover"
             />
-          </button>
-        </td>
-      </tr>
+          ) : null}
+          {/* The camera sits over a filled tile only on hover/focus, and is always
+              visible on an empty one — an empty tile has to say what it wants. */}
+          <span
+            className={`absolute inset-0 flex items-center justify-center transition-opacity ${
+              row.imagePath
+                ? 'bg-charcoal/50 opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100'
+                : 'opacity-100'
+            }`}
+          >
+            <CameraIcon
+              className={`h-4 w-4 ${row.imagePath ? 'text-white' : 'text-charcoal-muted'}`}
+            />
+          </span>
+        </button>
+      </td>
 
-      {open ? (
-        <tr className="bg-sand/20">
-          {/* Ten columns at the widest layout (nine before the selling price
-              joined them); the folded ones are display:none rather than absent, so
-              one span covers every layout. */}
-          <td colSpan={10} className="px-0 py-0">
-            <div className="border-t border-sand-border/70">
-              <div className="flex flex-wrap items-start justify-between gap-2 px-3 pt-3 sm:px-4">
-                <div className="min-w-0 text-xs text-charcoal-muted">
-                  {/* The mobile fold's missing figures, restored where there is
-                      room for them. */}
-                  <p className="sm:hidden">
-                    Average cost{' '}
-                    <span className="font-semibold text-charcoal">
-                      {row.averageCost === null
-                        ? MISSING_VALUE
-                        : formatMoney(row.averageCost, currency)}
-                    </span>{' '}
-                    per {row.baseUnit}
-                  </p>
-                  <p className="sm:hidden">
-                    Selling price{' '}
-                    <span className="font-semibold text-charcoal">
-                      {row.sellingPrice === null
-                        ? MISSING_VALUE
-                        : formatMoney(row.sellingPrice, currency)}
-                    </span>
-                    {row.sellingPrice === null ? ' — not sold' : ` per ${row.baseUnit}`}
-                  </p>
-                  {/* RETAIL AT THIS SCOPE, in the panel rather than as an eleventh
-                      column. The row already carries cost, quantity and value; a
-                      retail column beside them would push the table past what
-                      1366×768 can show without a sideways scroll, and this figure is
-                      one somebody opens a row to see rather than scans down. */}
-                  {row.retailValue !== null ? (
-                    <p>
-                      Retail at this price{' '}
-                      <span className="font-semibold text-charcoal">
-                        {formatMoney(row.retailValue, currency)}
-                      </span>{' '}
-                      before tax
-                    </p>
-                  ) : null}
-                  <p className="lg:hidden">
-                    <LocationBreakdown row={row} locationId={locationId} />
-                  </p>
-                  {row.reorderLevel ? (
-                    <p>
-                      Reorder at{' '}
-                      <span className="font-semibold text-charcoal">
-                        {formatQuantity(row.reorderLevel)} {row.baseUnit}
-                      </span>
-                    </p>
-                  ) : null}
-                </div>
+      <td className="px-2 py-2.5 align-top">
+        {/* THE REAL LINK, for the keyboard and the screen reader. The row's own
+            onClick is the mouse convenience on top of it. */}
+        <a
+          href={href}
+          onClick={(e) => {
+            // Let the row handler navigate through the router; the href exists so
+            // the row is a real destination that can be middle-clicked, copied and
+            // tabbed to.
+            e.preventDefault();
+            e.stopPropagation();
+            onOpen();
+          }}
+          className="font-medium text-charcoal hover:text-primary hover:underline focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
+        >
+          {row.name}
+        </a>
+        <span className="mt-1 flex flex-wrap gap-1">
+          {row.isBelowReorder ? (
+            <Badge tone="bg-accent/15 text-accent">At or below reorder level</Badge>
+          ) : null}
+          {negative ? <Badge tone="bg-accent/15 text-accent">Less than nothing</Badge> : null}
+          {sellable && row.sellingPrice === null ? (
+            <Badge tone="bg-accent/15 text-accent">No selling price</Badge>
+          ) : null}
+          {!row.isActive ? <Badge tone="bg-sand text-charcoal-muted">Not in use</Badge> : null}
+        </span>
+      </td>
 
-                <div className="flex flex-wrap gap-2">
-                  <RowAction onClick={onEdit} disabled={busy}>
-                    Edit item
-                  </RowAction>
-                  {soleLocationId && !ambiguousLocation ? (
-                    <RowAction
-                      onClick={() => onAdjust(row, soleLocationId)}
-                      disabled={busy}
-                    >
-                      Add or correct stock
-                    </RowAction>
-                  ) : null}
-                  <RowAction onClick={onRemove} disabled={busy}>
-                    Remove item
-                  </RowAction>
-                </div>
-              </div>
+      <Td muted>{row.code ?? MISSING_VALUE}</Td>
+      <Td muted>{row.categoryName ?? MISSING_VALUE}</Td>
 
-              {/* ONE LOCATION → the working behind its figures. EVERY LOCATION →
-                  where the stock actually is, because a movement ledger blended
-                  across locations would fold two independent averages into one
-                  number that is true of neither. */}
-              {locationId || byPosition ? (
-                <StockItemLedger
-                  tenantId={tenantId}
-                  propertyId={propertyId}
-                  locationId={locationId ?? row.locations[0]!.locationId}
-                  inventoryItemId={row.itemId}
-                  baseUnit={row.baseUnit}
-                  currency={currency}
-                  // Named so the reversal card can say WHICH item in WHICH
-                  // location is about to move. The location name comes from the
-                  // row's own position rather than being looked up, so it is
-                  // always the location whose ledger is on screen.
-                  itemName={row.name}
-                  locationName={
-                    row.locations.find(
-                      (l) => l.locationId === (locationId ?? row.locations[0]!.locationId),
-                    )?.locationName ?? row.locations[0]?.locationName
-                  }
-                  onReversed={onReversed}
-                />
-              ) : (
-                <LocationDetail
-                  row={row}
-                  currency={currency}
-                  onAdjust={onAdjust}
-                  busy={busy}
-                />
-              )}
-            </div>
-          </td>
-        </tr>
-      ) : null}
-    </>
+      <td className="px-2 py-2.5 align-top">
+        <span
+          className={`rounded-full px-2 py-0.5 text-[10px] font-semibold tracking-wide uppercase ${itemTypeTone(
+            row.itemType,
+          )}`}
+        >
+          {itemTypeLabel(row.itemType)}
+        </span>
+      </td>
+
+      <Td muted>{row.baseUnit}</Td>
+
+      <td className="px-2 py-2.5 text-right align-top tabular-nums text-charcoal">
+        {row.averageCost === null ? (
+          <span className="text-charcoal-muted">{MISSING_VALUE}</span>
+        ) : (
+          formatMoney(row.averageCost, currency)
+        )}
+      </td>
+
+      <td className="px-2 py-2.5 text-right align-top tabular-nums text-charcoal">
+        {row.sellingPrice === null ? (
+          // Blank means NOT SOLD — the shared dash, never a zero, which would be
+          // a price.
+          <span className="text-charcoal-muted">{MISSING_VALUE}</span>
+        ) : (
+          formatMoney(row.sellingPrice, currency)
+        )}
+      </td>
+
+      <td className="px-2 py-2.5 text-right align-top tabular-nums">
+        {untracked ? (
+          <span className="text-charcoal-muted">{MISSING_VALUE}</span>
+        ) : (
+          <span className={`font-semibold ${negative ? 'text-accent' : 'text-charcoal'}`}>
+            {formatQuantity(row.quantity)}
+          </span>
+        )}
+      </td>
+
+      <td className="max-w-[16rem] px-2 py-2.5 align-top text-xs text-charcoal-muted">
+        <LocationBreakdown row={row} locationId={locationId} />
+      </td>
+
+      <td className="px-2 py-2.5 text-right align-top font-semibold tabular-nums text-charcoal">
+        {row.value === null ? (
+          <span className="font-normal text-charcoal-muted">{MISSING_VALUE}</span>
+        ) : (
+          formatMoney(row.value, currency)
+        )}
+      </td>
+    </tr>
   );
 }
 
-// THE ITEM PICTURE ON THE ROW (1.1e §3) — a 40px square beside the name.
-//
-// IT ASKS FOR THE 'thumb' VARIANT, NEVER THE PATH IT WAS GIVEN. The row carries
-// one bucket_path and mediaVariantUrl rewrites its size segment, so a 40px slot
-// loads the 400px file and not the 1920px one. That is the whole read-time egress
-// saving made real (mediaUrl.ts): twenty-five rows pulling full-size images would
-// be about 5MB per page view, on a Nigerian mobile connection, for pictures
-// rendered at a fortieth of their width.
-//
-// NO PICTURE RENDERS AN EMPTY WELL, not the platform placeholder. A placeholder
-// belongs on a guest-facing surface where an unconfigured property must still look
-// deliberate; here, twenty-five identical stock photographs would be visual noise
-// that makes the two real pictures harder to find, and it would hide which items
-// actually have one.
-//
-// alt="" AND aria-hidden, DELIBERATELY: the item's name is right beside it in the
-// same cell, so a screen reader announcing "photo of Rice, Rice" is repetition,
-// and this image carries no information the row does not already say.
-function ItemThumbnail({ row }: { row: ProductRow }) {
+function Td({ children, muted = false }: { children: React.ReactNode; muted?: boolean }) {
   return (
-    <span className="mt-0.5 h-10 w-10 flex-shrink-0 overflow-hidden rounded-lg border border-sand-border bg-sand/60">
-      {row.imagePath ? (
-        <img
-          src={mediaVariantUrl(row.imagePath, 'thumb')}
-          alt=""
-          aria-hidden="true"
-          loading="lazy"
-          className="h-full w-full object-cover"
-        />
-      ) : null}
-    </span>
+    <td
+      className={`px-2 py-2.5 align-top text-xs ${muted ? 'text-charcoal-muted' : 'text-charcoal'}`}
+    >
+      {children}
+    </td>
   );
 }
 
-// "Main Store: 62 · Kitchen: 1" — the ERP's Locations column, with the hotel's
-// separator. Truncated in the cell with the full string as its title, so a wide
-// spread is readable without breaking the row height.
+// "Main Store: 62 · Kitchen: 1" — where the stock actually is. Truncated in the
+// cell with the full string as its title, so a wide spread is readable without
+// breaking the row height.
 function LocationBreakdown({
   row,
   locationId,
@@ -473,18 +314,14 @@ function LocationBreakdown({
 
   if (locationId) {
     const here = row.locations[0];
-    return (
-      <span className="truncate">{here ? here.locationName : MISSING_VALUE}</span>
-    );
+    return <span className="truncate">{here ? here.locationName : MISSING_VALUE}</span>;
   }
 
   if (held.length === 0) {
     return <span className="text-charcoal-muted">Nowhere yet</span>;
   }
 
-  const text = held
-    .map((l) => `${l.locationName}: ${formatQuantity(l.quantity)}`)
-    .join(' · ');
+  const text = held.map((l) => `${l.locationName}: ${formatQuantity(l.quantity)}`).join(' · ');
 
   return (
     <span className="block truncate" title={text}>
@@ -493,125 +330,10 @@ function LocationBreakdown({
   );
 }
 
-// The per-location breakdown as a real little table, shown when the page is
-// looking at every location at once. Each line is a position with its OWN
-// average cost — two locations holding the same item at different costs is
-// normal, and the roll-up above is value/quantity, never the mean of these.
-function LocationDetail({
-  row,
-  currency,
-  onAdjust,
-  busy,
-}: {
-  row: ProductRow;
-  currency: string;
-  onAdjust: (row: ProductRow, locationId: string) => void;
-  busy: boolean;
-}) {
-  if (row.locations.length === 0) {
-    return (
-      <p className="px-3 py-4 text-xs text-charcoal-muted sm:px-4">
-        This item has no stock recorded in any location yet. Record an opening
-        balance from a location, or add stock with an adjustment.
-      </p>
-    );
-  }
-
-  return (
-    <div className="px-3 py-3 sm:px-4">
-      <p className="mb-2 text-xs text-charcoal-muted">
-        Where this item is held. Each location keeps its own quantity and its own
-        average cost — pick a location above to see the movements behind them.
-      </p>
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[28rem] border-collapse text-xs">
-          <thead>
-            <tr className="border-b border-sand-border text-left">
-              <th scope="col" className="py-1.5 pr-3 font-semibold text-charcoal-muted">
-                Location
-              </th>
-              <th scope="col" className="py-1.5 pr-3 text-right font-semibold text-charcoal-muted">
-                On hand
-              </th>
-              <th scope="col" className="py-1.5 pr-3 text-right font-semibold text-charcoal-muted">
-                Average cost
-              </th>
-              <th scope="col" className="py-1.5 pr-3 text-right font-semibold text-charcoal-muted">
-                Value
-              </th>
-              <th scope="col" className="py-1.5" />
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-sand-border/50">
-            {row.locations.map((l) => {
-              const q = l.quantity;
-              const negative = q < 0;
-              return (
-                <tr key={l.locationId}>
-                  <td className="py-2 pr-3 text-charcoal">
-                    {l.locationName}
-                    {l.isBelowReorder ? (
-                      <span className="ml-1 text-accent">· low</span>
-                    ) : null}
-                  </td>
-                  <td
-                    className={`py-2 pr-3 text-right tabular-nums font-semibold ${
-                      negative ? 'text-accent' : 'text-charcoal'
-                    }`}
-                  >
-                    {formatQuantity(l.quantity)} {row.baseUnit}
-                  </td>
-                  <td className="py-2 pr-3 text-right tabular-nums text-charcoal-muted">
-                    {formatMoney(l.averageCost, currency)}
-                  </td>
-                  <td className="py-2 pr-3 text-right tabular-nums text-charcoal">
-                    {formatMoney(l.value, currency)}
-                  </td>
-                  <td className="py-2 text-right">
-                    <button
-                      type="button"
-                      onClick={() => onAdjust(row, l.locationId)}
-                      disabled={busy}
-                      className="rounded-lg px-2 py-1 text-[11px] font-semibold text-primary transition-colors hover:bg-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-cream disabled:opacity-60"
-                    >
-                      Correct here
-                    </button>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
-function RowAction({
-  onClick,
-  disabled,
-  children,
-}: {
-  onClick: () => void;
-  disabled?: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className="rounded-full border border-sand-border bg-white/70 px-3 py-1.5 text-xs font-semibold text-charcoal transition-colors hover:bg-sand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-cream disabled:opacity-60"
-    >
-      {children}
-    </button>
-  );
-}
-
 function Badge({ tone, children }: { tone: string; children: React.ReactNode }) {
   return (
     <span
-      className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${tone}`}
+      className={`rounded-full px-2 py-0.5 text-[10px] font-semibold tracking-wide uppercase ${tone}`}
     >
       {children}
     </span>

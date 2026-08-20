@@ -222,6 +222,10 @@ export interface ProductRow {
   // mediaVariantUrl derives the size the surface needs from it, so a list row
   // pulls the 400px thumb and never the 1920px full.
   imagePath: string | null;
+  // 1.1f. The ASSET ID behind that path, carried so the row's tile can open the
+  // picture dialog without a lookup per open — ItemImageField needs the id, not
+  // the path. One more column on a select that already reads it.
+  imageAssetId: string | null;
 
   // The position AT THE CURRENT SCOPE — the selected location, or the property
   // roll-up when "all locations" is active. NULL (not zero) when the item has
@@ -503,8 +507,9 @@ async function attachStock(
       reorderLevel: item.reorder_level,
       isActive: item.is_active,
       sellingPrice: item.default_selling_price,
-      // Filled in by attachImages once the page's asset ids are resolved.
+      // Both filled in by attachImages once the page's asset ids are resolved.
       imagePath: null,
+      imageAssetId: item.image_asset_id,
       quantity: locationId
         ? (scoped?.quantity_on_hand ?? null)
         : (rollup?.quantity_on_hand ?? null),
@@ -559,6 +564,7 @@ function rowFromPosition(p: PositionRow): ProductRow {
     reorderLevel: null,
     isActive: p.item_is_active,
     sellingPrice: p.default_selling_price,
+    imageAssetId: null,
     // The positions view does not carry the picture: a thumbnail is not something
     // a stock query should join for, and this mode is reached by filtering on
     // stock state. Filled in by attachImages from the item ids, the same as the
@@ -599,12 +605,14 @@ async function attachImages(
   if (assets.size === 0) return rows;
 
   return rows.map((row) => {
-    const id = imageIdByItem.get(row.itemId);
+    const id = imageIdByItem.get(row.itemId) ?? null;
     // An id whose asset is missing (soft-deleted since it was referenced) leaves
-    // imagePath null and the row shows its placeholder — a dangling reference is
-    // never a broken image.
+    // imagePath null and the row shows an empty tile — a dangling reference is
+    // never a broken image. The ID is still carried, because the tile opens the
+    // picture dialog either way and "replace the one that will not load" is a
+    // thing somebody needs to be able to do.
     const path = id ? (assets.get(id)?.bucket_path ?? null) : null;
-    return path === null ? row : { ...row, imagePath: path };
+    return { ...row, imagePath: path, imageAssetId: id };
   });
 }
 

@@ -128,6 +128,18 @@ export interface StockOnHandRow {
   // FALSE — never null — for an item with no reorder level: unmonitored is not
   // low, and a filter must not silently drop unmonitored items.
   is_below_reorder: boolean;
+  // --- 042 -----------------------------------------------------------------
+  // DECLARED HERE BECAUSE THE READ ALREADY RETURNS THEM. fetchItemPosition does
+  // `select('*')`, so 042's two new view columns have been arriving on this row
+  // since that migration — unparsed, because the boundary only parses the fields
+  // it is told about and passes everything else through untouched. Nothing read
+  // them, so nothing crashed; that is precisely the shape rule 24 exists to stop
+  // (a raw wire value sitting on a row that claims to be parsed), and declaring
+  // them makes the compiler demand they be listed in the boundary.
+  //
+  // NULL means NOT SOLD on the price, and NULL retail follows from it — never 0.
+  default_selling_price: number | null;
+  retail_value: number | null;
   item_is_active: boolean;
   category_name: string | null;
   location_name: string;

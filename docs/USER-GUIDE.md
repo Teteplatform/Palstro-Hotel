@@ -888,9 +888,11 @@ Search by name or code, and filter by category, type, stock, or **selling price*
 location, because that is a question about a shelf rather than about an item.
 
 **Export** writes every row matching your filters, across all pages. **Add
-product** creates items — one at a time, or many from a template. Opening a row
-shows the movements behind its figures when you are looking at one location, or
-where the stock is when you are looking at all of them.
+product** creates items — one at a time, or many from a template.
+
+**Clicking a row opens that item's own page** — its movements, its history and what
+they add up to. **Clicking its picture** opens the picture instead, which is the one
+thing you can change without leaving the list. See *One item in detail* below.
 
 Each item has:
 
@@ -980,8 +982,13 @@ resized in your browser before they are sent, so an 8 MB phone photo arrives as
 about 200 KB and the list rows load a smaller copy again. **Removing or replacing a
 picture frees its space straight away.**
 
-The picture is added on an item that already exists: create the item, then open it
-again to give it one.
+**The quickest way to add one is to click the picture tile on the item's row** in
+the list — an empty tile invites a picture, a filled one replaces it, and you never
+leave the list. It is also on the item's own page and in **Edit item**.
+
+The picture is added to an item that already exists: create the item, then give it
+one. That is not an oversight — a photograph uploaded before there is an item to
+attach it to would be sitting in your storage allowance with nothing pointing at it.
 
 **Removing an item** takes it out of the catalogue but keeps its history, so it
 can come back later. An item still holding stock anywhere cannot be removed at
@@ -1052,6 +1059,81 @@ work.
 
 Uploading the same file twice is safe: names that already exist are recognised
 and left alone, never created a second time.
+
+### One item in detail
+
+**Where:** click any row on the **Products** list.
+
+Everything about one item on one page: what it is, where its stock is, every
+movement that has touched it, and what those movements add up to. It is the screen
+for "where did the 40 kg go" and "why is the average what it is" — questions you
+ask about one thing, without a hundred other items in the way.
+
+**Clicking the picture does something different from clicking the row.** The
+picture opens the picture — an empty tile invites one, a filled one replaces it.
+Everywhere else on the row opens the item.
+
+#### The location picker at the top decides everything below it
+
+Your catalogue is shared across the whole company, but **stock is always in a
+place**. So "how much rice is there" has no answer until you say where, and this
+page makes you say it. The cards, the chart and the table all follow that picker.
+
+Leave it on **Every location** for this hotel's whole position; pick one for a
+single shelf. The choice is in the address bar, so you can send somebody a link to
+*the rice in the kitchen* and they will see what you saw. Going back to the list
+keeps the same location.
+
+#### The cards, and why they add up
+
+Across the top: **Opening balance**, **Adjustments**, **Count corrections**,
+**Reversals**, then **On hand** and **Value**.
+
+**The four cards add up to On hand.** That is the point of them. There is no stored
+stock figure anywhere in this system — what you hold *is* the sum of what has
+moved — and this row is that sentence you can check with your own eyes. Each card
+shows a signed net figure, so a card reads as a term in a sum rather than a rival
+total.
+
+If they ever stop adding up, **the page says so** and tells you to trust the table
+instead. That will happen the day a new kind of movement arrives without a card of
+its own, and it is better said out loud than left to be discovered.
+
+You will notice there are no cards for purchases or issues. That is deliberate: a
+card reading *Purchases 0* would tell you this hotel has bought nothing, when the
+truth is there is no way to record buying yet. Those cards arrive with the screens
+that write them.
+
+**Click a card** to narrow the table below to that kind of movement; click it again
+or press **Show everything** to go back. The figures on the cards do not change when
+you do — they always describe the whole scope, which is what makes them worth
+checking against.
+
+#### The line
+
+Stock level over time, one point per movement, coloured the same way as the badges
+in the table. **Hover a point** to see what it was and what it did; **click one** to
+jump to its row below.
+
+The points are spaced evenly by movement rather than by date. A busy Tuesday and a
+quiet six weeks each get the same room, because it is the movements that carry the
+information — and every point carries its own date. The dashed line is zero, so
+stock that has gone below nothing is visibly below something.
+
+#### The table, and what you can do from here
+
+Every movement at the scope, oldest first, with what the stock stood at afterwards.
+Looking at every location, there is a **Location** column and no running average —
+averages belong to one shelf, and there is no property-wide one that would mean
+anything. Looking at one location, it is the other way round.
+
+**Reverse** on a row undoes that movement. It is not offered on an opening balance,
+on a reversal, or on something already reversed, because the system refuses all
+three.
+
+The **menu beside the item's name** carries the rest: **Edit item** (its details,
+price and picture), **Add or correct stock** (against the location you are
+scoped to), and **Remove item**.
 
 ### Choosing an item or a location
 

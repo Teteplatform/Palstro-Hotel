@@ -24,6 +24,7 @@ import { RoomTypesPage } from './pages/admin/RoomTypesPage';
 import { CompaniesPage } from './pages/admin/CompaniesPage';
 import { InventoryPage } from './pages/admin/InventoryPage';
 import { StockImportPage } from './pages/admin/StockImportPage';
+import { InventoryItemPage } from './pages/admin/InventoryItemPage';
 import { StockCountPage } from './pages/admin/StockCountPage';
 import { StockCountPrintPage } from './pages/admin/StockCountPrintPage';
 import { ProductImportPage } from './pages/admin/ProductImportPage';
@@ -184,6 +185,22 @@ const router = createBrowserRouter([
                 element: (
                   <ModuleGuard module="store">
                     <StockImportPage />
+                  </ModuleGuard>
+                ),
+              },
+              // ONE ITEM, as its own page — the sibling of the count route below
+              // and the same move for the same reason. An item used to be an
+              // expanding row in a paginated table inside a tab strip, and
+              // looking into one (where did the 40 kg go, why is the average
+              // what it is) is a ten-minute job with a hundred other items in
+              // the way. Its own route also means it can be LINKED TO at a
+              // SCOPE — "the rice in the kitchen" is a URL, because the location
+              // rides in ?location= rather than in component state.
+              {
+                path: 'inventory/items/:itemId',
+                element: (
+                  <ModuleGuard module="store">
+                    <InventoryItemPage />
                   </ModuleGuard>
                 ),
               },

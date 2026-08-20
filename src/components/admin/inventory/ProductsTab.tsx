@@ -6,11 +6,7 @@ import { useToast } from '../../ui/Toast';
 import { DownloadIcon, PlusIcon, SearchIcon } from '../../ui/icons';
 import { useInventoryProducts } from '../../../hooks/useInventoryProducts';
 import { todayIsoInZone } from '../../../lib/date';
-import { describeError, humanizeError } from '../../../lib/errors';
-import {
-  fetchInventoryItemsByIds,
-  softDeleteInventoryItem,
-} from '../../../lib/inventory';
+import { describeError } from '../../../lib/errors';
 import { ITEM_TYPES, itemTypeLabel } from '../../../lib/inventoryLabels';
 import {
   EMPTY_PRODUCT_FILTERS,
@@ -34,9 +30,9 @@ import type {
 import { ScreenHeader } from '../../ui/ScreenHeader';
 import { AddProductChoiceDialog } from './AddProductChoiceDialog';
 import { InventorySummaryCard } from './InventorySummaryCard';
+import { ItemImageDialog } from './ItemImageDialog';
 import { ItemPanel } from './ItemPanel';
 import { ProductsTable } from './ProductsTable';
-import { StockEntryForm } from './StockEntryForm';
 
 // THE PRODUCTS TAB — the main screen of the module, and the one the ERP's
 // Products page is modelled on: the catalogue, with each item's stock beside it.
@@ -68,10 +64,11 @@ interface ProductsTabProps {
   units: UnitOfMeasure[];
   categories: InventoryCategory[];
   referenceLoading: boolean;
-  // The whole active catalogue, for the stock entry form's item picker. Loaded
-  // once by the screen rather than per form, so opening and closing the form
-  // does not refetch three hundred items each time.
-  items: InventoryItem[];
+  // WHY THIS LIST IS STILL A PROP THOUGH THE TABLE NO LONGER USES IT: the item
+  // FORM does. Adding a product from this screen opens ItemPanel, whose
+  // duplicate-name check and unit picker read the catalogue the screen already
+  // holds. The stock entry form that used to consume it has moved to the item
+  // page, which loads the one item it is about.
   itemsError: string | null;
   onCatalogueChanged: () => Promise<void> | void;
   // Re-pulls units and categories after the item form's inline "+ New" adds one.
@@ -89,7 +86,6 @@ export function ProductsTab({
   units,
   categories,
   referenceLoading,
-  items,
   itemsError,
   onCatalogueChanged,
   onReferenceChanged,
@@ -100,7 +96,6 @@ export function ProductsTab({
   const [searchDraft, setSearchDraft] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [exporting, setExporting] = useState(false);
-  const [busy, setBusy] = useState(false);
 
   // The add/edit slide-over. `editing` null with `panelOpen` true is "add".
   const [panelOpen, setPanelOpen] = useState(false);
@@ -117,11 +112,16 @@ export function ProductsTab({
     setChoiceOpen(true);
   }
 
-  // The stock entry form, opened against one item in one location from a row.
-  const [entry, setEntry] = useState<{ itemId: string; locationId: string } | null>(
-    null,
-  );
+  // THE PICTURE DIALOG, opened by a row's tile (1.1f §5). The row it is about,
+  // not just an id, because the dialog names the item and needs its current
+  // asset id — both of which the row already carries.
+  const [picturing, setPicturing] = useState<ProductRow | null>(null);
 
+  // THE ROW'S OTHER ACTIONS ARE GONE FROM THIS SCREEN, deliberately. Edit item,
+  // Add or correct stock and Remove item were three buttons inside an expanding
+  // panel; they are the item page's kebab now. A list is for finding a thing and
+  // comparing figures down a column, and every action it grew was a reason to
+  // stop scanning and start operating in the wrong place.
   const scopeLocation = locations.find((l) => l.id === locationId) ?? null;
   const filtered = hasProductFilters(list.filters);
 
@@ -181,56 +181,13 @@ export function ProductsTab({
     }
   }
 
-  // The edit panel needs the WHOLE catalogue row, and the list row is a
-  // projection of it. The shared `items` list holds only ACTIVE items (it is
-  // there to populate pickers), so an item that has been switched off — visible
-  // whenever the filters ask for it — is fetched on demand rather than edited
-  // from a half-row, which would blank whatever the projection left out.
-  async function handleEdit(row: ProductRow) {
-    const known = items.find((i) => i.id === row.itemId) ?? null;
-    if (known) {
-      setEditing(known);
-      setPanelOpen(true);
-      return;
-    }
-    setBusy(true);
-    try {
-      const [full] = await fetchInventoryItemsByIds(tenantId, [row.itemId]);
-      if (!full) throw new Error('That item could not be found.');
-      setEditing(full);
-      setPanelOpen(true);
-    } catch (e) {
-      toast.error(humanizeError(e)); // rule 11: surfaced, never swallowed
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handleRemove(row: ProductRow) {
-    if (
-      !window.confirm(
-        `Remove "${row.name}"? It leaves the catalogue, but its history is kept and it can be added again later. An item still holding stock anywhere cannot be removed.`,
-      )
-    ) {
-      return;
-    }
-    setBusy(true);
-    try {
-      await softDeleteInventoryItem(row.itemId, tenantId);
-      toast.success('Item removed.');
-      await Promise.all([list.reload(), onCatalogueChanged()]);
-    } catch (e) {
-      // 036 §6 refuses this at the DATABASE when the item still holds stock, and
-      // says so in a sentence the user can act on.
-      toast.error(humanizeError(e));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  const entryLocation = entry
-    ? (locations.find((l) => l.id === entry.locationId) ?? null)
-    : null;
+  // handleEdit and handleRemove lived here and have moved to the item page's
+  // kebab, where the thing being edited is the thing on screen — along with the
+  // on-demand fetch of the full catalogue row they needed, since the item page
+  // loads that row anyway. What is left on this screen is the ONE action a list
+  // is the right place for: the picture, because its affordance is already on the
+  // row and routing it through a form about names and thresholds is the friction
+  // that ends in a catalogue of grey squares.
 
   const rows = withCategoryNames(list.rows, categories);
 
@@ -425,25 +382,6 @@ export function ProductsTab({
         </p>
       ) : null}
 
-      {entry && entryLocation ? (
-        <StockEntryForm
-          tenantId={tenantId}
-          propertyId={propertyId}
-          locationId={entryLocation.id}
-          locationName={entryLocation.name}
-          currency={currency}
-          timezone={timezone}
-          items={items}
-          presetItemId={entry.itemId}
-          presetMode="adjustment"
-          onDone={async () => {
-            setEntry(null);
-            await list.reload();
-          }}
-          onCancel={() => setEntry(null)}
-        />
-      ) : null}
-
       {list.error ? (
         <ErrorState message={list.error.message} onRetry={() => void list.reload()} />
       ) : list.loading && list.rows.length === 0 ? (
@@ -454,20 +392,11 @@ export function ProductsTab({
         <>
           <ProductsTable
             rows={rows}
-            tenantId={tenantId}
-            propertyId={propertyId}
+            propertySlug={propertySlug}
             currency={currency}
             locationId={locationId}
             byPosition={list.byPosition}
-            busy={busy}
-            onEdit={(row) => void handleEdit(row)}
-            onAdjust={(row, locId) => setEntry({ itemId: row.itemId, locationId: locId })}
-            onRemove={(row) => void handleRemove(row)}
-            // A reversal from the expanded ledger moves the on-hand figure and
-            // the location's total, so both the page and the summary are
-            // re-pulled — never patched locally, which would be a second,
-            // drifting copy of a number the server already computes.
-            onReversed={() => list.reload()}
+            onEditImage={setPicturing}
           />
 
           <div className="mt-6">
@@ -477,12 +406,26 @@ export function ProductsTab({
               totalCount={list.count}
               onPageChange={list.setPage}
               onPageSizeChange={list.setPageSize}
-              disabled={list.loading || busy}
+              disabled={list.loading}
               itemNoun={list.byPosition ? 'lines' : 'items'}
             />
           </div>
         </>
       )}
+
+      {/* THE PICTURE, from the tile. The list re-pulls when it changes, so the
+          thumbnail on the row is the server's version rather than this screen's
+          guess — the same rule every other write on this page follows. */}
+      {picturing ? (
+        <ItemImageDialog
+          tenantId={tenantId}
+          itemId={picturing.itemId}
+          itemName={picturing.name}
+          imageAssetId={picturing.imageAssetId}
+          onChanged={() => list.reload()}
+          onClose={() => setPicturing(null)}
+        />
+      ) : null}
 
       {choiceOpen ? (
         <AddProductChoiceDialog

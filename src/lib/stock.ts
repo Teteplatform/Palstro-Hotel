@@ -71,7 +71,12 @@ export const movementRows = boundary<StockMovement>('stock_movements')(
 
 export const onHandRows = boundary<StockOnHandRow>('stock_on_hand_items')(
   ['quantity_on_hand', 'moving_average_cost', 'stock_value', 'movement_count'] as const,
-  ['reorder_level'] as const,
+  // 042's two columns were already arriving on this read (`select('*')`) and were
+  // passing through the boundary unparsed, because a boundary parses what it is
+  // told about. Declaring them on the row type is what forced them into this list
+  // — which is the compiler check in rule 24 working as designed, one migration
+  // later than it should have.
+  ['reorder_level', 'default_selling_price', 'retail_value'] as const,
 );
 
 export const ledgerRows = boundary<StockLedgerRow>('stock_movement_ledger')(

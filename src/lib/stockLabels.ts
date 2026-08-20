@@ -294,6 +294,29 @@ export const NEGATIVE_STOCK_ABOUT: string[] = [
     'back on, which is why they are worth a screen of their own.',
 ];
 
+export const ITEM_PAGE_ABOUT_TITLE = 'About this item’s page';
+
+export const ITEM_PAGE_ABOUT: string[] = [
+  'Stock is always in a location, and this item is defined once for the whole ' +
+    'company — so the figures on this page mean nothing until you say where. ' +
+    'The picker at the top decides it, and the cards, the picture and the table ' +
+    'all follow it. "Every location" is a deliberate roll-up across this hotel, ' +
+    'never a total that pretends the stock is in one pile.',
+  'The cards add up to On hand. That is not a coincidence — there is no stored ' +
+    'balance anywhere in this system, so what you hold IS the sum of what has ' +
+    'moved. If they ever stop adding up, the page says so and tells you to ' +
+    'trust the table instead.',
+  'Only the four kinds of movement that can be recorded today have a card: an ' +
+    'opening balance, an adjustment, a count correction and a reversal. ' +
+    'Purchases and issues get theirs when receiving and requisitions arrive — a ' +
+    'card reading "Purchases 0" would say you had bought nothing, when the ' +
+    'truth is that there is no way to record buying yet.',
+  'Each point on the line is one movement, coloured the same way as its badge ' +
+    'in the table. Click one to find its row. The line is spaced evenly by ' +
+    'movement rather than by date, so a busy morning and a quiet month each get ' +
+    'the room they need — every point carries its own date.',
+];
+
 export const PRODUCTS_ABOUT_TITLE = 'About the product list';
 
 export const PRODUCTS_ABOUT: string[] = [

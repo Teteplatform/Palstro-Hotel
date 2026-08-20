@@ -101,9 +101,34 @@ export function InventoryScreen({
   );
   // '' is All locations — the roll-up across the property, and the default,
   // because "what does this hotel hold?" is the question the page opens on.
-  // Not stored anywhere (no browser storage, by constraint): a fresh visit
+  //
+  // IN THE URL, not in state, for the reason the tab is: the item page (1.1f)
+  // carries the scope in its own `?location=` and links back here with it, so a
+  // person who opened the rice in the Kitchen and pressed "All products" lands on
+  // the Kitchen rather than on the whole property. Held in state, that round trip
+  // would silently change which shelf the figures describe — which is exactly the
+  // ambiguity the item page's own scope picker exists to remove.
+  //
+  // Still no browser storage (by constraint): a fresh visit with no parameter
   // starts at the whole property.
-  const [locationId, setLocationId] = useState('');
+  const locationId = searchParams.get('location') ?? '';
+
+  const setLocationId = useCallback(
+    (next: string) => {
+      // replace, not push: the location is a view of one page, and pushing would
+      // make Back walk the location picker instead of leaving the screen.
+      setSearchParams(
+        (prev) => {
+          const params = new URLSearchParams(prev);
+          if (next) params.set('location', next);
+          else params.delete('location');
+          return params;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
   const [managingLocations, setManagingLocations] = useState(false);
 
   // The whole ACTIVE catalogue, loaded once here and shared by every tab that
@@ -287,7 +312,6 @@ export function InventoryScreen({
             units={reference.units}
             categories={reference.categories}
             referenceLoading={reference.loading}
-            items={items}
             itemsError={itemsError}
             onCatalogueChanged={reloadCatalogue}
             // A unit or category added inline from the item form has to reach
