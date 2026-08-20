@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ChevronDownIcon } from '../../ui/icons';
 import { formatMoney, formatQuantity, MISSING_VALUE } from '../../../lib/format';
 import { itemTypeLabel, itemTypeTone } from '../../../lib/inventoryLabels';
+import { mediaVariantUrl } from '../../../lib/mediaUrl';
 import type { ProductRow } from '../../../lib/inventoryProducts';
 import { StockItemLedger } from './StockItemLedger';
 
@@ -77,6 +78,11 @@ export function ProductsTable({
             <Th className="hidden xl:table-cell">Type</Th>
             <Th className="hidden xl:table-cell">Unit</Th>
             <Th className="hidden text-right sm:table-cell">Average cost</Th>
+            {/* SELLING PRICE SITS BESIDE AVERAGE COST, and the adjacency is the
+                point: the two numbers only mean anything against each other, and a
+                storekeeper scanning down them can see an item priced below what it
+                cost without doing any arithmetic. */}
+            <Th className="hidden text-right sm:table-cell">Selling price</Th>
             <Th className="text-right">On hand</Th>
             <Th className="hidden lg:table-cell">Locations</Th>
             <Th className="text-right">Value</Th>
@@ -166,6 +172,10 @@ function ProductTableRow({
   // a confident zero: "we hold none" and "we have no figure" are different
   // statements, and only one of them is true here.
   const untracked = row.quantity === null;
+  // A Sold as-is or Both item is meant to have a price (042 §1.2). A raw
+  // ingredient is meant NOT to, so an empty price cell on one is correct and gets
+  // no badge — flagging it would train people to ignore the badge.
+  const sellable = row.itemType === 'finished' || row.itemType === 'both';
 
   // Which location an adjustment from this row should target. A single selected
   // location, the row's own when the list is by position, else the only place it
@@ -181,24 +191,36 @@ function ProductTableRow({
     <>
       <tr className={negative ? 'bg-accent/5' : undefined}>
         <td className="px-3 py-2.5 align-top sm:px-4">
-          <span className="block font-medium text-charcoal">{row.name}</span>
-          <span className="mt-0.5 block text-xs text-charcoal-muted">
-            {/* The folded columns ride along here at narrow widths. */}
-            <span className="lg:hidden">
-              {row.categoryName ? `${row.categoryName} · ` : ''}
-            </span>
-            {row.code ? `${row.code} · ` : ''}
-            tracked in {row.baseUnit}
-          </span>
-          <span className="mt-1 flex flex-wrap gap-1">
-            {row.isBelowReorder ? (
-              <Badge tone="bg-accent/15 text-accent">At or below reorder level</Badge>
-            ) : null}
-            {negative ? <Badge tone="bg-accent/15 text-accent">Less than nothing</Badge> : null}
-            {!row.isActive ? (
-              <Badge tone="bg-sand text-charcoal-muted">Not in use</Badge>
-            ) : null}
-          </span>
+          <div className="flex items-start gap-2.5">
+            <ItemThumbnail row={row} />
+            <div className="min-w-0">
+              <span className="block font-medium text-charcoal">{row.name}</span>
+              <span className="mt-0.5 block text-xs text-charcoal-muted">
+                {/* The folded columns ride along here at narrow widths. */}
+                <span className="lg:hidden">
+                  {row.categoryName ? `${row.categoryName} · ` : ''}
+                </span>
+                {row.code ? `${row.code} · ` : ''}
+                tracked in {row.baseUnit}
+              </span>
+              <span className="mt-1 flex flex-wrap gap-1">
+                {row.isBelowReorder ? (
+                  <Badge tone="bg-accent/15 text-accent">At or below reorder level</Badge>
+                ) : null}
+                {negative ? <Badge tone="bg-accent/15 text-accent">Less than nothing</Badge> : null}
+                {/* SOLD WITH NO PRICE, on the row. The filter finds these in bulk;
+                    the badge is what stops one being scrolled past — and it is the
+                    only way the gap is visible to somebody who came here for
+                    something else. */}
+                {sellable && row.sellingPrice === null ? (
+                  <Badge tone="bg-accent/15 text-accent">No selling price</Badge>
+                ) : null}
+                {!row.isActive ? (
+                  <Badge tone="bg-sand text-charcoal-muted">Not in use</Badge>
+                ) : null}
+              </span>
+            </div>
+          </div>
         </td>
 
         <td className="hidden px-2 py-2.5 align-top text-xs text-charcoal-muted lg:table-cell">
@@ -225,6 +247,23 @@ function ProductTableRow({
           ) : (
             <>
               {formatMoney(row.averageCost, currency)}
+              <span className="block text-xs text-charcoal-muted">
+                per {row.baseUnit}
+              </span>
+            </>
+          )}
+        </td>
+
+        <td className="hidden px-2 py-2.5 text-right align-top tabular-nums sm:table-cell">
+          {row.sellingPrice === null ? (
+            // BLANK MEANS NOT SOLD, and the dash is the shared MISSING_VALUE — the
+            // same mark every other absent figure in the app uses, so it reads as
+            // "no value" rather than as a layout gap. Never a zero: 0 would be a
+            // price, and the database refuses one for exactly that reason.
+            <span className="text-charcoal-muted">{MISSING_VALUE}</span>
+          ) : (
+            <>
+              {formatMoney(row.sellingPrice, currency)}
               <span className="block text-xs text-charcoal-muted">
                 per {row.baseUnit}
               </span>
@@ -274,9 +313,10 @@ function ProductTableRow({
 
       {open ? (
         <tr className="bg-sand/20">
-          {/* Nine columns at the widest layout; the folded ones are display:none
-              rather than absent, so one span covers every layout. */}
-          <td colSpan={9} className="px-0 py-0">
+          {/* Ten columns at the widest layout (nine before the selling price
+              joined them); the folded ones are display:none rather than absent, so
+              one span covers every layout. */}
+          <td colSpan={10} className="px-0 py-0">
             <div className="border-t border-sand-border/70">
               <div className="flex flex-wrap items-start justify-between gap-2 px-3 pt-3 sm:px-4">
                 <div className="min-w-0 text-xs text-charcoal-muted">
@@ -291,6 +331,29 @@ function ProductTableRow({
                     </span>{' '}
                     per {row.baseUnit}
                   </p>
+                  <p className="sm:hidden">
+                    Selling price{' '}
+                    <span className="font-semibold text-charcoal">
+                      {row.sellingPrice === null
+                        ? MISSING_VALUE
+                        : formatMoney(row.sellingPrice, currency)}
+                    </span>
+                    {row.sellingPrice === null ? ' — not sold' : ` per ${row.baseUnit}`}
+                  </p>
+                  {/* RETAIL AT THIS SCOPE, in the panel rather than as an eleventh
+                      column. The row already carries cost, quantity and value; a
+                      retail column beside them would push the table past what
+                      1366×768 can show without a sideways scroll, and this figure is
+                      one somebody opens a row to see rather than scans down. */}
+                  {row.retailValue !== null ? (
+                    <p>
+                      Retail at this price{' '}
+                      <span className="font-semibold text-charcoal">
+                        {formatMoney(row.retailValue, currency)}
+                      </span>{' '}
+                      before tax
+                    </p>
+                  ) : null}
                   <p className="lg:hidden">
                     <LocationBreakdown row={row} locationId={locationId} />
                   </p>
@@ -359,6 +422,40 @@ function ProductTableRow({
         </tr>
       ) : null}
     </>
+  );
+}
+
+// THE ITEM PICTURE ON THE ROW (1.1e §3) — a 40px square beside the name.
+//
+// IT ASKS FOR THE 'thumb' VARIANT, NEVER THE PATH IT WAS GIVEN. The row carries
+// one bucket_path and mediaVariantUrl rewrites its size segment, so a 40px slot
+// loads the 400px file and not the 1920px one. That is the whole read-time egress
+// saving made real (mediaUrl.ts): twenty-five rows pulling full-size images would
+// be about 5MB per page view, on a Nigerian mobile connection, for pictures
+// rendered at a fortieth of their width.
+//
+// NO PICTURE RENDERS AN EMPTY WELL, not the platform placeholder. A placeholder
+// belongs on a guest-facing surface where an unconfigured property must still look
+// deliberate; here, twenty-five identical stock photographs would be visual noise
+// that makes the two real pictures harder to find, and it would hide which items
+// actually have one.
+//
+// alt="" AND aria-hidden, DELIBERATELY: the item's name is right beside it in the
+// same cell, so a screen reader announcing "photo of Rice, Rice" is repetition,
+// and this image carries no information the row does not already say.
+function ItemThumbnail({ row }: { row: ProductRow }) {
+  return (
+    <span className="mt-0.5 h-10 w-10 flex-shrink-0 overflow-hidden rounded-lg border border-sand-border bg-sand/60">
+      {row.imagePath ? (
+        <img
+          src={mediaVariantUrl(row.imagePath, 'thumb')}
+          alt=""
+          aria-hidden="true"
+          loading="lazy"
+          className="h-full w-full object-cover"
+        />
+      ) : null}
+    </span>
   );
 }
 

@@ -1,12 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import {
-  CurrencyField,
-  DateField,
-  NumberField,
-  Select,
-  TextField,
-} from '../../ui/form';
-import type { SelectOption } from '../../ui/form';
+import { CurrencyField, DateField, NumberField, TextField } from '../../ui/form';
+import { LocationPicker } from './LocationPicker';
 import { useToast } from '../../ui/Toast';
 import { CloseIcon } from '../../ui/icons';
 import { useFocusTrap } from '../../../hooks/useFocusTrap';
@@ -35,6 +29,7 @@ import {
   postOpeningBalance,
   stockErrorMessage,
 } from '../../../lib/stock';
+import { ItemImageField } from './ItemImageField';
 import {
   ItemFormFields,
   type ItemFormValues,
@@ -115,6 +110,10 @@ const EMPTY_ITEM_FORM: ItemFormValues = {
   purchaseCost: null,
   minStockLevel: null,
   maxStockLevel: null,
+  // 042. Blank, and blank means NOT SOLD. Never seeded with a number — a
+  // pre-filled price is a claim about what a hotel charges that nobody made
+  // (rule 10's principle, applied past payments for the same reason).
+  sellingPrice: null,
   isActive: true,
 };
 
@@ -139,6 +138,7 @@ function toForm(item: InventoryItem): ItemFormValues {
     purchaseCost: item.purchase_cost,
     minStockLevel: item.min_stock_level,
     maxStockLevel: item.max_stock_level,
+    sellingPrice: item.default_selling_price,
     isActive: item.is_active,
   };
 }
@@ -273,10 +273,11 @@ export function ItemPanel({
   const isEdit = item !== null;
   const wantsOpening = !isEdit && (openingQuantity !== null || openingCost !== null);
 
-  const locationOptions: SelectOption[] = locations.map((l) => ({
-    value: l.id,
-    label: l.is_active ? l.name : `${l.name} (closed)`,
-  }));
+  // The row behind the resolved opening location, for the picker's label. The panel
+  // already holds the property's locations (it derives the default from them); only
+  // the SEARCH goes to the server (rule 26).
+  const openingLocation =
+    locations.find((l) => l.id === openingLocationId) ?? null;
 
   function patch(next: Partial<ItemFormValues>) {
     setValues((prev) => ({ ...prev, ...next }));
@@ -522,6 +523,34 @@ export function ItemPanel({
             />
           </section>
 
+          {/* THE PICTURE (1.1e §3), on an item that exists.
+              On the ADD form this is one line saying where to find it, not an
+              upload — see ItemImageField's header for why: an upload before the
+              item exists creates files nothing references, and tenant-level media
+              deliberately has no orphan sweeper to find them. */}
+          <section className="mt-6 rounded-2xl border border-sand-border bg-white/60 p-4">
+            <h3 className="text-sm font-semibold text-charcoal">
+              Picture{' '}
+              <span className="font-normal text-charcoal-muted">— optional</span>
+            </h3>
+            {isEdit ? (
+              <div className="mt-3">
+                <ItemImageField
+                  tenantId={tenantId}
+                  itemId={item.id}
+                  itemName={item.name}
+                  imageAssetId={item.image_asset_id}
+                  onChanged={onSaved}
+                  disabled={saving}
+                />
+              </div>
+            ) : (
+              <p className="mt-1 text-xs text-charcoal-muted">
+                Add the item first, then open it again to give it a picture.
+              </p>
+            )}
+          </section>
+
           {!isEdit ? (
             <section className="mt-6 rounded-2xl border border-sand-border bg-white/60 p-4">
               <h3 className="text-sm font-semibold text-charcoal">
@@ -545,11 +574,15 @@ export function ItemPanel({
                 </p>
               ) : (
                 <div className="mt-3 grid gap-4 sm:grid-cols-2">
-                  <Select
-                    label="Location"
+                  {/* Searchable, server-side (rule 26). This writes an opening
+                      balance, so only locations in use are offered. */}
+                  <LocationPicker
+                    tenantId={tenantId}
+                    propertyId={propertyId}
                     value={openingLocationId}
                     onChange={setOpeningLocationChoice}
-                    options={locationOptions}
+                    selectedLocation={openingLocation}
+                    activeOnly
                     disabled={saving || blocked}
                   />
                   <NumberField
@@ -688,6 +721,7 @@ function itemFieldsFrom(values: ItemFormValues): {
   purchase_cost: number | null;
   min_stock_level: number | null;
   max_stock_level: number | null;
+  default_selling_price: number | null;
 } {
   return {
     name: cleanName(values.name),
@@ -703,6 +737,10 @@ function itemFieldsFrom(values: ItemFormValues): {
     purchase_cost: values.purchaseCost,
     min_stock_level: values.minStockLevel,
     max_stock_level: values.maxStockLevel,
+    // 042. Sent as NULL when blank, which is what NOT SOLD is. The form removes the
+    // field entirely for an Ingredient and clears the value with it, so this is
+    // never a number on a raw item — and if it somehow were, the CHECK refuses it.
+    default_selling_price: values.sellingPrice,
   };
 }
 

@@ -24,8 +24,19 @@ const COLUMNS = [
   { label: 'Type', width: 14 },
   { label: 'Unit', width: 10 },
   { label: 'Average cost', width: 16 },
+  // 042. NEXT TO AVERAGE COST, so the recipient can put a formula between the two
+  // adjacent cells — which is the whole reason a spreadsheet is what they asked for.
+  // A BLANK cell means NOT SOLD, never 0: a zero in a price column is a price, and
+  // it would divide into a margin of infinity in whatever sheet is built on top of
+  // this. numberCell already renders an absent value as empty for that reason.
+  { label: 'Selling price', width: 16 },
   { label: 'On hand', width: 14 },
-  { label: 'Stock value', width: 16 },
+  { label: 'Value at cost', width: 16 },
+  // 042. Read from the row, so it is the DATABASE's retail figure — the same one
+  // the summary card totals. Never quantity × price recomputed here, which would be
+  // a second implementation of the arithmetic in 042 §3.1 that could disagree with
+  // the screen the export was taken from.
+  { label: 'Retail value', width: 16 },
   { label: 'Locations', width: 40 },
   { label: 'Reorder level', width: 15 },
   { label: 'Low stock', width: 11 },
@@ -45,8 +56,10 @@ export function buildProductsXlsx(
     { kind: 'text', value: itemTypeLabel(row.itemType) },
     { kind: 'text', value: row.baseUnit },
     numberCell(row.averageCost, 'money'),
+    numberCell(row.sellingPrice, 'money'),
     numberCell(row.quantity, 'quantity'),
     numberCell(row.value, 'money'),
+    numberCell(row.retailValue, 'money'),
     row.locations.length > 0
       ? {
           kind: 'text',

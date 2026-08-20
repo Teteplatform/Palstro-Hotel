@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Pagination } from '../../ui/Pagination';
 import { DateField, Select } from '../../ui/form';
-import type { SelectOption } from '../../ui/form';
+import { ItemPicker } from './ItemPicker';
+import { LocationPicker } from './LocationPicker';
 import { useAuth } from '../../../hooks/useAuth';
 import { formatDisplayDate, formatDisplayDateTimeInZone } from '../../../lib/date';
 import { describeError } from '../../../lib/errors';
@@ -150,32 +151,40 @@ export function MovementsList({
     setPage(1);
   }
 
-  const locationOptions: SelectOption[] = [
-    { value: '', label: 'Every location' },
-    ...locations.map((l) => ({ value: l.id, label: l.name })),
-  ];
-
-  const itemOptions: SelectOption[] = [
-    { value: '', label: 'Every item' },
-    ...items.map((i) => ({ value: i.id, label: i.code ? `${i.name} (${i.code})` : i.name })),
-  ];
-
   const filtered = hasMovementFilters(filters);
+
+  // The rows behind the two picker values, for their labels. Read from the lists the
+  // screen already holds; the SEARCH is the server's either way (rule 26).
+  const filterLocation =
+    locations.find((l) => l.id === filters.locationId) ?? null;
+  const filterItem = items.find((i) => i.id === filters.inventoryItemId) ?? null;
 
   return (
     <div className="space-y-4">
       <div className="grid gap-3 rounded-2xl border border-sand-border bg-white/60 p-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Select
-          label="Location"
+        {/* BOTH SEARCHABLE, SERVER-SIDE (rule 26), and both FILTERS rather than
+            write forms — so neither passes activeOnly. A movement against an item
+            or a location that has since been switched off is still a movement, and
+            a picker that omitted it would make that history unreachable, which is
+            the opposite of what an audit trail is for. Clearing either box is
+            "every one" — the empty option the old Selects spelled out. */}
+        <LocationPicker
+          tenantId={tenantId}
+          propertyId={propertyId}
           value={filters.locationId}
           onChange={(v) => narrow({ locationId: v })}
-          options={locationOptions}
+          selectedLocation={filterLocation}
+          clearable
+          placeholder="Every location"
         />
-        <Select
-          label="Item"
+        <ItemPicker
+          tenantId={tenantId}
           value={filters.inventoryItemId}
           onChange={(v) => narrow({ inventoryItemId: v })}
-          options={itemOptions}
+          selectedItem={filterItem}
+          activeOnly={false}
+          clearable
+          placeholder="Every item"
         />
         <DateField
           label="From"

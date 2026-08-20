@@ -53,9 +53,32 @@ import type {
 // ---------------------------------------------------------------------------
 // Barcode, pack size, purchase cost and the min/max par range are captured here.
 // SUPPLIER is not — it belongs to purchasing, where it is a table and not one
-// text box (a hotel buys rice from three people at three prices). SELLING PRICE
-// is not — a price belongs to a menu line, because the same Coke sells at one
-// price at the bar and another in the restaurant.
+// text box (a hotel buys rice from three people at three prices).
+//
+// SELLING PRICE IS NOW HERE, and this comment used to say it never would be. The
+// old reason was that "the same Coke sells at one price at the bar and another in
+// the restaurant", so a price belonged to a menu line. That fact is true and the
+// conclusion drawn from it was wrong: it left a hotel unable to say what a crate
+// of Coke is worth until a whole menu module existed, and it left every outlet
+// charging the ordinary price with nothing to inherit, so one number got typed
+// once per outlet and drifted. 042 puts the DEFAULT on the item; 1.1g adds the
+// outlet OVERRIDE that reads from it. Both facts, one place to maintain.
+//
+// ---------------------------------------------------------------------------
+// THE PRICE FIELD ONLY EXISTS FOR AN ITEM THAT IS SOLD
+// ---------------------------------------------------------------------------
+// It renders for Sold as-is and Both, and NOT for Ingredient — because the
+// database refuses a price on an Ingredient outright
+// (inventory_items_raw_has_no_price_check), so a box that could only ever produce
+// a constraint error is not a field, it is a trap. Switching the Type back to
+// Ingredient clears the price with it, in the same act, so the form can never
+// submit a combination the database will reject.
+//
+// The reverse rule — a sold item MUST have a price — is NOT restated here (rule
+// 21). The trigger in 042 §1.2 raises it, with the rule in its message and the way
+// out in its hint, and the panel shows both verbatim. A copy of the check in this
+// file would be a second source of truth that drifts the day the rule changes,
+// silently, because nothing errors when a client forgets one.
 
 // A UI form shape, not a DB row — the DB row is InventoryItem in types/inventory.
 // Fields are the plain values the controls hold: '' for "not set" on text and
@@ -74,6 +97,11 @@ export interface ItemFormValues {
   purchaseCost: number | null;
   minStockLevel: number | null;
   maxStockLevel: number | null;
+  // 042. NULL means NOT SOLD — the same distinction the column carries, held as
+  // null rather than as 0 all the way from the box to the database. CurrencyField
+  // already gives null for an empty field rather than Number('') === 0, which is
+  // what makes that possible without a special case here.
+  sellingPrice: number | null;
   isActive: boolean;
 }
 
@@ -146,6 +174,11 @@ export function ItemFormFields({
   const unitLabel =
     units.find((u) => u.unit_code === values.baseUnit)?.unit_code ?? 'units';
 
+  // Whether this item is sold at all, which is what decides whether a price is a
+  // field or a trap. Derived from the CURRENT form value, not from the saved row,
+  // so switching Type reveals or removes the box immediately.
+  const sellable = values.itemType === 'finished' || values.itemType === 'both';
+
   return (
     <div className="grid gap-4 sm:grid-cols-2">
       <TextField
@@ -171,7 +204,19 @@ export function ItemFormFields({
         label="Type"
         required
         value={values.itemType}
-        onChange={(v) => onChange({ itemType: v as ItemType })}
+        onChange={(v) => {
+          const itemType = v as ItemType;
+          // CHANGING TO Ingredient CLEARS THE PRICE, in the same act. The database
+          // refuses a raw item with a price, so leaving a stale value in state
+          // would mean the form submits a combination that can only fail — and it
+          // would fail naming a constraint rather than the field somebody just
+          // changed. Cleared here, so the two controls can never disagree.
+          onChange(
+            itemType === 'raw'
+              ? { itemType, sellingPrice: null }
+              : { itemType },
+          );
+        }}
         options={typeOptions}
         // The hint follows the CHOICE, so the consequence of the selection is
         // visible at the moment it is made rather than in a legend elsewhere.
@@ -243,6 +288,25 @@ export function ItemFormFields({
         helpText={`What one ${unitLabel} normally costs to buy. Your stock is still valued at what you actually paid.`}
         disabled={disabled}
       />
+
+      {/* SELLING PRICE, beside purchase cost, and only for an item that is sold.
+          The pairing is deliberate: buy price and sell price are the two numbers
+          somebody setting up an item wants to see together. */}
+      {sellable ? (
+        <CurrencyField
+          label="Selling price"
+          required
+          value={values.sellingPrice}
+          onChange={(v) => onChange({ sellingPrice: v })}
+          currency={currency}
+          // The one hint that genuinely earns its place here (rule 25): "before
+          // tax" changes the number a person types, and the label cannot carry it.
+          // Everything else about pricing — outlet overrides, what blank means for
+          // an ingredient — is in the ⓘ and the guide.
+          helpText={`What one ${unitLabel} sells for, before tax. An outlet can charge something different.`}
+          disabled={disabled}
+        />
+      ) : null}
 
       <NumberField
         label="Reorder level"

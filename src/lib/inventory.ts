@@ -47,7 +47,15 @@ const categories = boundary<InventoryCategory>('inventory_categories')(
 
 const items = boundary<InventoryItem>('inventory_items')(
   ['display_order'] as const,
-  ['reorder_level', 'purchase_cost', 'min_stock_level', 'max_stock_level'] as const,
+  [
+    'reorder_level',
+    'purchase_cost',
+    'min_stock_level',
+    'max_stock_level',
+    // 042. NULL means NOT SOLD, and the boundary keeps it null rather than
+    // coercing it to 0 — the whole distinction the column exists to carry.
+    'default_selling_price',
+  ] as const,
 );
 
 const locations = boundary<StockLocation>('locations')(
@@ -229,6 +237,15 @@ export const EMPTY_ITEM_FILTERS: ItemFilters = {
   categoryId: '',
 };
 
+// PostgREST's or() takes a comma-separated filter list, so commas and parens in a
+// search term would be read as SYNTAX rather than as characters. Stripped rather
+// than escaped — the same treatment as fetchCompaniesPage and
+// inventoryProducts.safeSearch, kept identical so a term behaves the same
+// wherever it is typed.
+export function safeSearchTerm(search: string): string {
+  return search.trim().replace(/[,()*]/g, ' ').trim();
+}
+
 export interface InventoryItemsPage {
   rows: InventoryItem[];
   count: number; // exact total for the FILTER (rules 1b/20), not the page length
@@ -324,6 +341,130 @@ export async function fetchInventoryItemsByIds(
   );
 }
 
+// ===========================================================================
+// The searchable pickers (1.1e §4) — SERVER-SIDE, always
+// ===========================================================================
+// A hotel with a thousand items cannot scroll a dropdown, and it equally cannot
+// be given a box that filters a list the browser happens to be holding. Those two
+// sentences are one rule with two halves, and the second half is the one that
+// gets lost:
+//
+//   A CLIENT-SIDE FILTER SEARCHES WHAT WAS FETCHED, NOT WHAT EXISTS. Type "zobo"
+//   into a box filtering 25 loaded rows and it says "no matches" — confidently,
+//   instantly, and wrongly, because Zobo is item 400. Nothing errors, nothing
+//   looks broken, and the person concludes the hotel does not stock it. That is
+//   strictly worse than a long dropdown, which at least does not lie.
+//
+// So a picker's search is a QUERY, matched on name and code, against the same
+// table and the same filters the underlying list uses — which is what makes the
+// picker's answer and the list's answer the same answer.
+//
+// THE CAP IS A CAP ON A PICKER, NOT ON A LIST (rule 1b's distinction). Rule 1b
+// forbids capping a list a person BROWSES without giving them a way to reach the
+// rest. A picker is not browsed: the way to reach the rest is to type more, which
+// is the control. Both functions return `capped` so the surface can say so out
+// loud — "showing the first 20, keep typing to narrow it" — because a silently
+// truncated picker is the same lie in a different costume.
+
+// Small on purpose. A picker is for choosing one thing; twenty rows is more than
+// enough to recognise the one you meant, and beyond that the answer is to type.
+export const PICKER_SEARCH_LIMIT = 20;
+
+export interface PickerSearchResult<T> {
+  rows: T[];
+  // TRUE when more rows matched than were returned. Detected by asking for ONE
+  // MORE than the limit and seeing whether it arrived — never by comparing
+  // against a count, which would be a second round trip to learn one boolean.
+  capped: boolean;
+}
+
+// Search a tenant's LIVE catalogue items by name or code, server-side.
+//
+// An empty term returns the first page ALPHABETICALLY rather than nothing: a
+// picker that is blank until you type hides the fact that it is a picker, and a
+// storekeeper who does not know how an item was spelled needs somewhere to start.
+// Alphabetical (not most-recent) because that is the order the products list uses
+// and the order a person looks a name up in.
+export async function searchInventoryItems(
+  tenantId: string,
+  term: string,
+  options: { activeOnly?: boolean; limit?: number } = {},
+): Promise<PickerSearchResult<InventoryItem>> {
+  const limit = options.limit ?? PICKER_SEARCH_LIMIT;
+
+  let q = supabase
+    .from('inventory_items')
+    .select('*')
+    .eq('tenant_id', tenantId) // rule 19
+    .is('deleted_at', null); // rule 5
+
+  // The same predicate the products list applies by default: an item switched off
+  // is on file but is not what somebody filling in a form is looking for. Passing
+  // it here rather than filtering the result is the point of the whole function.
+  if (options.activeOnly) q = q.eq('is_active', true);
+
+  const safe = safeSearchTerm(term);
+  if (safe.length > 0) {
+    // Name OR CODE, because a storekeeper who has bin cards types the code.
+    q = q.or(`name.ilike.%${safe}%,code.ilike.%${safe}%`);
+  }
+
+  const { data, error } = await q
+    .order('name', { ascending: true })
+    .order('id', { ascending: true }) // unique → a stable window
+    .range(0, limit); // limit + 1 rows: the extra one reveals the cap
+
+  if (error) throw error;
+  const rows = items.rows(data);
+  return { rows: rows.slice(0, limit), capped: rows.length > limit };
+}
+
+// Search a property's LIVE stock locations by name.
+//
+// Locations are few today — a store, a kitchen, two bars — and this could have
+// stayed a dropdown. It is a typeahead anyway, for one reason worth stating: the
+// rule is about what a selector CAN hold, not what this property's happens to hold
+// today, and a hotel group with twenty outlets across four properties reaches the
+// threshold without anybody revisiting the decision. The cost is one query; the
+// alternative is remembering to come back.
+//
+// `kind` is offered as a filter because the callers that need one need it
+// server-side: "which store issues this" is a question about a subset, and
+// narrowing it after the fact would cap-then-filter.
+export async function searchLocations(
+  propertyId: string,
+  tenantId: string,
+  term: string,
+  options: { activeOnly?: boolean; kind?: LocationKind; limit?: number } = {},
+): Promise<PickerSearchResult<StockLocation>> {
+  const limit = options.limit ?? PICKER_SEARCH_LIMIT;
+
+  let q = supabase
+    .from('locations')
+    .select('*')
+    .eq('tenant_id', tenantId) // rule 19
+    .eq('property_id', propertyId) // rule 19: stock is physical
+    .is('deleted_at', null); // rule 5
+
+  if (options.activeOnly) q = q.eq('is_active', true);
+  if (options.kind) q = q.eq('kind', options.kind);
+
+  const safe = safeSearchTerm(term);
+  if (safe.length > 0) q = q.ilike('name', `%${safe}%`);
+
+  const { data, error } = await q
+    // The hotel's own curated order first — a location list is short enough to be
+    // arranged deliberately, and "Main Store" should lead it.
+    .order('display_order', { ascending: true })
+    .order('name', { ascending: true })
+    .order('id', { ascending: true }) // unique → a stable window
+    .range(0, limit);
+
+  if (error) throw error;
+  const rows = locations.rows(data);
+  return { rows: rows.slice(0, limit), capped: rows.length > limit };
+}
+
 export interface InventoryItemWrite {
   name?: string;
   code?: string | null;
@@ -349,6 +490,16 @@ export interface InventoryItemWrite {
   purchase_cost?: number | null;
   min_stock_level?: number | null;
   max_stock_level?: number | null;
+
+  // 042. What one base unit sells for, before tax. NULL means NOT SOLD — never 0,
+  // which the database refuses outright so the two can never be confused.
+  //
+  // NOTHING IN THIS FILE VALIDATES IT (rule 21). An Ingredient with a price is
+  // refused by a CHECK; a sellable item with no price is refused by a trigger,
+  // which carries the rule in its message and the way out in its hint. Restating
+  // either here would be a second source of truth that drifts the day the rule
+  // changes — silently, because nothing would error.
+  default_selling_price?: number | null;
 
   is_active?: boolean;
   display_order?: number;

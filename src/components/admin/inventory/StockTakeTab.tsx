@@ -5,8 +5,8 @@ import { ScreenHeader } from '../../ui/ScreenHeader';
 import { CalculationNote } from '../../ui/CalculationNote';
 import { ActionMenu } from '../../ui/ActionMenu';
 import type { ActionMenuItem } from '../../ui/ActionMenu';
-import { DateField, Select, TextField } from '../../ui/form';
-import type { SelectOption } from '../../ui/form';
+import { DateField, TextField } from '../../ui/form';
+import { LocationPicker } from './LocationPicker';
 import { useToast } from '../../ui/Toast';
 import { useOpenStockTake, useStockTakes } from '../../../hooks/useStockTakes';
 import { formatDisplayDate, todayIsoInZone } from '../../../lib/date';
@@ -108,10 +108,10 @@ export function StockTakeTab({
 
   const location = locations.find((l) => l.id === countLocationId) ?? null;
 
-  const locationOptions: SelectOption[] = locations.map((l) => ({
-    value: l.id,
-    label: l.is_active ? l.name : `${l.name} (closed)`,
-  }));
+  // The row behind the history filter's current value, for its label. Held by the
+  // screen because it already loaded the property's locations for other reasons.
+  const historyLocation =
+    locations.find((l) => l.id === history.filters.locationId) ?? null;
 
   const countUrl = (id: string) => `/admin/${propertySlug}/inventory/counts/${id}`;
   const printUrl = (id: string) => `${countUrl(id)}/print`;
@@ -224,15 +224,21 @@ export function StockTakeTab({
         />
 
         <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <Select
-            label="Location"
-            required
+          {/* Searchable, server-side (rule 26). A count is against ONE location —
+              never "the property" — so this choice decides what the whole sheet is
+              about, and it must stay findable when a group has twenty outlets. */}
+          <LocationPicker
+            tenantId={tenantId}
+            propertyId={propertyId}
             value={countLocationId}
             onChange={(v) => {
               setCountLocationId(v);
               setStartError(null);
             }}
-            options={locationOptions}
+            selectedLocation={location}
+            // Counting posts movements, so only a location in use.
+            activeOnly
+            required
             disabled={starting || open.loading}
           />
           <DateField
@@ -310,13 +316,20 @@ export function StockTakeTab({
         <div className="flex flex-wrap items-end justify-between gap-3 border-b border-sand-border px-4 py-3">
           <h3 className="text-sm font-semibold text-charcoal">Counts on file</h3>
           <div className="w-full sm:w-56">
-            <Select
-              label="Location"
+            {/* A FILTER over history, so closed locations are offered too: a count
+                run in a bar that has since been shut is still a count, and hiding
+                it would make its variance report unreachable. Clearing the box is
+                "every location" — the empty value the old Select spelled out. */}
+            <LocationPicker
+              tenantId={tenantId}
+              propertyId={propertyId}
               value={history.filters.locationId}
               onChange={(v) =>
                 history.setFilters({ ...history.filters, locationId: v })
               }
-              options={[{ value: '', label: 'Every location' }, ...locationOptions]}
+              selectedLocation={historyLocation}
+              clearable
+              placeholder="Every location"
               disabled={history.loading}
             />
           </div>

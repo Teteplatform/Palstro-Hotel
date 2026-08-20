@@ -130,6 +130,13 @@ interface PopoverProps {
   ariaLabel?: string;
   id?: string;
   className?: string;
+  // 'anchor' forces the panel to the TRIGGER's width. For a typeahead's results
+  // list this is not styling: a listbox that is narrower or wider than the box you
+  // are typing into reads as a different control from the one you are using, and a
+  // list of item names in a 240px menu under a full-width field truncates every
+  // row it exists to let you read. A kebab menu keeps 'auto' — its width is its
+  // own, and matching an icon button would be absurd.
+  width?: 'auto' | 'anchor';
 }
 
 export function Popover({
@@ -142,9 +149,29 @@ export function Popover({
   ariaLabel,
   id,
   className = '',
+  width = 'auto',
 }: PopoverProps) {
   const panelRef = useRef<HTMLDivElement | null>(null);
   const [placement, setPlacement] = useState<Placement | null>(null);
+  // THE FORCED WIDTH IS READ DURING RENDER, NOT SET IN AN EFFECT, and the reason is
+  // ordering rather than tidiness.
+  //
+  // A panel's HEIGHT depends on its WIDTH — narrow it and its rows wrap, so it grows
+  // taller — and placePopover decides whether to flip above the trigger using that
+  // height. Settle the width in an effect and the first pass measures the height of a
+  // panel at its natural width, then the width changes underneath the placement that
+  // was computed from it. On the last row of a table, the case rule 23 says to check,
+  // that is the difference between a list that fits above the trigger and one that
+  // runs off the bottom of the window.
+  //
+  // Reading the anchor's box here means the panel's very first render already has its
+  // final width, so the layout effect below measures a height that is true of the
+  // panel that will actually be shown. It is a layout READ of a node held in state —
+  // no mutation, nothing to tear — and it only happens while the popover is open.
+  const forcedWidth =
+    open && anchor && width === 'anchor'
+      ? anchor.getBoundingClientRect().width
+      : null;
 
   // Measure AFTER the panel is in the DOM but BEFORE the browser paints, so the
   // panel is never seen at the wrong position. It renders invisible until
@@ -164,7 +191,7 @@ export function Popover({
         align,
       ),
     );
-  }, [open, anchor, align]);
+  }, [open, anchor, align, width, forcedWidth]);
 
   const close = useCallback(() => {
     // RETURN FOCUS TO THE TRIGGER — but only when focus is still inside the
@@ -232,6 +259,7 @@ export function Popover({
         position: 'fixed',
         top: placement ? `${placement.top}px` : 0,
         left: placement ? `${placement.left}px` : 0,
+        width: forcedWidth !== null ? `${forcedWidth}px` : undefined,
         // Hidden rather than unmounted for the measuring pass: it has to be laid
         // out to have a size at all.
         visibility: placement ? 'visible' : 'hidden',

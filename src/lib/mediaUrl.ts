@@ -1,10 +1,44 @@
 import { supabase } from './supabase';
-import type { MediaAsset, SizeVariant } from '../types/media';
+import type { MediaAsset, MediaCategory, SizeVariant } from '../types/media';
+import { isTenantLevelCategory } from '../types/media';
 import placeholderImage from '../assets/hero.png';
 
 // The single public bucket (005). Named once here so no caller writes it as a
 // literal.
 export const MEDIA_BUCKET = 'property-media';
+
+// The segment that stands in for a property id on TENANT-LEVEL media (042).
+//
+// WHY A LITERAL IN THE PROPERTY SLOT rather than a four-segment path. Two things
+// depend on the shape and neither is negotiable:
+//   * the storage RLS policies (005) parse the FIRST segment as a tenant id and
+//     pass it to is_tenant_admin(), so the tenant id must stay first;
+//   * variantPath() and bucketPathFamily() find a sibling variant by rewriting the
+//     SECOND-TO-LAST segment, and both give up below five segments — a shorter
+//     path would silently return the same variant for every size, so a list
+//     thumbnail would quietly serve the 1920px file.
+// Keeping five segments with 'tenant' in the property slot satisfies both without
+// a special case anywhere else in this file.
+//
+// It is not a valid uuid, so it can never collide with a real property id.
+export const TENANT_SCOPE_SEGMENT = 'tenant';
+
+// The scope segment for a category: the property id, or the tenant literal for
+// the one tenant-level category. DERIVED from the category, never passed
+// alongside it — the database refuses a mismatch (media_assets_scope_check), and
+// deriving it means no caller can construct one.
+export function scopeSegment(
+  category: MediaCategory,
+  propertyId: string | null,
+): string {
+  if (isTenantLevelCategory(category)) return TENANT_SCOPE_SEGMENT;
+  if (!propertyId) {
+    throw new Error(
+      `${category} media is property-level and needs a property id.`,
+    );
+  }
+  return propertyId;
+}
 
 // Public URL for an exact object path. The bucket is public, so this is a plain,
 // long-lived CDN URL — no signing, no expiry, cacheable by the browser for the
@@ -15,8 +49,9 @@ export function mediaPublicUrl(bucketPath: string): string {
 }
 
 // Rewrite the {size} segment of a path to another variant.
-// Paths follow {tenant_id}/{property_id}/{category}/{size}/{filename} (5
-// segments), and all three variants of one image share EVERY other segment,
+// Paths follow {tenant_id}/{scope}/{category}/{size}/{filename} (5 segments,
+// where scope is a property id or the tenant literal — see TENANT_SCOPE_SEGMENT),
+// and all three variants of one image share EVERY other segment,
 // including the filename — so the sibling variant's exact path is this path with
 // just the size segment (second-to-last) swapped. No second DB lookup needed.
 // A path that does not match the convention is returned unchanged.

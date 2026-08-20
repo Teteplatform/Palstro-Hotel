@@ -1,5 +1,12 @@
 import { supabase } from './supabase';
-import { MEDIA_BUCKET, variantPath, bucketPathFamily } from './mediaUrl';
+import {
+  MEDIA_BUCKET,
+  variantPath,
+  bucketPathFamily,
+  scopeSegment,
+  buildMediaMap,
+  type MediaAssetMap,
+} from './mediaUrl';
 import { SIZE_VARIANTS } from './imageProcessing';
 import { fetchAllPagedRows } from './fetchAllPaged';
 import { boundary } from './rowParse';
@@ -75,7 +82,11 @@ export async function fetchQuotaStatus(
 // ---------------------------------------------------------------------------
 export interface UploadImageArgs {
   tenantId: string;
-  propertyId: string;
+  // NULL for a TENANT-LEVEL category (042: 'items'). It is not optional — the
+  // caller must state it, so "I forgot" and "there genuinely is none" cannot look
+  // the same at the call site. scopeSegment() throws if a property-level category
+  // arrives without one, rather than writing a path with the word "null" in it.
+  propertyId: string | null;
   category: MediaCategory;
   processed: ProcessedImage;
 }
@@ -98,7 +109,10 @@ export async function uploadProcessedImage(
   // crypto.randomUUID keeps the path content-addressed and collision-free, so an
   // upload never overwrites an existing object (upsert:false enforces it too).
   const filename = `${crypto.randomUUID()}.webp`;
-  const base = `${tenantId}/${propertyId}/${category}`;
+  // The scope segment is DERIVED from the category, never taken as a separate
+  // argument (see scopeSegment): an 'items' upload is tenant-level and a hero
+  // upload is property-level, and there is no way to write one as the other.
+  const base = `${tenantId}/${scopeSegment(category, propertyId)}/${category}`;
   const pathFor = (size: string) => `${base}/${size}/${filename}`;
 
   const uploaded: string[] = [];
@@ -119,6 +133,9 @@ export async function uploadProcessedImage(
     }
 
     // 2. Index every uploaded object with a media_assets row (one insert).
+    //    property_id is NULL for a tenant-level category, which is exactly what
+    //    media_assets_scope_check requires — and what keeps these rows out of
+    //    fetchPropertyMedia, the gallery and OrphanCleanup.
     const rows = processed.variants.map((v) => ({
       tenant_id: tenantId,
       property_id: propertyId,
@@ -180,6 +197,41 @@ export async function fetchPropertyMedia(
       .order('created_at', { ascending: true })
       .range(from, to),
   );
+}
+
+// ---------------------------------------------------------------------------
+// Read: tenant-level media by id (042 — the item pictures)
+// ---------------------------------------------------------------------------
+// Resolve a set of media_assets ids to their rows, so a list of items can render
+// thumbnails. Returns a map keyed by id, which is what mediaUrl() consumes.
+//
+// THE `.in()` IS OVER ONE PAGE'S IDS, which is what rule 1a permits (it forbids a
+// bare `.in()` over an unbounded list). It is wrapped in fetchAllPaged regardless,
+// because a caller could hand this a page of 200 and each id resolves to a row:
+// the read must not be able to truncate at a row cap and silently drop the last
+// few thumbnails, which would look like items that have no picture.
+//
+// SOFT-DELETED ROWS ARE EXCLUDED (rule 5). An id pointing at a deleted asset
+// resolves to nothing and the surface shows its placeholder — a dangling
+// reference renders as "no picture", never as a broken image.
+export async function fetchMediaAssetsByIds(
+  tenantId: string,
+  ids: string[],
+): Promise<MediaAssetMap> {
+  const wanted = [...new Set(ids.filter((id) => id))];
+  if (wanted.length === 0) return new Map();
+
+  const rows = await fetchAllPagedRows<MediaAsset>(assets, (from, to) =>
+    supabase
+      .from('media_assets')
+      .select('*')
+      .eq('tenant_id', tenantId) // rule 19: active tenant, explicit
+      .in('id', wanted)
+      .is('deleted_at', null) // rule 5: NULL-safe soft-delete
+      .order('id', { ascending: true }) // unique → stable range pagination
+      .range(from, to),
+  );
+  return buildMediaMap(rows);
 }
 
 // ---------------------------------------------------------------------------

@@ -32,9 +32,9 @@ the right order.
 
 ---
 
-## 2. Engineering non-negotiables (25)
+## 2. Engineering non-negotiables (26)
 
-Every one of these came from a real bug — most from a prior product, the last five
+Every one of these came from a real bug — most from a prior product, the last six
 from this one. They are binding.
 
 ### 1. Every list read is bounded correctly — two cases, split below
@@ -504,6 +504,48 @@ move, and stripping them makes a screen worse:
 - **Rule 16's per-figure note.** Different affordance, different job: the ⓘ is
   about the screen, the small i is about one number. A screen may carry both.
 
+### 26. Pickers are searchable
+**Any selector that can hold more than about twenty options is a typeahead** that
+filters as you type, matched on **name and code**, searched on the **SERVER**
+against the same filters the underlying list uses. Never a client-side filter over
+one loaded page. Keyboard-navigable, and portalled like every other floating layer
+(rule 23).
+
+*Why: a hotel with a thousand items cannot scroll a dropdown — but the obvious fix
+is worse than the problem it replaces. A box that filters the rows the page happens
+to hold answers "no matches" for an item that exists: instantly, confidently, and
+wrongly, because Zobo is item four hundred. Nothing errors, nothing looks broken,
+and the storekeeper concludes the hotel does not stock a thing sitting on the
+shelf. A client-side filter searches what happened to be fetched, not what
+exists.*
+
+```tsx
+// One primitive owns the behaviour; the domain wrapper owns the query.
+<Typeahead value={id} selectedLabel={label} onChange={pick} search={serverSearch} />
+```
+
+The four parts, each load-bearing:
+
+- **The search is a QUERY**, using the same predicates as the list it picks from
+  (`searchInventoryItems`, `searchLocations`), so the picker's answer and the
+  list's answer can never disagree.
+- **The cap is announced.** A picker may return one page — rule 1b's "no way to
+  reach the rest" is satisfied because the way through is to type more — but only
+  if the panel says so out loud: "showing the first 20, keep typing to narrow it".
+  A silent cap is the same lie in a different costume.
+- **A row that exists but cannot be chosen here is SHOWN, with the reason, and
+  disabled** — never filtered out. An absent row is indistinguishable from an item
+  that does not exist; and dropping rows from a server result means a query that
+  matched twenty can display two, which reads as "no matches".
+- **Enter with nothing highlighted chooses nothing.** Grabbing the first result
+  commits a form to a row nobody looked at, which on a stock screen is a movement
+  against the wrong product.
+
+**The threshold is about what a selector CAN hold, not what today's data happens to
+hold.** A property has four locations; a group with an outlet in every lounge
+reaches twenty without anybody revisiting the decision, and the person who would
+have revisited it is reading a diff where a `<select>` looks fine.
+
 ---
 
 ## 3. Multi-tenancy model
@@ -712,7 +754,7 @@ first.
 
 ## 7. Before-you-write-code checklist (run every session)
 
-1. **Read this file.** Confirm the 23 non-negotiables are fresh in mind.
+1. **Read this file.** Confirm the 26 non-negotiables are fresh in mind.
    **Starting a new module?** Read [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
    first — the system map, shared engines, and dependency order that decide where
    the module fits and what must exist before it.
@@ -756,6 +798,10 @@ first.
 16. **Writing an action form?** Split subject / effect / about (rule 25). The
     effect names this record's own figures and stays on screen; the general rule
     goes behind the ⓘ.
+17. **Adding a selector?** If it can hold more than about twenty options it is a
+    `Typeahead` searched on the SERVER, not a `<select>` and never a client-side
+    filter over a loaded page (rule 26). Judge it by what the selector CAN hold,
+    not by what today's data does.
 
 ---
 

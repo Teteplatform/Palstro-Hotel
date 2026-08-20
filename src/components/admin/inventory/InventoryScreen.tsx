@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Select } from '../../ui/form';
-import type { SelectOption } from '../../ui/form';
+import { LocationPicker } from './LocationPicker';
 import { ScreenHeader } from '../../ui/ScreenHeader';
 import { CloseIcon } from '../../ui/icons';
 import { INVENTORY_ABOUT, INVENTORY_ABOUT_TITLE } from '../../../lib/stockLabels';
@@ -138,13 +137,9 @@ export function InventoryScreen({
     setCatalogueNonce((n) => n + 1);
   }, []);
 
-  const locationOptions: SelectOption[] = [
-    { value: '', label: 'All locations' },
-    ...locations.rows.map((l) => ({
-      value: l.id,
-      label: l.is_active ? l.name : `${l.name} (closed)`,
-    })),
-  ];
+  // The row behind the current scope, for the picker's label. The screen already
+  // holds the property's locations; only the SEARCH goes to the server (rule 26).
+  const scopeLocation = locations.rows.find((l) => l.id === locationId) ?? null;
 
   const scopedLocationId = locationId || null;
   const tab = INVENTORY_TABS.find((t) => t.key === activeTab) ?? INVENTORY_TABS[0];
@@ -197,11 +192,19 @@ export function InventoryScreen({
           tab row. */}
       <div className="mb-4 flex flex-wrap items-end gap-3">
         <div className="min-w-[12rem] flex-1 sm:max-w-xs">
-          <Select
+          {/* Searchable, server-side (rule 26). Clearing it is "all locations" —
+              the roll-up across every location in this hotel, which is what the
+              old empty option spelled out. Closed locations are offered, because
+              stock in a bar that has since been shut is still stock. */}
+          <LocationPicker
+            tenantId={tenantId}
+            propertyId={propertyId}
             label="View stock at"
             value={locationId}
             onChange={setLocationId}
-            options={locationOptions}
+            selectedLocation={scopeLocation}
+            clearable
+            placeholder="All locations"
             disabled={locations.loading}
           />
         </div>

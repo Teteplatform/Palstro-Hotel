@@ -3,6 +3,7 @@ import { Pagination } from '../../ui/Pagination';
 import { ScreenHeader } from '../../ui/ScreenHeader';
 import { CalculationNote } from '../../ui/CalculationNote';
 import { Select } from '../../ui/form';
+import { LocationPicker } from './LocationPicker';
 import type { SelectOption } from '../../ui/form';
 import { useToast } from '../../ui/Toast';
 import { DownloadIcon, SearchIcon } from '../../ui/icons';
@@ -95,13 +96,10 @@ export function NegativeStockTab({
 
   const filtered = hasNegativeFilters(list.filters);
 
-  const locationOptions: SelectOption[] = [
-    { value: '', label: 'Every location' },
-    ...locations.map((l) => ({
-      value: l.id,
-      label: l.is_active ? l.name : `${l.name} (switched off)`,
-    })),
-  ];
+  // The row behind the location filter, for its label. The screen already holds the
+  // property's locations; only the SEARCH goes to the server (rule 26).
+  const filterLocation =
+    locations.find((l) => l.id === list.filters.locationId) ?? null;
 
   const categoryOptions: SelectOption[] = [
     { value: '', label: 'All categories' },
@@ -240,11 +238,18 @@ export function NegativeStockTab({
       </div>
 
       <div className="grid gap-3 rounded-2xl border border-sand-border bg-white/60 p-4 sm:grid-cols-3">
-        <Select
-          label="Location"
+        {/* Searchable, server-side (rule 26). A FILTER over positions that are
+            already wrong, so closed locations are offered too — the whole point of
+            this screen is the negatives sitting behind something switched off, and
+            a picker that hid them would hide the rows it exists to show. */}
+        <LocationPicker
+          tenantId={tenantId}
+          propertyId={propertyId}
           value={list.filters.locationId}
           onChange={(v) => list.setFilters({ ...list.filters, locationId: v })}
-          options={locationOptions}
+          selectedLocation={filterLocation}
+          clearable
+          placeholder="Every location"
         />
         <Select
           label="Category"

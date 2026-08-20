@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { DateField, Select, TextField } from '../../ui/form';
 import type { SelectOption } from '../../ui/form';
+import { LocationPicker } from './LocationPicker';
 import { useToast } from '../../ui/Toast';
 import { DownloadIcon } from '../../ui/icons';
 import { useFocusTrap } from '../../../hooks/useFocusTrap';
@@ -134,11 +135,6 @@ export function StockImportScreen({
   const defaultLocation = pickDefaultLocation(locations.rows);
   const location =
     locations.rows.find((l) => l.id === locationChoice) ?? defaultLocation;
-
-  const locationOptions: SelectOption[] = locations.rows.map((l) => ({
-    value: l.id,
-    label: l.is_active ? l.name : `${l.name} (closed)`,
-  }));
 
   // Re-validated on every change to the file, the decisions, the location or
   // the catalogue — validation is a pure function, so this is the whole state
@@ -358,11 +354,18 @@ export function StockImportScreen({
       {/* Where, when, and the sheet — one row, no step numbers. */}
       <section className="mb-4 rounded-2xl border border-sand-border bg-white/60 p-4">
         <div className="grid gap-4 sm:grid-cols-2">
-          <Select
-            label="Location"
+          {/* Searchable, server-side (rule 26). This posts opening balances, so
+              only locations in use are offered. The hint stays because it changes
+              what somebody does: receiving into a kitchen rather than a store is
+              legal and is what the "received outside the store" report exists to
+              surface (§9), so it is worth noticing before the upload, not after. */}
+          <LocationPicker
+            tenantId={tenantId}
+            propertyId={propertyId}
             value={location?.id ?? ''}
             onChange={chooseLocation}
-            options={locationOptions}
+            selectedLocation={location}
+            activeOnly
             disabled={locations.loading || committing}
             helpText={
               location && location.kind !== 'store'

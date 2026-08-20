@@ -91,6 +91,11 @@ const item: InventoryItem = {
   purchase_cost: null,
   min_stock_level: null,
   max_stock_level: null,
+  // 042. An Ingredient, so it has NO selling price — the database refuses one
+  // (inventory_items_raw_has_no_price_check), and a fixture that carried one would
+  // be a row the schema cannot hold.
+  default_selling_price: null,
+  image_asset_id: null,
   is_active: true,
   display_order: 1,
   deleted_at: null,

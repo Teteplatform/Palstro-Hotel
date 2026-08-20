@@ -848,12 +848,42 @@ Everything you hold, use or sell, defined **once for the whole company** — the
 same *Rice* in every hotel you run — with this hotel's stock beside it.
 
 The card above the table gives **total items**, **items with stock**, **total
-units** and the **stock value**, each across everything matching your filters and
-every page, never just what you can see. The small **i** beside each one says
-exactly what it counts. (Total units adds kilograms to bottles, so it is a rough
-sense of scale; the value is the figure that really adds up.)
+units**, and then three money figures: **value at cost**, **retail value** and
+**margin**. Every one covers everything matching your filters, across every page,
+never just what you can see. The small **i** beside each says exactly what it
+counts. (Total units adds kilograms to bottles, so it is a rough sense of scale;
+the money figures are the ones that really add up.)
 
-Search by name or code, and filter by category, type or stock. Narrowing by
+#### Value at cost, retail value and margin
+
+These three are worth reading once properly, because the first two are easy to
+mistake for each other and the third is not the difference between them.
+
+| Figure | What it is |
+| --- | --- |
+| **Value at cost** | What your stock is worth — what you actually paid for it, delivery by delivery. This is the figure the books use. |
+| **Retail value** | What that stock would bring in at your own selling prices, **before tax**. |
+| **Margin** | Retail minus what **those same items** cost you. |
+
+**Margin is deliberately not the retail tile minus the cost tile.** Your
+ingredients have no selling price — rice is not sold by the kilo over a counter —
+so they are counted in the cost figure and absent from the retail one. Subtracting
+one tile from the other would treat every sack of rice in your store as a loss and
+show you a large negative number. Margin compares only the items that have a
+price, on both sides of the sum.
+
+**Items with no selling price are left out of retail entirely, and the card says
+how many.** That count is a button: press it and the list narrows to exactly those
+items so you can price them. An item priced at nothing would be an item you give
+away, so a blank price is left blank rather than counted as zero — and a total that
+quietly ignored half your shelf would be worse than no total at all.
+
+Every figure is **before tax**, because a selling price here is a pre-tax price:
+VAT and any service charge are added when the sale reaches a bill, not stored on
+the item.
+
+Search by name or code, and filter by category, type, stock, or **selling price**
+(*sold, but no price set* — the same list the card's count leads to). Narrowing by
 **stock** — *at or below reorder level*, *less than nothing* — lists one line per
 location, because that is a question about a shelf rather than about an item.
 
@@ -887,6 +917,9 @@ Each item has:
   uncategorised.
 - **A reorder level** — the amount below which you want warning. Optional. Items
   at or below it are flagged on the row and counted on the card above.
+- **A selling price**, for anything that is sold. See below — it is the one field
+  where leaving it blank means something.
+- **A picture**, one per item, shown as a thumbnail on the list row. See below.
 - **Perishable** and **In use** switches. *In use* off keeps an item on file but
   out of new entries, and out of this list unless you ask for it in the filters.
 
@@ -907,11 +940,48 @@ purchasing screens that come next:
 | **Purchase cost** | What one base unit normally costs to buy. Informational: your stock is still valued at what you actually paid, delivery by delivery. |
 | **Min stock** / **Max stock** | The ordering range — the floor you want to keep, and the ceiling worth holding. Read by purchasing when it arrives. **The low-stock warning uses Reorder level**, not these. |
 
-Two fields you may expect and will not find. **Supplier** arrives with
-purchasing, where it is a proper record — a hotel buys rice from three people at
-three prices, and one box on the item could only ever hold one of them.
-**Selling price** arrives with the menu, because the same bottle sells at one
-price at the bar and another in the restaurant.
+One field you may expect and will not find: **Supplier** arrives with purchasing,
+where it is a proper record — a hotel buys rice from three people at three prices,
+and one box on the item could only ever hold one of them.
+
+#### The selling price
+
+**What one base unit sells for, before tax.** The box appears only for items that
+are *Sold as-is* or *Both*, because an *Ingredient* is never sold on its own — and
+if you change an item's type to *Ingredient*, its price goes with it.
+
+Three things about it:
+
+- **It is required for anything sold.** Save a *Sold as-is* or *Both* item without
+  one and the system refuses, and tells you what to enter — or suggests making it
+  an *Ingredient* instead, if that is what you meant.
+- **Blank means not sold. It does not mean free.** A price of zero is refused
+  outright, so the two can never be confused. Something you genuinely give away is
+  a complimentary line on the guest's bill, not an item priced at nothing.
+- **An outlet can charge something different**, and when the menu arrives it will.
+  This is the price used when nothing else says otherwise, so you maintain one
+  number instead of one per outlet.
+
+If you already have items marked as sold with no price — perfectly possible, they
+were created before there was a price to enter — the filter **Selling price → sold,
+but no price set** lists exactly those, and the count on the summary card leads to
+the same place. Nothing forces you to fix them all at once, and editing one of them
+for any other reason still works.
+
+#### The picture
+
+**One picture per item**, uploaded from the item and shown as a small thumbnail on
+its row. It belongs to the item across the whole company, like the item itself —
+one photograph of a bottle of oil, not one per hotel.
+
+Pictures count towards the same storage allowance as your hotel photographs, and
+the uploader shows how much of it you have used before it writes anything. They are
+resized in your browser before they are sent, so an 8 MB phone photo arrives as
+about 200 KB and the list rows load a smaller copy again. **Removing or replacing a
+picture frees its space straight away.**
+
+The picture is added on an item that already exists: create the item, then open it
+again to give it one.
 
 **Removing an item** takes it out of the catalogue but keeps its history, so it
 can come back later. An item still holding stock anywhere cannot be removed at
@@ -983,6 +1053,31 @@ work.
 Uploading the same file twice is safe: names that already exist are recognised
 and left alone, never created a second time.
 
+### Choosing an item or a location
+
+Everywhere you pick an item or a location — recording an adjustment, starting a
+count, filtering the movement list — the box **searches as you type** rather than
+listing everything.
+
+- **Type part of the name, or the code.** Either finds it. Codes are there so
+  somebody working from bin cards does not have to remember how a name was spelled.
+- **The search covers your whole catalogue**, not the part of it on screen. An item
+  that would be on page seventeen of the list is found by typing four letters.
+- **Arrow keys** move down the results, **Enter** takes the one highlighted,
+  **Escape** closes without choosing. Nothing is chosen until you highlight it, so
+  pressing Enter early cannot pick something for you.
+- **"Showing the first 20 — keep typing to narrow it"** means exactly that: there
+  are more matches than fit, and typing more is how you reach them.
+- **A greyed-out row is real but not available here**, with the reason beside it.
+  On an opening balance, an item that already has one in that location reads *already
+  has an opening balance here — correct it with an adjustment*. It is shown rather
+  than hidden so you can see it exists and know what to do instead.
+
+Location boxes work the same way. On a form that records something, only locations
+in use are offered; on a filter over history, closed locations appear too and are
+marked, because stock that was counted in a bar you have since shut is still stock
+you may need to look at.
+
 ### Stock locations
 
 **Where:** *Inventory* → **Manage locations**.
@@ -1029,7 +1124,9 @@ one with stock on hand anywhere cannot be removed from the catalogue.)
 > name. Defining the *items* and the *locations* stays with the owner.
 
 Each row shows the quantity **in the item's own unit**, its **average cost** per
-unit, and the **value** of what is there.
+unit, its **selling price** where it has one, and the **value** of what is there.
+Cost and price sit next to each other on purpose: an item priced below what it
+costs you is visible by looking down two columns rather than by doing arithmetic.
 
 **Nothing here is stored.** Every quantity is added up from the movements
 recorded against that item in that location, every time you open the screen. That
@@ -1059,6 +1156,12 @@ store is worth. Only buying more at a different price moves it.
 never worked out again afterwards. That is what lets a food-cost figure from last
 March still be the figure that was true last March, rather than something
 recalculated from today's prices.
+
+**Purchase cost and average cost are not the same thing, and only one of them
+values your stock.** *Purchase cost* on the item is a note about what a thing
+normally costs to buy; the average above is what you actually paid, delivery by
+delivery, and it is the only figure any valuation uses. Nothing on any screen or
+report values stock at the purchase cost.
 
 #### When stock says less than nothing
 

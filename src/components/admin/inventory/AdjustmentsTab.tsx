@@ -1,6 +1,4 @@
 import { useState } from 'react';
-import { Select } from '../../ui/form';
-import type { SelectOption } from '../../ui/form';
 import { ScreenHeader } from '../../ui/ScreenHeader';
 import { PlusIcon } from '../../ui/icons';
 import {
@@ -9,6 +7,7 @@ import {
 } from '../../../lib/stockLabels';
 import type { InventoryItem, StockLocation } from '../../../types/inventory';
 import { MovementsList } from './MovementsList';
+import { LocationPicker } from './LocationPicker';
 import { StockEntryForm } from './StockEntryForm';
 
 // THE ADJUSTMENTS TAB — every correction ever posted, and the form that posts
@@ -64,11 +63,6 @@ export function AdjustmentsTab({
 
   const formLocation = locations.find((l) => l.id === formLocationId) ?? null;
 
-  const locationOptions: SelectOption[] = locations.map((l) => ({
-    value: l.id,
-    label: l.is_active ? l.name : `${l.name} (closed)`,
-  }));
-
   return (
     <div className="space-y-4">
       <div className="rounded-2xl border border-sand-border bg-white/60 p-4">
@@ -101,12 +95,18 @@ export function AdjustmentsTab({
         {formOpen ? (
           <div className="mt-4 space-y-4">
             <div className="sm:max-w-xs">
-              <Select
+              {/* Searchable, server-side (rule 26) — see LocationPicker on why a
+                  four-row list gets a typeahead anyway. */}
+              <LocationPicker
+                tenantId={tenantId}
+                propertyId={propertyId}
                 label="Which location"
-                required
                 value={formLocationId}
                 onChange={setFormLocationId}
-                options={locationOptions}
+                selectedLocation={formLocation}
+                // A correction writes a movement, so only a location in use.
+                activeOnly
+                required
               />
             </div>
             {formLocation ? (

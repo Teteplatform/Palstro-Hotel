@@ -13,6 +13,7 @@ import {
 } from '../../../lib/inventory';
 import { ITEM_TYPES, itemTypeLabel } from '../../../lib/inventoryLabels';
 import {
+  EMPTY_PRODUCT_FILTERS,
   fetchProductsForExport,
   hasProductFilters,
   type ProductRow,
@@ -21,6 +22,7 @@ import {
 import {
   PRODUCTS_ABOUT,
   PRODUCTS_ABOUT_TITLE,
+  UNPRICED_SELLABLE_FILTER_LABEL,
 } from '../../../lib/stockLabels';
 import type {
   InventoryCategory,
@@ -258,6 +260,13 @@ export function ProductsTab({
         scopeName={scopeLocation?.name ?? null}
         onShowLow={() => list.setFilters({ ...list.filters, state: 'low' })}
         onShowNegative={() => list.setFilters({ ...list.filters, state: 'negative' })}
+        // The excluded count leads to the CATALOGUE view of the gap, with the
+        // stock-state filter cleared: the count is about items holding stock, but
+        // the job it starts is "price everything that is sold", and an unpriced
+        // item with an empty shelf needs a price just as much.
+        onShowUnpriced={() =>
+          list.setFilters({ ...list.filters, state: '', unpricedSellable: true })
+        }
       />
 
       {itemsError ? (
@@ -370,19 +379,29 @@ export function ProductsTab({
               { value: 'yes', label: 'Shown' },
             ]}
           />
+          {/* THE GAP THE PRICE RULE CANNOT CLOSE BY ITSELF (042 §1.2), as a
+              first-class filter rather than something to spot by eye. The database
+              stops the gap growing; this is what makes the gap that already exists
+              findable, which is the difference between a rule that is achievable
+              and one that is merely stated. */}
+          <Select
+            label="Selling price"
+            value={list.filters.unpricedSellable ? 'missing' : ''}
+            onChange={(v) =>
+              list.setFilters({ ...list.filters, unpricedSellable: v === 'missing' })
+            }
+            options={[
+              { value: '', label: 'Any' },
+              { value: 'missing', label: UNPRICED_SELLABLE_FILTER_LABEL },
+            ]}
+          />
           {filtered ? (
             <div className="sm:col-span-2 lg:col-span-4">
               <button
                 type="button"
                 onClick={() => {
                   setSearchDraft('');
-                  list.setFilters({
-                    search: '',
-                    categoryId: '',
-                    itemType: '',
-                    state: '',
-                    includeInactive: false,
-                  });
+                  list.setFilters(EMPTY_PRODUCT_FILTERS);
                 }}
                 className="rounded-lg px-3 py-2 text-sm font-semibold text-charcoal-muted transition-colors hover:text-charcoal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-cream"
               >

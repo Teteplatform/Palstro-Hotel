@@ -15,7 +15,13 @@ interface ImageUploadProps {
   // No hardcoded tenant/property ids (rule 17): the host screen passes the active
   // tenant (useTenantContext) and the property being edited.
   tenantId: string;
-  propertyId: string;
+  // NULL for a TENANT-LEVEL category — 042's item picture, where the catalogue is
+  // tenant-wide and there is no property to file the image under. Required rather
+  // than optional, so "there genuinely is none" is a thing the caller states and
+  // not something it can omit by accident; uploadProcessedImage throws if a
+  // property-level category arrives without one, rather than writing a path with
+  // the word "null" in it.
+  propertyId: string | null;
   category: MediaCategory;
   // Called after each image's variants + rows are written, so the parent can
   // refresh its gallery. Receives the three inserted rows.

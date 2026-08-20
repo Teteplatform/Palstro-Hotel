@@ -83,7 +83,8 @@ export function useInventoryProducts(
 
   // Listed individually rather than as the object, so a caller re-creating an
   // equal filter object does not refetch.
-  const { search, categoryId, itemType, state, includeInactive } = filters;
+  const { search, categoryId, itemType, state, includeInactive, unpricedSellable } =
+    filters;
 
   useEffect(() => {
     let cancelled = false;
@@ -106,6 +107,7 @@ export function useInventoryProducts(
         itemType,
         state,
         includeInactive,
+        unpricedSellable,
       };
 
       try {
@@ -154,6 +156,7 @@ export function useInventoryProducts(
     itemType,
     state,
     includeInactive,
+    unpricedSellable,
     nonce,
   ]);
 

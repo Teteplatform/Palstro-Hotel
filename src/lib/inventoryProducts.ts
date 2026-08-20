@@ -1,5 +1,7 @@
 import { supabase } from './supabase';
 import { fetchAllPagedRows } from './fetchAllPaged';
+import { fetchInventoryItemsByIds } from './inventory';
+import { fetchItemImages } from './itemImages';
 import { boundary } from './rowParse';
 import type { InventoryItem, ItemType } from '../types/inventory';
 
@@ -54,6 +56,22 @@ export interface ProductFilters {
   // still on file and still hold their history, but they are not what somebody
   // scanning a stock list is looking for.
   includeInactive: boolean;
+
+  // 042. Narrow to SELLABLE ITEMS WITH NO PRICE — the gap the price rule's
+  // unenforceable half leaves behind.
+  //
+  // WHY THIS IS A FILTER AND NOT A CONSTRAINT. A Sold as-is or Both item must have
+  // a price, but that cannot be a CHECK: `add constraint` validates existing rows,
+  // and this property already has sellable items priced at nothing. The only ways
+  // past that are to invent prices or to relabel real merchandise as ingredients,
+  // and both are lies in the data. So the database's trigger stops the gap
+  // GROWING, and this filter makes the gap that already exists FINDABLE — which is
+  // the difference between a rule that is achievable and one that is aspirational.
+  //
+  // Applied to the catalogue, not to positions, deliberately: an unpriced sellable
+  // item with nothing on hand is exactly as unpriced as one with a full shelf, and
+  // a hotel closing this gap wants every one of them, not just the stocked ones.
+  unpricedSellable: boolean;
 }
 
 export const EMPTY_PRODUCT_FILTERS: ProductFilters = {
@@ -62,6 +80,7 @@ export const EMPTY_PRODUCT_FILTERS: ProductFilters = {
   itemType: '',
   state: '',
   includeInactive: false,
+  unpricedSellable: false,
 };
 
 export function hasProductFilters(f: ProductFilters): boolean {
@@ -70,7 +89,8 @@ export function hasProductFilters(f: ProductFilters): boolean {
     Boolean(f.categoryId) ||
     Boolean(f.itemType) ||
     Boolean(f.state) ||
-    f.includeInactive
+    f.includeInactive ||
+    f.unpricedSellable
   );
 }
 
@@ -95,6 +115,11 @@ function applyCatalogueFilters(query: any, tenantId: string, filters: ProductFil
   if (filters.categoryId) q = q.eq('category_id', filters.categoryId);
   if (filters.itemType) q = q.eq('item_type', filters.itemType);
   if (!filters.includeInactive) q = q.eq('is_active', true);
+  // 042. Both halves of "sellable with no price", server-side, so the page, the
+  // count and the export all describe the same set (rules 1b/20).
+  if (filters.unpricedSellable) {
+    q = q.in('item_type', ['finished', 'both']).is('default_selling_price', null);
+  }
 
   return q;
 }
@@ -126,6 +151,12 @@ function applyPositionFilters(
   if (filters.categoryId) q = q.eq('category_id', filters.categoryId);
   if (filters.itemType) q = q.eq('item_type', filters.itemType);
   if (!filters.includeInactive) q = q.eq('item_is_active', true);
+  // 042. The view carries the price (§3.1) precisely so this is expressible here
+  // and not only against the catalogue — otherwise combining "sellable, no price"
+  // with a stock-state filter would page one set and count another.
+  if (filters.unpricedSellable) {
+    q = q.in('item_type', ['finished', 'both']).is('default_selling_price', null);
+  }
 
   switch (filters.state) {
     case 'in_stock':
@@ -165,6 +196,10 @@ export interface ProductLocationStock {
   quantity: number;
   averageCost: number;
   value: number;
+  // 042. What this position would bring in at the item's price. NULL — never 0 —
+  // when the item has no price, because "not for sale" and "worth nothing" are
+  // different facts and only the first one is true.
+  retailValue: number | null;
   isBelowReorder: boolean;
 }
 
@@ -179,6 +214,15 @@ export interface ProductRow {
   reorderLevel: number | null;
   isActive: boolean;
 
+  // 042. What one base unit sells for, before tax, or NULL for NOT SOLD. Shown as
+  // its own column, so an unpriced sellable line is visible on the row rather than
+  // only findable through a filter.
+  sellingPrice: number | null;
+  // 042. The bucket_path of the item's picture, or NULL. A PATH and not a URL:
+  // mediaVariantUrl derives the size the surface needs from it, so a list row
+  // pulls the 400px thumb and never the 1920px full.
+  imagePath: string | null;
+
   // The position AT THE CURRENT SCOPE — the selected location, or the property
   // roll-up when "all locations" is active. NULL (not zero) when the item has
   // never moved at that scope: "we have no figure" is not "there is none", and
@@ -186,6 +230,10 @@ export interface ProductRow {
   quantity: number | null;
   averageCost: number | null;
   value: number | null;
+  // 042. Retail at the current scope. NULL when there is no position OR no price —
+  // the row shows a dash either way, and the summary card is where the two are
+  // told apart (it counts the unpriced ones).
+  retailValue: number | null;
   isBelowReorder: boolean;
 
   // Every location holding this item, for the "Main Store: 62 · Kitchen: 1"
@@ -206,8 +254,9 @@ export interface ProductsPage {
 
 // The catalogue columns the list needs. Selected explicitly rather than '*' so
 // adding a column to the table does not silently widen every page fetch.
+// prettier-ignore
 const ITEM_COLUMNS =
-  'id,name,code,item_type,base_unit,category_id,reorder_level,is_active';
+  'id,name,code,item_type,base_unit,category_id,reorder_level,is_active,default_selling_price,image_asset_id';
 
 type ItemRow = Pick<
   InventoryItem,
@@ -219,6 +268,8 @@ type ItemRow = Pick<
   | 'category_id'
   | 'reorder_level'
   | 'is_active'
+  | 'default_selling_price'
+  | 'image_asset_id'
 >;
 
 interface PositionRow {
@@ -236,13 +287,18 @@ interface PositionRow {
   category_id: string | null;
   category_name: string | null;
   item_is_active: boolean;
+  // 042 (view §3.1). NULL price means NOT SOLD; NULL retail follows from it, and
+  // the view returns NULL rather than 0 precisely so sum() skips it and count()
+  // can report how many were skipped.
+  default_selling_price: number | null;
+  retail_value: number | null;
 }
 
 // ONE STRING LITERAL, not a concatenation: supabase-js parses the column list at
 // the TYPE level, and a value it only knows as `string` degrades the row type to
 // its error placeholder. Kept on one line for that reason, not for style.
 // prettier-ignore
-const POSITION_COLUMNS = 'inventory_item_id,location_id,location_name,quantity_on_hand,moving_average_cost,stock_value,is_below_reorder,item_name,item_code,item_type,base_unit,category_id,category_name,item_is_active';
+const POSITION_COLUMNS = 'inventory_item_id,location_id,location_name,quantity_on_hand,moving_average_cost,stock_value,is_below_reorder,item_name,item_code,item_type,base_unit,category_id,category_name,item_is_active,default_selling_price,retail_value';
 
 interface RollupRow {
   inventory_item_id: string;
@@ -251,6 +307,8 @@ interface RollupRow {
   // NULL when nothing is on hand: with no quantity there is no meaningful unit
   // cost, and the view returns NULL rather than dividing by zero (036 §3.3).
   moving_average_cost: number | null;
+  // 042 (view §3.2). Retail summed across every location holding the item.
+  retail_value: number | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -262,17 +320,17 @@ interface RollupRow {
 
 const positionRows = boundary<PositionRow>('stock_on_hand_items (product list)')(
   ['quantity_on_hand', 'moving_average_cost', 'stock_value'] as const,
-  [] as const,
+  ['default_selling_price', 'retail_value'] as const,
 );
 
 const rollupRows = boundary<RollupRow>('stock_on_hand_by_item')(
   ['quantity_on_hand', 'stock_value'] as const,
-  ['moving_average_cost'] as const,
+  ['moving_average_cost', 'retail_value'] as const,
 );
 
 const itemRows = boundary<ItemRow>('inventory_items (product list)')(
   [] as const,
-  ['reorder_level'] as const,
+  ['reorder_level', 'default_selling_price'] as const,
 );
 
 // ---------------------------------------------------------------------------
@@ -322,8 +380,13 @@ export async function fetchProductsPage(
 
     if (error) throw error;
     const positions = positionRows.rows(data);
+    const rows = positions.map(rowFromPosition);
     return {
-      rows: positions.map(rowFromPosition),
+      rows: await attachImages(
+        tenantId,
+        rows,
+        await imageIdsFor(tenantId, rows, null),
+      ),
       count: count ?? 0,
       byPosition: true,
     };
@@ -342,7 +405,15 @@ export async function fetchProductsPage(
   const items = itemRows.rows(data);
 
   const rows = await attachStock(tenantId, propertyId, locationId, items);
-  return { rows, count: count ?? 0, byPosition: false };
+  return {
+    rows: await attachImages(
+      tenantId,
+      rows,
+      await imageIdsFor(tenantId, rows, items),
+    ),
+    count: count ?? 0,
+    byPosition: false,
+  };
 }
 
 // Attach each item's stock to a page of catalogue rows.
@@ -387,7 +458,8 @@ async function attachStock(
     : fetchAllPagedRows<RollupRow>(rollupRows, (from, to) =>
         supabase
           .from('stock_on_hand_by_item')
-          .select('inventory_item_id,quantity_on_hand,stock_value,moving_average_cost')
+          // prettier-ignore
+          .select('inventory_item_id,quantity_on_hand,stock_value,moving_average_cost,retail_value')
           .eq('tenant_id', tenantId) // rule 19
           .eq('property_id', propertyId) // rule 19
           .in('inventory_item_id', ids)
@@ -430,6 +502,9 @@ async function attachStock(
       categoryName: held[0]?.category_name ?? null,
       reorderLevel: item.reorder_level,
       isActive: item.is_active,
+      sellingPrice: item.default_selling_price,
+      // Filled in by attachImages once the page's asset ids are resolved.
+      imagePath: null,
       quantity: locationId
         ? (scoped?.quantity_on_hand ?? null)
         : (rollup?.quantity_on_hand ?? null),
@@ -437,6 +512,14 @@ async function attachStock(
         ? (scoped?.moving_average_cost ?? null)
         : (rollup?.moving_average_cost ?? null),
       value: locationId ? (scoped?.stock_value ?? null) : (rollup?.stock_value ?? null),
+      // Retail comes from the SAME source as value at the same scope — the
+      // position's own figure at one location, the view's roll-up across all of
+      // them — never a client-side multiplication of price by quantity, which
+      // would be a second implementation of the arithmetic in §3.1 that could
+      // disagree with the total on the card above.
+      retailValue: locationId
+        ? (scoped?.retail_value ?? null)
+        : (rollup?.retail_value ?? null),
       // At a single location the view's own flag; across the property, low in
       // ANY location is low — a kitchen about to run out is not reassured by a
       // full main store, because the two are separate physical positions.
@@ -453,6 +536,7 @@ function toLocationStock(p: PositionRow): ProductLocationStock {
     quantity: p.quantity_on_hand,
     averageCost: p.moving_average_cost,
     value: p.stock_value,
+    retailValue: p.retail_value,
     isBelowReorder: p.is_below_reorder,
   };
 }
@@ -474,12 +558,82 @@ function rowFromPosition(p: PositionRow): ProductRow {
     // worse than an honest dash.
     reorderLevel: null,
     isActive: p.item_is_active,
+    sellingPrice: p.default_selling_price,
+    // The positions view does not carry the picture: a thumbnail is not something
+    // a stock query should join for, and this mode is reached by filtering on
+    // stock state. Filled in by attachImages from the item ids, the same as the
+    // catalogue mode, so both modes show the same row.
+    imagePath: null,
     quantity: p.quantity_on_hand,
     averageCost: p.moving_average_cost,
     value: p.stock_value,
+    retailValue: p.retail_value,
     isBelowReorder: p.is_below_reorder,
     locations: [location],
   };
+}
+
+// ---------------------------------------------------------------------------
+// The pictures (042 §3)
+// ---------------------------------------------------------------------------
+// Resolve the page's items to their picture paths in ONE read, after the rows are
+// built.
+//
+// WHY NOT A POSTGREST EMBED on inventory_items → media_assets: an embed would
+// nest a row inside a row, and the boundary (rule 24) parses a FLAT projection —
+// a nested object would pass through unparsed, which is the exact hole rule 24
+// exists to close. A second small read keeps every numeric crossing the boundary
+// it is declared at.
+//
+// A ROW WITH NO PICTURE COSTS NOTHING: the ids are collected first and the read is
+// skipped entirely when there are none, so a hotel that has uploaded no pictures
+// pays for no extra round trip.
+async function attachImages(
+  tenantId: string,
+  rows: ProductRow[],
+  imageIdByItem: Map<string, string>,
+): Promise<ProductRow[]> {
+  if (imageIdByItem.size === 0) return rows;
+
+  const assets = await fetchItemImages(tenantId, [...imageIdByItem.values()]);
+  if (assets.size === 0) return rows;
+
+  return rows.map((row) => {
+    const id = imageIdByItem.get(row.itemId);
+    // An id whose asset is missing (soft-deleted since it was referenced) leaves
+    // imagePath null and the row shows its placeholder — a dangling reference is
+    // never a broken image.
+    const path = id ? (assets.get(id)?.bucket_path ?? null) : null;
+    return path === null ? row : { ...row, imagePath: path };
+  });
+}
+
+// The item ids behind a page of rows, mapped to their picture's asset id. Read
+// from the CATALOGUE rows where the list has them, and fetched for the positions
+// mode where it does not.
+async function imageIdsFor(
+  tenantId: string,
+  rows: ProductRow[],
+  known: ItemRow[] | null,
+): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
+
+  if (known) {
+    for (const item of known) {
+      if (item.image_asset_id) map.set(item.id, item.image_asset_id);
+    }
+    return map;
+  }
+
+  // Positions mode: the view carries no image column, so the ids come from the
+  // catalogue. Bounded by the page (rule 1a) and paged by the helper.
+  const ids = [...new Set(rows.map((r) => r.itemId))];
+  if (ids.length === 0) return map;
+  const items = await fetchInventoryItemsByIds(tenantId, ids);
+  for (const item of items) {
+    if (item.image_asset_id) map.set(item.id, item.image_asset_id);
+  }
+  return map;
 }
 
 // ---------------------------------------------------------------------------
@@ -495,9 +649,53 @@ export interface ProductsSummary {
   // kilograms to bottles, so it is a rough scale figure and says so.
   totalUnits: number;
   // THE meaningful total: money adds up across items where quantity does not.
+  // VALUE AT COST — what the books say this stock is worth, across EVERY position
+  // in scope whether or not the item has a price.
   totalValue: number;
   belowReorderCount: number;
   negativeCount: number;
+
+  // --- 042: retail, and the three figures that make it honest --------------
+  //
+  // RETAIL VALUE: what the shelf would bring in, at the items' own pre-tax prices,
+  // over the positions that HAVE a price.
+  retailValue: number;
+
+  // THE COST OF EXACTLY THOSE SAME POSITIONS, and this is the field most likely to
+  // be mistaken for a duplicate of totalValue. It is not, and the difference is the
+  // whole reason margin can be trusted:
+  //
+  //   totalValue covers every position on the shelf — priced merchandise AND
+  //   unpriced ingredients — because that is what the stock is WORTH.
+  //   retailValue covers only the priced ones, because the unpriced ones have no
+  //   price to sell at.
+  //
+  // Subtracting the first from the second would treat every sack of rice in the
+  // store as pure loss and put a large negative number on an owner's dashboard —
+  // arithmetically explicable, completely false, and nothing would error. So margin
+  // is retailValue − retailCostValue: the same positions on both sides.
+  retailCostValue: number;
+
+  // How many ITEMS in scope hold stock but have no price, and are therefore absent
+  // from retailValue. Reported because a total that silently ignores half the shelf
+  // is worse than no total: this is the size of the hole in the figure beside it.
+  retailExcludedCount: number;
+}
+
+// Retail minus the cost OF THE SAME POSITIONS. Never minus totalValue — see
+// retailCostValue. Derived here rather than stored on the summary so there is one
+// definition of it, shared by the card and by the proof that checks the card.
+export function summaryMargin(summary: ProductsSummary): number {
+  return summary.retailValue - summary.retailCostValue;
+}
+
+// Margin as a share of retail, or NULL when there is no retail to take a share of
+// (nothing priced in scope). NULL, not 0: "no priced stock" and "no margin on
+// priced stock" are different statements, and a confident 0% would be the second
+// one told about the first.
+export function summaryMarginPercent(summary: ProductsSummary): number | null {
+  if (summary.retailValue === 0) return null;
+  return (summaryMargin(summary) / summary.retailValue) * 100;
 }
 
 // The figures above the table, across the WHOLE FILTERED SET (rule 20), from
@@ -515,11 +713,14 @@ export async function fetchProductsSummary(
     quantity_on_hand: number;
     stock_value: number;
     is_below_reorder: boolean;
+    // 042. Read, never derived: retail_value is computed once in the view (§3.1),
+    // so the total here and the figure on a row can never disagree.
+    retail_value: number | null;
   }
 
   const summaryRows = boundary<SummaryRow>('stock_on_hand_items (product summary)')(
     ['quantity_on_hand', 'stock_value'] as const,
-    [] as const,
+    ['retail_value'] as const,
   );
 
   // Paged, not a capped read (rule 1a): a total must cover every matching row,
@@ -528,7 +729,8 @@ export async function fetchProductsSummary(
     applyPositionFilters(
       supabase
         .from('stock_on_hand_items')
-        .select('inventory_item_id,quantity_on_hand,stock_value,is_below_reorder'),
+        // prettier-ignore
+        .select('inventory_item_id,quantity_on_hand,stock_value,is_below_reorder,retail_value'),
       tenantId,
       propertyId,
       locationId,
@@ -562,8 +764,18 @@ export async function fetchProductsSummary(
   let totalValue = 0;
   let belowReorderCount = 0;
   let negativeCount = 0;
+  // 042. Retail, and the cost of THE SAME POSITIONS — accumulated in the same pass
+  // and gated by the same condition, so the two sides of the margin can never be
+  // taken over different sets. That is the bug this shape exists to prevent, and it
+  // is why retailCostValue is not read off totalValue.
+  let retailValue = 0;
+  let retailCostValue = 0;
   const itemsHolding = new Set<string>();
   const itemsSeen = new Set<string>();
+  // Items in scope holding stock that have NO price — the ones absent from retail.
+  // A SET of item ids, not a row count: one unpriced item held in three locations
+  // is one item the owner has to price, not three.
+  const itemsExcludedFromRetail = new Set<string>();
 
   for (const row of positions) {
     // Already numbers — parsed at the boundary on the way in (rule 24).
@@ -574,6 +786,18 @@ export async function fetchProductsSummary(
     if (quantity < 0) negativeCount += 1;
     if (row.is_below_reorder) belowReorderCount += 1;
     itemsSeen.add(row.inventory_item_id);
+
+    if (row.retail_value === null) {
+      // NO PRICE. Excluded from BOTH sides of the margin, and counted — but only
+      // when it is actually holding something. An unpriced item with nothing on
+      // hand is missing from a retail total that was going to be 0 for it either
+      // way, so reporting it as "excluded" would inflate the hole with rows that
+      // are not in it. The unpriced-sellable FILTER is the surface for those.
+      if (quantity !== 0) itemsExcludedFromRetail.add(row.inventory_item_id);
+    } else {
+      retailValue += row.retail_value;
+      retailCostValue += row.stock_value;
+    }
   }
 
   return {
@@ -583,6 +807,9 @@ export async function fetchProductsSummary(
     totalValue,
     belowReorderCount,
     negativeCount,
+    retailValue,
+    retailCostValue,
+    retailExcludedCount: itemsExcludedFromRetail.size,
   };
 }
 
@@ -637,5 +864,9 @@ export async function fetchProductsForExport(
       ...(await attachStock(tenantId, propertyId, locationId, items.slice(i, i + CHUNK))),
     );
   }
+  // NO PICTURES ON THE EXPORT, and that is a decision rather than an omission: a
+  // spreadsheet cannot show a thumbnail, and resolving every asset path for a
+  // thousand-row export would be a read whose only consumer is a column that does
+  // not exist. The PRICE is exported, because a spreadsheet can carry a number.
   return rows;
 }

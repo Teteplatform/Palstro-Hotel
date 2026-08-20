@@ -1,12 +1,5 @@
-import { useEffect, useState } from 'react';
-import {
-  CurrencyField,
-  DateField,
-  NumberField,
-  Select,
-  TextField,
-} from '../../ui/form';
-import type { SelectOption } from '../../ui/form';
+import { useCallback, useEffect, useState } from 'react';
+import { CurrencyField, DateField, NumberField, TextField } from '../../ui/form';
 import { useToast } from '../../ui/Toast';
 import { todayIsoInZone } from '../../../lib/date';
 import { describeError } from '../../../lib/errors';
@@ -28,6 +21,7 @@ import {
   MOVING_AVERAGE_EXPLANATION,
 } from '../../../lib/stockLabels';
 import type { InventoryItem } from '../../../types/inventory';
+import { ItemPicker } from './ItemPicker';
 import type { StockOnHandRow } from '../../../types/stock';
 
 // THE MANUAL PATH — an opening balance, or a correction, for one item in one
@@ -188,22 +182,32 @@ export function StockEntryForm({
   const shownPosition =
     position && position.inventory_item_id === itemId ? position : null;
 
-  // The opening picker hides items that already have one here; the adjustment
-  // picker offers everything.
-  const selectableItems =
-    mode === 'opening' && openings
-      ? items.filter(
-          (i) => i.id === itemId || !openings.has(openingKey(locationId, i.id)),
-        )
-      : items;
-
-  const itemOptions: SelectOption[] = [
-    { value: '', label: 'Choose an item…' },
-    ...selectableItems.map((i) => ({
-      value: i.id,
-      label: i.code ? `${i.name} (${i.code})` : i.name,
-    })),
-  ];
+  // WHY AN ITEM CANNOT BE CHOSEN, in opening mode: it already has an opening
+  // balance in this location, and 036 refuses a second one structurally.
+  //
+  // IT USED TO BE A FILTER over the loaded catalogue, and it deliberately is not one
+  // any more. Two reasons, and the second is the one that made it wrong rather than
+  // merely unhelpful:
+  //   * a dropped row is indistinguishable from an item that does not exist, so the
+  //     storekeeper searching for Rice learns nothing about why it is missing;
+  //   * now that the search is the server's, removing rows from the RESULT would mean
+  //     a query that matched twenty items could display two — which reads as "no
+  //     matches" for a term that matched plenty.
+  // So the row is shown, disabled, carrying the reason, and the person can see that
+  // what they want is an adjustment.
+  //
+  // useCallback because ItemPicker passes it into Typeahead's debounced search
+  // effect: an identity that changed every render would restart the timer forever.
+  const openingUnavailable = useCallback(
+    (candidate: InventoryItem): string | null => {
+      if (mode !== 'opening' || !openings) return null;
+      if (candidate.id === itemId) return null; // never disqualify the current choice
+      return openings.has(openingKey(locationId, candidate.id))
+        ? 'Already has an opening balance here — correct it with an adjustment'
+        : null;
+    },
+    [mode, openings, itemId, locationId],
+  );
 
   const currentAverage = shownPosition?.moving_average_cost ?? null;
   const costIsOptional = mode === 'adjustment' && currentAverage !== null;
@@ -346,21 +350,27 @@ export function StockEntryForm({
 
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
         <div className="sm:col-span-2">
-          <Select
-            label="Item"
-            required
+          {/* SEARCHABLE, SERVER-SIDE (rule 26). This was a <select> over the whole
+              loaded catalogue, which works at thirty items and is unusable at a
+              thousand — and the obvious fix, a filter box over the loaded array,
+              would search what happened to be fetched rather than what exists. */}
+          <ItemPicker
+            tenantId={tenantId}
             value={itemId}
             onChange={(v) => {
               setItemId(v);
               setConfirm(null);
             }}
-            options={itemOptions}
+            selectedItem={item}
+            // A form about to write a movement offers only items in use.
+            activeOnly
+            // Opening mode: an item that already has one HERE is listed with the
+            // reason and cannot be chosen — not dropped. See ItemPicker's header for
+            // why hiding it is worse, and why filtering the search result would be
+            // worse still.
+            unavailable={openingUnavailable}
+            required
             disabled={submitting}
-            helpText={
-              mode === 'opening'
-                ? 'Items that already have an opening balance here are not listed.'
-                : undefined
-            }
           />
         </div>
 

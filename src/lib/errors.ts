@@ -42,6 +42,22 @@ export function describeError(e: unknown): string {
   return 'Something went wrong. Please try again.';
 }
 
+// THE HINT IS HALF THE REFUSAL, and dropping it is the subtle half of rule 21.
+//
+// A refusal shown without its hint says "no" without "instead" — and the pressure
+// is then to write the "instead" into a component, which is a second source of
+// truth about a rule that lives in the database. 042's sellable-needs-a-price
+// trigger is exactly this shape: the message states the rule ("a Sold as-is item
+// must have a selling price") and the hint states the way out ("enter what one kg
+// sells for, or set its type to Ingredient"). Showing only the first would leave a
+// storekeeper stuck at a form with no route through it.
+//
+// Verbatim, both of them. Never re-worded — see rule 21's snippet, which this is.
+function withHint(message: string, err: PostgrestLikeError | null): string {
+  const hint = err?.hint?.trim();
+  return hint ? `${message} — ${hint}` : message;
+}
+
 export function humanizeError(e: unknown): string {
   const err = e as PostgrestLikeError | null;
   switch (err?.code) {
@@ -52,8 +68,11 @@ export function humanizeError(e: unknown): string {
     case '23502': // not_null_violation
       return 'A required field is missing. Please fill it in and try again.';
     case '23514': // check_violation — surface the DB message (e.g. date order)
-      return err?.message || 'One of the values is not allowed. Please review and try again.';
+      return withHint(
+        err?.message || 'One of the values is not allowed. Please review and try again.',
+        err,
+      );
     default:
-      return err?.message || 'Something went wrong. Please try again.';
+      return withHint(err?.message || 'Something went wrong. Please try again.', err);
   }
 }

@@ -102,6 +102,28 @@ export interface InventoryItem {
   min_stock_level: number | null;
   max_stock_level: number | null;
 
+  // --- the price and the picture (042) ------------------------------------
+  // numeric(14,2). What one base unit sells for, BEFORE TAX, when no outlet price
+  // overrides it (outlet overrides arrive in 1.1g and READ this).
+  //
+  // NULL MEANS NOT SOLD, and it is not the same as 0 — the database refuses 0
+  // outright (inventory_items_selling_price_check), so "not sold" has exactly one
+  // representation. Pre-tax because 021 adds tax on top of a charge's net_amount,
+  // which stays true even at a property that has switched VAT off.
+  //
+  // An Ingredient (raw) item must have NONE (a CHECK); a Sold as-is or Both item
+  // must have one (a write-path trigger, because a CHECK would have to validate
+  // rows that already exist unpriced). Neither rule is restated in this app — the
+  // database raises both, message and hint, and the client shows them (rule 21).
+  default_selling_price: number | null;
+
+  // The media_assets id of this item's single picture, or NULL for none. An ID and
+  // never a URL (009's reasoning): one id resolves to whichever variant a surface
+  // needs, so a list row pulls the 400px thumb and not the 1920px full. The media
+  // row is TENANT-level (property_id NULL) because the catalogue is tenant-wide —
+  // a picture of Rice is a picture of the same Rice at every property.
+  image_asset_id: string | null;
+
   is_active: boolean;
   display_order: number;
   deleted_at: string | null;

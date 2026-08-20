@@ -100,6 +100,51 @@ export const TOTAL_UNITS_EXPLANATION =
   'not a measurable total: the stock value beside it is the figure that really ' +
   'adds up.';
 
+// ---------------------------------------------------------------------------
+// Cost and retail, side by side (1.1e §2)
+// ---------------------------------------------------------------------------
+// THE TWO FIGURES ARE LABELLED SO THEY CAN NEVER BE CONFUSED, because confusing
+// them is expensive in both directions: a retail figure read as the stock's worth
+// overstates the balance sheet, and a cost figure read as what the shelf will
+// bring in understates every margin decision made from it. Hence "Value at cost"
+// and "Retail value" as words on the tiles, and these notes underneath.
+
+// STOCK_VALUE_EXPLANATION above still describes the cost figure and is unchanged;
+// this is the sentence the tile adds now that there is something beside it to be
+// distinguished from.
+export const COST_VALUE_CONTRAST =
+  'This is what the books say your stock is worth — what you actually paid for ' +
+  'it. The retail figure beside it is what it would bring in if you sold it.';
+
+export const RETAIL_VALUE_EXPLANATION =
+  'What this stock would bring in at your own selling prices, BEFORE tax, ' +
+  'across the whole filtered set and not just this page. Each item is counted ' +
+  'at its quantity on hand × its selling price. Items with no selling price are ' +
+  'left out entirely — the tile says how many — because there is no price to ' +
+  'value them at, and counting them as nothing would quietly shrink the total.';
+
+// THE ONE THAT NEEDS THE MOST CARE, because the obvious reading of it is wrong.
+// Margin is retail minus the cost of THE SAME items — not minus the value-at-cost
+// tile, which also covers every ingredient in the store. Said plainly, because an
+// owner WILL try to subtract the two tiles and needs to know why the answer
+// differs.
+export const MARGIN_EXPLANATION =
+  'Retail value minus what those same items cost you — only the items that have ' +
+  'a selling price, on both sides. It is deliberately NOT the retail tile minus ' +
+  'the cost tile: the cost tile includes your ingredients, which have no selling ' +
+  'price, so subtracting it would count every sack of rice in the store as a ' +
+  'loss. Covers the whole filtered set, not this page. Before tax.';
+
+export const RETAIL_EXCLUDED_EXPLANATION =
+  'Items holding stock in this scope that have no selling price, so they are ' +
+  'absent from the retail and margin figures. An item held in two locations is ' +
+  'counted once. Give it a price and it joins them.';
+
+// The button that turns the excluded count into somewhere to go. Same principle
+// as the negative-stock and low-stock counts: a figure that is a way in rather
+// than a dead end.
+export const UNPRICED_SELLABLE_FILTER_LABEL = 'Sold, but no price set';
+
 // The two tabs that do less than their name suggests say so on the tab itself,
 // in the same words used in the build notes, so nobody discovers the limit by
 // finding a number missing.
@@ -258,5 +303,16 @@ export const PRODUCTS_ABOUT: string[] = [
   MOVING_AVERAGE_EXPLANATION,
   'The figures above the table cover the whole filtered set, across every ' +
     'page — never just the rows in front of you. Export writes the same set.',
+  // 1.1e §2. The distinction the two money tiles rest on, in one paragraph, in
+  // the place somebody can choose to read it rather than on the card itself.
+  'Value at cost is what you paid for the stock; retail value is what it would ' +
+    'bring in at your own prices, before tax. Margin compares only the items ' +
+    'that have a price — your ingredients have none, so including them would ' +
+    'count the whole store as a loss.',
+  // 1.1e §1. Where the price lives and what a blank one means, because "blank" is
+  // a real setting here and every screen that reads it treats it as one.
+  'A selling price belongs to the item, and blank means the item is not sold — ' +
+    'which is not the same as a price of zero. An outlet can charge something ' +
+    'different, and when it does, that price wins at the till.',
   NEGATIVE_FILTER_CROSS_REFERENCE,
 ];
