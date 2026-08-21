@@ -52,12 +52,29 @@ export type MovementType =
   | 'count_adjustment'
   | 'reversal';
 
-// The movement types this tranche can actually write. 'reversal' is NOT here:
-// it is never chosen on a form, only produced by reverse_stock_movement.
+// The movement types a person can actually choose on a form. 'reversal' is NOT
+// here — it is never chosen, only produced by reverse_stock_movement — and
+// neither is 'count_adjustment', which a posted stock take produces.
+//
+// 043 adds the two 036 reserved and nothing had ever written: a RECEIPT (stock
+// arriving from outside, and the movement that recomputes the moving average)
+// and WASTAGE (stock lost, with a reason category).
 export type WritableMovementType = Extract<
   MovementType,
-  'opening' | 'adjustment'
+  'opening' | 'adjustment' | 'receipt' | 'wastage'
 >;
+
+// THE FIVE WRITE-OFF CATEGORIES (043 §1.1), as the database constrains them.
+//
+// A CATEGORY AND NOT PROSE, because that is what makes wastage reportable: five
+// names a report can group on, rather than five ways of typing "went bad". The
+// free text a person adds lives beside it in `note`.
+export type WriteoffReason =
+  | 'spoilage'
+  | 'breakage'
+  | 'expiry'
+  | 'staff_meal'
+  | 'complimentary';
 
 export interface StockMovement {
   id: string;
@@ -82,6 +99,24 @@ export interface StockMovement {
   business_date: string;
   reason: string | null;
   note: string | null;
+
+  // --- added by 043 --------------------------------------------------------
+  // Who the stock came from, as FREE TEXT. Set on receipts, NULL elsewhere.
+  // Deliberately not a foreign key — supplier records and purchase orders are
+  // stage 7, and a text column upgrades into them cleanly.
+  supplier: string | null;
+  // The manager who authorised an EXCEPTION to a posting rule. Today that is
+  // exactly one thing: a direct receipt into a location that is not a store.
+  // NULL on every ordinary movement.
+  authorised_by: string | null;
+  // The write-off CATEGORY, as a machine key. Non-null exactly when
+  // movement_type is 'wastage' (a database equivalence, not a convention).
+  //
+  // `reason` carries the matching human LABEL, copied at write time — so a row
+  // keeps the wording it was written with even if the label is later reworded,
+  // which is correct for a ledger. Group by this; display that.
+  reason_code: WriteoffReason | null;
+
   // Free text: 'manual', 'import', later 'purchase'/'requisition'/'fnb'.
   source: string;
   source_document_type: string | null;
@@ -189,6 +224,16 @@ export interface StockLedgerRow {
   reversed_by_movement_id: string | null;
   batch_code: string | null;
   expiry_date: string | null;
+
+  // --- added by 043 --------------------------------------------------------
+  // stock_movement_ledger selects the movement's own columns, so these three
+  // arrive on a ledger row exactly as they sit on the movement. Declared here
+  // because the item page's ledger shows the supplier on a receipt and the
+  // category on a write-off, and rule 24's compiler check demands a row type
+  // that describes what actually arrives.
+  supplier: string | null;
+  authorised_by: string | null;
+  reason_code: WriteoffReason | null;
 }
 
 // ---------------------------------------------------------------------------

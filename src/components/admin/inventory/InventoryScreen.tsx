@@ -9,6 +9,7 @@ import { useLocations } from '../../../hooks/useLocations';
 import { useInventoryReference } from '../../../hooks/useInventoryReference';
 import { describeError } from '../../../lib/errors';
 import { fetchAllInventoryItems } from '../../../lib/inventory';
+import { fetchNegativeSummary } from '../../../lib/stock';
 import type { InventoryItem } from '../../../types/inventory';
 import { INVENTORY_TABS, type InventoryTabKey } from './inventoryTabs';
 import { AdjustmentsTab } from './AdjustmentsTab';
@@ -17,6 +18,7 @@ import { ComingSoonPanel } from './ComingSoonPanel';
 import { ImportHistoryTab } from './ImportHistoryTab';
 import { LocationsScreen } from './LocationsScreen';
 import { ProductsTab } from './ProductsTab';
+import { ProvenanceTab } from './ProvenanceTab';
 import { NegativeStockTab } from './NegativeStockTab';
 import { StockTakeTab } from './StockTakeTab';
 
@@ -161,6 +163,35 @@ export function InventoryScreen({
   const reloadCatalogue = useCallback(() => {
     setCatalogueNonce((n) => n + 1);
   }, []);
+
+  // HOW MANY POSITIONS ARE BELOW ZERO, for the provenance tab's third question.
+  // Read through fetchNegativeSummary — the SAME function the Negative Stock tab
+  // uses for its own figures — so the count on one tab and the list on the other
+  // can never disagree. §4 was explicit that the negatives are JOINED rather than
+  // recomputed, and this is that at the client layer too.
+  //
+  // NULL means "not counted yet", which the tab renders as "Counting…" rather
+  // than as a confident zero.
+  const [negativeCount, setNegativeCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!tenantId || !propertyId) return;
+      try {
+        const summary = await fetchNegativeSummary(tenantId, propertyId);
+        if (!cancelled) setNegativeCount(summary.positionCount);
+      } catch {
+        // A count we could not read stays NULL. The tab then says it is counting
+        // rather than claiming there are none — asserting "nothing is negative"
+        // about data we failed to load is the confident-wrong-number trap.
+        if (!cancelled) setNegativeCount(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [tenantId, propertyId, catalogueNonce]);
 
   // The row behind the current scope, for the picker's label. The screen already
   // holds the property's locations; only the SEARCH goes to the server (rule 26).
@@ -366,6 +397,22 @@ export function InventoryScreen({
             timezone={timezone}
             locations={locations.rows}
             categories={reference.categories}
+          />
+        ) : null}
+
+        {activeTab === 'provenance' ? (
+          <ProvenanceTab
+            tenantId={tenantId}
+            propertyId={propertyId}
+            propertySlug={propertySlug}
+            currency={currency}
+            timezone={timezone}
+            // Read through the SAME function the negative-stock screen uses, so
+            // the count here and the list there can never disagree — a second
+            // implementation of "what is negative" is exactly what §4 said not to
+            // build.
+            negativeCount={negativeCount}
+            onShowNegatives={() => setActiveTab('negative_stock')}
           />
         ) : null}
 

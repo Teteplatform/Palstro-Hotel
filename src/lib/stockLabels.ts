@@ -1,4 +1,4 @@
-import type { MovementType } from '../types/stock';
+import type { MovementType, WriteoffReason } from '../types/stock';
 
 // Generic UI copy for the movement ledger — no tenant content (rule 17), just
 // the human labels and tone tokens for the DB's movement_type values, plus the
@@ -294,6 +294,79 @@ export const NEGATIVE_STOCK_ABOUT: string[] = [
     'back on, which is why they are worth a screen of their own.',
 ];
 
+// ---------------------------------------------------------------------------
+// Write-off categories (043 §3)
+// ---------------------------------------------------------------------------
+// A CATEGORY AND NOT PROSE, because that is what makes wastage reportable: five
+// names a report groups on, rather than five ways of typing "went bad". The free
+// text a person adds sits beside it as a note.
+//
+// THESE LABELS ARE THE CLIENT'S COPY. The database writes its OWN label into
+// `reason` at post time (043 §3), so a posted row keeps the wording it was
+// written with even if these are later reworded — which is correct for a ledger.
+// These words are for the FORM and for grouping headings, and they are kept in
+// step with the RPC's deliberately: if they drift, a person picks "Expired" and
+// the ledger says something slightly different, which is a small confusion with
+// no upside.
+const WRITEOFF_REASON_LABELS: Record<WriteoffReason, string> = {
+  spoilage: 'Spoilage',
+  breakage: 'Breakage',
+  expiry: 'Expired',
+  staff_meal: 'Staff meal',
+  complimentary: 'Complimentary',
+};
+
+export function writeoffReasonLabel(reason: WriteoffReason): string {
+  return WRITEOFF_REASON_LABELS[reason] ?? reason;
+}
+
+// In the order they read best on a form: the three that are losses to chase
+// first, then the two that are a cost of doing business.
+export const WRITEOFF_REASONS: WriteoffReason[] = [
+  'spoilage',
+  'breakage',
+  'expiry',
+  'staff_meal',
+  'complimentary',
+];
+
+// What each one MEANS, shown under the choice so the person picks the right one
+// rather than the first. These are the difference between a wastage report that
+// can be acted on and a column of numbers.
+const WRITEOFF_REASON_HINTS: Record<WriteoffReason, string> = {
+  spoilage: 'It went off, went damp, or was thrown away as unfit.',
+  breakage: 'It was dropped, spilled or broken.',
+  expiry: 'It passed its date without being used.',
+  staff_meal: 'Eaten or drunk by staff. A real cost, not a loss.',
+  complimentary: 'Given to a guest for free — a gesture, an apology, a welcome tray.',
+};
+
+export function writeoffReasonHint(reason: WriteoffReason): string {
+  return WRITEOFF_REASON_HINTS[reason] ?? '';
+}
+
+// THE DISTINCTION THAT MAKES THE VARIANCE REPORT WORK (§9), said once, here.
+// Shown on both forms, because the choice between them is made at the moment of
+// posting and cannot be corrected afterwards — a movement is permanent.
+export const WRITEOFF_VS_ADJUSTMENT =
+  'A write-off means the stock is GONE and you know why — it spoiled, it broke, ' +
+  'somebody ate it. An adjustment means the COUNT WAS WRONG: the stock was never ' +
+  'there, or more of it was. Recording a loss as a correction is what makes a ' +
+  'variance report stop meaning anything, so the two are kept apart.';
+
+export const RECEIPT_MOVES_THE_AVERAGE =
+  'Receiving stock at a new price recomputes this item’s average cost, blending ' +
+  'what you already had with what just arrived in proportion to their ' +
+  'quantities. It is the only thing that moves it — taking stock out never does.';
+
+export const ONLY_THE_STORE_RECEIVES =
+  'Deliveries come into a store, and goods reach a kitchen or a bar by being ' +
+  'issued from it. That is what keeps one record of what arrived and one record ' +
+  'of where it went. If a delivery genuinely went straight somewhere else, a ' +
+  'manager can authorise it with their PIN and a reason — it is then listed on ' +
+  'the stock provenance report, which is not an accusation, just a list of ' +
+  'things worth being able to see.';
+
 export const ITEM_PAGE_ABOUT_TITLE = 'About this item’s page';
 
 export const ITEM_PAGE_ABOUT: string[] = [
@@ -338,4 +411,33 @@ export const PRODUCTS_ABOUT: string[] = [
     'which is not the same as a price of zero. An outlet can charge something ' +
     'different, and when it does, that price wins at the till.',
   NEGATIVE_FILTER_CROSS_REFERENCE,
+];
+
+export const PROVENANCE_ABOUT_TITLE = 'About stock provenance';
+
+export const PROVENANCE_ABOUT: string[] = [
+  'This screen lists stock that did not arrive the usual way. Every row on it ' +
+    'has an innocent explanation and most of them are innocent — it exists so ' +
+    'you can SEE them, not so anybody is accused. Each row carries its own ' +
+    'answer where there is one: who authorised it, what reason they gave, what ' +
+    'was already happening in that location.',
+  'DELIVERED SOMEWHERE OTHER THAN A STORE. Goods normally come into a store and ' +
+    'reach a kitchen or a bar by being issued from it — that is what keeps one ' +
+    'record of what arrived and one of where it went. A delivery that genuinely ' +
+    'went straight elsewhere needs a manager’s PIN and a reason, and then appears ' +
+    'here. The exception exists on purpose: without it, somebody who bought ' +
+    'something directly would record a fake store receipt and an instant ' +
+    'transfer, which puts two invented movements in your ledger instead of one ' +
+    'true one.',
+  'DECLARED AS OPENING STOCK IN A PLACE ALREADY IN USE. An opening balance means ' +
+    '“this is what was here when we started”. Entered on day one it is the honest ' +
+    'beginning of the record. Entered into a store that has been working for six ' +
+    'months, it is stock appearing with no purchase behind it. Nothing is ' +
+    'configured for this — a row appears only when the opening was posted after ' +
+    'that location had already moved stock some other way, so a genuine day-one ' +
+    'load never appears here.',
+  'STOCK SHOWING LESS THAN NOTHING. A negative means stock left without a ' +
+    'movement behind it. It has its own screen, with its own filters and export, ' +
+    'and this one links to it rather than showing a second version that could ' +
+    'disagree with the first.',
 ];

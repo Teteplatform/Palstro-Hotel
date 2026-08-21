@@ -8,7 +8,9 @@ import {
 import type { InventoryItem, StockLocation } from '../../../types/inventory';
 import { MovementsList } from './MovementsList';
 import { LocationPicker } from './LocationPicker';
+import { ReceiveStockForm } from './ReceiveStockForm';
 import { StockEntryForm } from './StockEntryForm';
+import { WriteOffForm } from './WriteOffForm';
 
 // THE ADJUSTMENTS TAB — every correction ever posted, and the form that posts
 // one. The ERP has the same pair on the same tab, and for the same reason: the
@@ -55,13 +57,25 @@ export function AdjustmentsTab({
   locationId,
   onPosted,
 }: AdjustmentsTabProps) {
-  const [formOpen, setFormOpen] = useState(false);
+  // WHICH FORM IS OPEN, as one value rather than three booleans. Three booleans
+  // can all be true, and the state that says "receiving and writing off at once"
+  // is one nobody meant and somebody would eventually reach.
+  const [openForm, setOpenForm] = useState<'receive' | 'writeoff' | 'adjust' | null>(
+    null,
+  );
   const [formLocationId, setFormLocationId] = useState(
     locationId ?? locations[0]?.id ?? '',
   );
   const [refreshToken, setRefreshToken] = useState(0);
 
   const formLocation = locations.find((l) => l.id === formLocationId) ?? null;
+
+  const close = () => setOpenForm(null);
+  const posted = async () => {
+    setOpenForm(null);
+    setRefreshToken((n) => n + 1);
+    await onPosted();
+  };
 
   return (
     <div className="space-y-4">
@@ -78,25 +92,82 @@ export function AdjustmentsTab({
           }}
           propertySlug={propertySlug}
           actions={
-            !formOpen ? (
-              <button
-                type="button"
-                onClick={() => setFormOpen(true)}
-                disabled={locations.length === 0 || items.length === 0}
-                className="inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-cream disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <PlusIcon className="h-4 w-4" />
-                New adjustment
-              </button>
+            /* THREE ACTIONS, AND THEY ARE THREE DIFFERENT THINGS (§9). Receiving
+               is stock arriving from outside; a write-off is stock that is gone
+               and why; an adjustment is the count having been wrong. Naming them
+               apart on the button is the first place that distinction is made —
+               a single "record a movement" menu would push the choice into a
+               dropdown where the wrong one is one row away. */
+            !openForm ? (
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setOpenForm('receive')}
+                  disabled={locations.length === 0 || items.length === 0}
+                  className="inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-primary-hover focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-cream focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <PlusIcon className="h-4 w-4" />
+                  Receive stock
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setOpenForm('writeoff')}
+                  disabled={locations.length === 0 || items.length === 0}
+                  className="inline-flex items-center gap-2 rounded-full border border-sand-border bg-white/70 px-5 py-2.5 text-sm font-semibold text-charcoal transition-colors hover:bg-sand focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-cream focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Write off
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setOpenForm('adjust')}
+                  disabled={locations.length === 0 || items.length === 0}
+                  className="inline-flex items-center gap-2 rounded-full border border-sand-border bg-white/70 px-5 py-2.5 text-sm font-semibold text-charcoal transition-colors hover:bg-sand focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-cream focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Adjust
+                </button>
+              </div>
             ) : null
           }
         />
 
-        {formOpen ? (
+        {/* THE RECEIVE AND WRITE-OFF FORMS CHOOSE THEIR OWN LOCATION, because a
+            delivery goes into a specific store and a loss happened in a specific
+            place — neither inherits the page's scope. The ADJUSTMENT form still
+            takes the shared picker above it, which is how it has always worked. */}
+        {openForm === 'receive' ? (
+          <div className="mt-4">
+            <ReceiveStockForm
+              tenantId={tenantId}
+              propertyId={propertyId}
+              currency={currency}
+              timezone={timezone}
+              defaultLocationId={locationId}
+              locations={locations}
+              onDone={posted}
+              onCancel={close}
+            />
+          </div>
+        ) : null}
+
+        {openForm === 'writeoff' ? (
+          <div className="mt-4">
+            <WriteOffForm
+              tenantId={tenantId}
+              propertyId={propertyId}
+              currency={currency}
+              timezone={timezone}
+              defaultLocationId={locationId}
+              locations={locations}
+              onDone={posted}
+              onCancel={close}
+            />
+          </div>
+        ) : null}
+
+        {openForm === 'adjust' ? (
           <div className="mt-4 space-y-4">
             <div className="sm:max-w-xs">
-              {/* Searchable, server-side (rule 26) — see LocationPicker on why a
-                  four-row list gets a typeahead anyway. */}
+              {/* Searchable, server-side (rule 26). */}
               <LocationPicker
                 tenantId={tenantId}
                 propertyId={propertyId}
@@ -104,7 +175,6 @@ export function AdjustmentsTab({
                 value={formLocationId}
                 onChange={setFormLocationId}
                 selectedLocation={formLocation}
-                // A correction writes a movement, so only a location in use.
                 activeOnly
                 required
               />
@@ -119,12 +189,8 @@ export function AdjustmentsTab({
                 timezone={timezone}
                 items={items}
                 presetMode="adjustment"
-                onDone={async () => {
-                  setFormOpen(false);
-                  setRefreshToken((n) => n + 1);
-                  await onPosted();
-                }}
-                onCancel={() => setFormOpen(false)}
+                onDone={posted}
+                onCancel={close}
               />
             ) : (
               <p className="text-sm text-charcoal-muted">

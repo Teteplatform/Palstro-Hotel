@@ -9,7 +9,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "proof:types": "tsc -p tsconfig.proofs.json",
-    "proof:render": "npm run proof:types && npm run proof:ledger && npm run proof:stocktake && npm run proof:popover && npm run proof:movements && npm run proof:screens && npm run proof:picker && npm run proof:summary && npm run proof:item",
+    "proof:render": "npm run proof:types && npm run proof:ledger && npm run proof:stocktake && npm run proof:popover && npm run proof:movements && npm run proof:screens && npm run proof:picker && npm run proof:summary && npm run proof:item && npm run proof:receive",
     "proof:ledger": "vite build --ssr proofs/ledgerRender.tsx --outDir node_modules/.tmp/proofdist --logLevel error && node node_modules/.tmp/proofdist/ledgerRender.js",
     "proof:stocktake": "vite build --ssr proofs/stockTakeRender.tsx --outDir node_modules/.tmp/proofdist --logLevel error && node node_modules/.tmp/proofdist/stockTakeRender.js",
     "proof:screens": "vite build --ssr proofs/screenHeaderRender.tsx --outDir node_modules/.tmp/screensdist --logLevel error && node node_modules/.tmp/screensdist/screenHeaderRender.js",
@@ -17,7 +17,8 @@
     "proof:popover": "vite build --ssr proofs/popoverRender.tsx --outDir node_modules/.tmp/popoverdist --logLevel error && node node_modules/.tmp/popoverdist/popoverRender.js",
     "proof:picker": "vite build --ssr proofs/pickerRender.tsx --outDir node_modules/.tmp/pickerdist --logLevel error && node node_modules/.tmp/pickerdist/pickerRender.js",
     "proof:summary": "vite build --ssr proofs/summaryCardRender.tsx --outDir node_modules/.tmp/summarydist --logLevel error && node node_modules/.tmp/summarydist/summaryCardRender.js",
-    "proof:item": "vite build --ssr proofs/itemPageRender.tsx --outDir node_modules/.tmp/itemdist --logLevel error && node node_modules/.tmp/itemdist/itemPageRender.js"
+    "proof:item": "vite build --ssr proofs/itemPageRender.tsx --outDir node_modules/.tmp/itemdist --logLevel error && node node_modules/.tmp/itemdist/itemPageRender.js",
+    "proof:receive": "vite build --ssr proofs/receiveWriteOffRender.tsx --outDir node_modules/.tmp/rwdist --logLevel error && node node_modules/.tmp/rwdist/receiveWriteOffRender.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.7",

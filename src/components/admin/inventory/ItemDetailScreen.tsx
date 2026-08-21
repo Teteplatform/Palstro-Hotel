@@ -31,7 +31,9 @@ import { ItemMovementCards } from './ItemMovementCards';
 import { ItemMovementLedger } from './ItemMovementLedger';
 import { ItemPanel } from './ItemPanel';
 import { LocationPicker } from './LocationPicker';
+import { ReceiveStockForm } from './ReceiveStockForm';
 import { StockEntryForm } from './StockEntryForm';
+import { WriteOffForm } from './WriteOffForm';
 import { StockLevelChart } from './StockLevelChart';
 
 // ONE ITEM, ON ITS OWN PAGE (1.1f).
@@ -117,7 +119,8 @@ export function ItemDetailScreen({
   const [highlighted, setHighlighted] = useState<string | null>(null);
 
   const [editing, setEditing] = useState(false);
-  const [entryOpen, setEntryOpen] = useState(false);
+  // WHICH POSTING FORM IS OPEN. One value, not three booleans — see AdjustmentsTab.
+  const [posting, setPosting] = useState<'receive' | 'writeoff' | 'adjust' | null>(null);
   const [busy, setBusy] = useState(false);
 
   const [imageUrl, setImageUrl] = useState<string | null>(null);
@@ -257,7 +260,19 @@ export function ItemDetailScreen({
         ? `Post a movement against ${scopeLocation.name}.`
         : 'Pick a location above first — stock is always in one place.',
       disabled: !scopeLocation,
-      onSelect: () => setEntryOpen(true),
+      onSelect: () => setPosting('adjust'),
+    },
+    {
+      key: 'receive',
+      label: 'Receive stock',
+      hint: 'A delivery arriving from outside. It changes what this item is worth.',
+      onSelect: () => setPosting('receive'),
+    },
+    {
+      key: 'writeoff',
+      label: 'Write off',
+      hint: 'Stock that is gone — spoiled, broken, eaten. Not the same as a correction.',
+      onSelect: () => setPosting('writeoff'),
     },
     {
       key: 'remove',
@@ -367,7 +382,41 @@ export function ItemDetailScreen({
             loading={loading}
           />
 
-          {entryOpen && scopeLocation ? (
+          {posting === 'receive' ? (
+            <ReceiveStockForm
+              tenantId={tenantId}
+              propertyId={propertyId}
+              currency={currency}
+              timezone={timezone}
+              defaultLocationId={locationId}
+              locations={locations}
+              presetItem={item}
+              onDone={async () => {
+                setPosting(null);
+                await reload();
+              }}
+              onCancel={() => setPosting(null)}
+            />
+          ) : null}
+
+          {posting === 'writeoff' ? (
+            <WriteOffForm
+              tenantId={tenantId}
+              propertyId={propertyId}
+              currency={currency}
+              timezone={timezone}
+              defaultLocationId={locationId}
+              locations={locations}
+              presetItem={item}
+              onDone={async () => {
+                setPosting(null);
+                await reload();
+              }}
+              onCancel={() => setPosting(null)}
+            />
+          ) : null}
+
+          {posting === 'adjust' && scopeLocation ? (
             <StockEntryForm
               tenantId={tenantId}
               propertyId={propertyId}
@@ -379,10 +428,10 @@ export function ItemDetailScreen({
               presetItemId={item.id}
               presetMode="adjustment"
               onDone={async () => {
-                setEntryOpen(false);
+                setPosting(null);
                 await reload();
               }}
-              onCancel={() => setEntryOpen(false)}
+              onCancel={() => setPosting(null)}
             />
           ) : null}
 

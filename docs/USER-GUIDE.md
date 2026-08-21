@@ -1262,6 +1262,117 @@ confirm, it records it. Serving guests always wins: a system that refuses to let
 the kitchen work is a system whose staff start writing fake receipts to get
 through the night, and then nothing in it can be trusted.
 
+### Receiving a delivery
+
+**Where:** *Inventory* → **Adjustments** tab → **Receive stock**, or from an item's
+own page.
+
+**This is the only thing that changes what your stock is worth.** Everything else
+moves quantities around; a delivery brings stock in at a price, and that price is
+blended into the item's average cost. Until you record purchases, every valuation
+in the system is still working from whatever your opening balances said.
+
+Fill in where it arrived, what it was, how much, and **what one unit cost** — the
+unit price from the invoice, not the invoice total. Supplier and a note are
+optional and worth filling in; the supplier is free text for now, and becomes a
+proper record when purchasing arrives.
+
+Before you post, the form tells you **what the delivery does to this item**: the
+new quantity, the new average cost, and what it was before. That figure is
+confirmed by the system when you press the button.
+
+> **Worked example.** You hold 100 kg of rice that cost ₦1,000 a kilo. A delivery
+> brings 50 kg at ₦1,600. You now hold 150 kg at **₦1,200** a kilo — not ₦1,300,
+> because there is twice as much of the cheaper rice. That is what "blended in
+> proportion to their quantities" means, and it is why the average moves less than
+> the new price on its own suggests.
+
+#### Only a store receives deliveries
+
+**Goods come into a store, and reach a kitchen or a bar by being issued from it.**
+That is what keeps one record of what arrived and one record of where it went. Try
+to receive into a kitchen and the system will say no.
+
+**There is one way round it, and it is deliberate.** If a delivery genuinely did go
+straight somewhere else — the chef bought vegetables at the market for a function —
+a manager can authorise it with their PIN and a reason. The receipt is then
+recorded normally and listed on the **Provenance** tab.
+
+That exception exists because the alternative is worse. Without it, somebody who
+bought something directly would record a made-up store delivery and an instant
+transfer to cover it: two invented movements in your ledger instead of one true
+one, and a store average cost that absorbed a delivery it never saw.
+
+A hotel with two stores can receive into either. The rule is about the *kind* of
+place, not about which one you nominated as your main receiving point.
+
+### Writing stock off
+
+**Where:** *Inventory* → **Adjustments** tab → **Write off**, or from an item's
+own page.
+
+**A write-off is not a correction, and keeping them apart is the point.**
+
+| | What it means | When to use it |
+| --- | --- | --- |
+| **Write off** | The stock is gone, and you know why | It spoiled, it broke, somebody ate it |
+| **Adjustment** | The count was wrong | The stock was never there, or there was more of it |
+
+Record a loss as a correction and your variance report stops meaning anything —
+variance *is* the gap between what should have gone and what did, and putting a
+real loss on the wrong side of that sum quietly deletes the answer.
+
+**Choose a reason from the five**, rather than typing one:
+
+| Reason | What it covers |
+| --- | --- |
+| **Spoilage** | It went off, went damp, or was thrown away as unfit |
+| **Breakage** | It was dropped, spilled or broken |
+| **Expired** | It passed its date without being used |
+| **Staff meal** | Eaten or drunk by staff. A real cost, not a loss |
+| **Complimentary** | Given to a guest for free — a gesture, an apology, a welcome tray |
+
+Five names can be added up; five ways of typing "went bad" cannot. Anything the
+category does not say goes in the **note** beside it.
+
+**Enter the quantity as a plain number.** Five kilos is 5, not −5 — the system
+knows a write-off takes stock off the shelf, and a typed minus is one keystroke
+away from adding five kilos of spoiled rice instead.
+
+**The cost is worked out for you** and recorded permanently on the movement: stock
+leaves at the average it was carrying, so the write-off knows what the lost stock
+cost. That is what lets you see wastage in naira rather than only in kilos.
+
+If a write-off would take you below zero the system says so and asks you to
+confirm. It never blocks you — a negative is recorded rather than hidden, because
+hiding it teaches people to invent deliveries to cover it.
+
+### Stock that did not come through the front door
+
+**Where:** *Inventory* → **Provenance** tab.
+
+Three questions on one screen. **Every row here has an innocent explanation and
+most of them are innocent** — the screen exists so you can see them, not so anybody
+is accused, and each row carries its own answer where there is one.
+
+**Delivered somewhere other than a store.** Deliveries that went straight to a
+kitchen or a bar, with the manager who authorised each one and the reason they
+gave. Usually that reason is the whole story.
+
+**Declared as opening stock in a place already in use.** An opening balance means
+"this is what was here when we started". On day one that is the honest beginning of
+your records. Entered into a store that has been working for six months, it is
+stock appearing with no purchase behind it.
+
+Nothing is configured for this and there is no date to keep up to date: a row
+appears only when the opening balance was entered *after* that location had already
+moved stock some other way. A genuine day-one load never appears, including a bulk
+spreadsheet import.
+
+**Stock showing less than nothing.** A negative means stock left without a movement
+behind it. It has its own screen with filters and an export; this one tells you how
+many there are and takes you there.
+
 ### Adding or correcting stock
 
 **Where:** the **Adjustments** tab, or **Add or correct stock** on any item's row.

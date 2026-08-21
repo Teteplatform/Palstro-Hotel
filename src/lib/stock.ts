@@ -12,6 +12,7 @@ import type {
   StockMovement,
   StockNegativePositionRow,
   StockOnHandRow,
+  WriteoffReason,
 } from '../types/stock';
 
 export { newIdempotencyKey };
@@ -527,6 +528,113 @@ export async function postStockAdjustment(
     p_allow_negative: input.allowNegative ?? false,
     p_batch_code: input.batchCode ?? null,
     p_expiry_date: input.expiryDate ?? null,
+  });
+
+  if (error) throw error;
+  return movementRows.row(data);
+}
+
+// ---------------------------------------------------------------------------
+// Receiving stock (043 §2)
+// ---------------------------------------------------------------------------
+
+export interface StockReceiptInput {
+  propertyId: string;
+  locationId: string;
+  inventoryItemId: string;
+  // POSITIVE. A receipt is stock arriving; stock leaving is a write-off or an
+  // adjustment, and the server refuses a non-positive quantity outright.
+  quantity: number;
+  // REQUIRED, and this is the field the whole shipment exists for: it is what
+  // moves the item's moving average. A stock-in with no cost is the one input
+  // that would silently corrupt every valuation built on top of it.
+  unitCost: number;
+  businessDate: string | null;
+  // Free text — 'Bonny Fresh Foods', 'the cash and carry'. Not a foreign key:
+  // supplier records and purchase orders are stage 7.
+  supplier: string | null;
+  note: string | null;
+  idempotencyKey: string;
+  // 038 §1C. Required by the server when the item tracks batches.
+  batchCode?: string | null;
+  expiryDate?: string | null;
+
+  // THE §2 EXCEPTION, both halves or neither. Only the store receives; a
+  // delivery that genuinely went straight to a kitchen or a bar needs a manager
+  // PIN and a reason, and is then listed on the provenance report.
+  //
+  // The PIN is held in component state for the length of one call and cleared in
+  // a finally block — never stored anywhere, exactly as the reversal form does.
+  managerPin?: string | null;
+  reason?: string | null;
+}
+
+// Post a receipt. Every refusal comes back as the SERVER's sentence with its
+// hint (rule 21) — this function authors no message of its own, including for
+// the store rule, which is the one a client would be most tempted to restate.
+export async function postStockReceipt(
+  input: StockReceiptInput,
+): Promise<StockMovement> {
+  const { data, error } = await supabase.rpc('post_stock_receipt', {
+    p_property_id: input.propertyId,
+    p_location_id: input.locationId,
+    p_inventory_item_id: input.inventoryItemId,
+    p_quantity: input.quantity,
+    p_unit_cost: input.unitCost,
+    p_business_date: input.businessDate,
+    p_supplier: input.supplier,
+    p_note: input.note,
+    p_idempotency_key: input.idempotencyKey,
+    p_batch_code: input.batchCode ?? null,
+    p_expiry_date: input.expiryDate ?? null,
+    p_manager_pin: input.managerPin ?? null,
+    p_reason: input.reason ?? null,
+  });
+
+  if (error) throw error;
+  return movementRows.row(data);
+}
+
+// ---------------------------------------------------------------------------
+// Writing stock off (043 §3)
+// ---------------------------------------------------------------------------
+
+export interface StockWriteoffInput {
+  propertyId: string;
+  locationId: string;
+  inventoryItemId: string;
+  // A POSITIVE MAGNITUDE. The server negates it, so a missed minus sign cannot
+  // add spoiled stock — the same reasoning the adjustment form's direction
+  // toggle uses, pushed into the RPC because a write-off has only one direction.
+  quantity: number;
+  // The CATEGORY, mandatory. Free prose alone cannot be grouped, and a wastage
+  // report that cannot group is not a report.
+  reasonCode: WriteoffReason;
+  businessDate: string | null;
+  // The free text that sits BESIDE the category, never instead of it.
+  note: string | null;
+  idempotencyKey: string;
+  // Re-submit after a PT449 with the SAME key to record a result below zero.
+  allowNegative?: boolean;
+}
+
+// Post a write-off. NO unit cost is sent and none is accepted: leaving stock
+// carries out the average already there, and 038's trigger stamps
+// carried_unit_cost with what it actually cost — which is what makes wastage
+// reportable in naira rather than in units, and is READ, never recomputed (§6).
+export async function postStockWriteoff(
+  input: StockWriteoffInput,
+): Promise<StockMovement> {
+  const { data, error } = await supabase.rpc('post_stock_writeoff', {
+    p_property_id: input.propertyId,
+    p_location_id: input.locationId,
+    p_inventory_item_id: input.inventoryItemId,
+    p_quantity: input.quantity,
+    p_reason_code: input.reasonCode,
+    p_business_date: input.businessDate,
+    p_note: input.note,
+    p_idempotency_key: input.idempotencyKey,
+    p_allow_negative: input.allowNegative ?? false,
   });
 
   if (error) throw error;

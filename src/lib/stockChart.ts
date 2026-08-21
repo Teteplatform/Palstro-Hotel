@@ -141,3 +141,50 @@ export function seriesFrom(movements: ItemMovement[]): SeriesPoint[] {
   return movements.map((m, i) => ({ x: i, value: m.scoped_quantity }));
 }
 
+
+// ---------------------------------------------------------------------------
+// THE RECEIPT PREVIEW'S ARITHMETIC (1.1g §1)
+// ---------------------------------------------------------------------------
+// Extracted here for the reason plotSeries above is, and the reason it was
+// extracted is worth recording: the first version of this lived inline in
+// ReceiveStockForm, and the proof "checked" it by recomputing the same sum from
+// its own constants. Breaking the component to use an UNWEIGHTED MEAN — the
+// classic wrong answer — left the proof GREEN, because the proof was never
+// looking at the component's formula at all. An assertion that cannot see the
+// thing it names is the same defect as one that cannot fail.
+//
+// This module already holds pure arithmetic with no React in it, so it is where
+// this belongs; the form imports it, and the proof exercises the same function
+// the screen runs.
+//
+// WHAT IT IS: the weighted-average fold (036 §2) applied to ONE arriving lot.
+// Stock already held at its value, plus stock arriving at its own cost, over the
+// combined quantity. NOT the mean of the two unit prices — that answer is wrong
+// whenever the two quantities differ, which is almost always, and it is wrong in a
+// way that looks entirely reasonable on screen.
+//
+// IT IS A PREVIEW, NOT A SECOND SOURCE OF TRUTH. The server recomputes this from
+// the movements when the receipt posts, and the screen re-reads the result. What
+// this must never do is DISAGREE with the fold, which is why it is the fold's own
+// formula rather than an approximation of it.
+export interface ReceiptPreview {
+  newQuantity: number;
+  newAverage: number;
+  previousAverage: number;
+}
+
+// Returns null when the arriving lot cannot produce a meaningful average — a
+// combined quantity of zero or less, which happens only against a negative
+// position. The caller shows nothing rather than a division by zero.
+export function previewReceipt(
+  onHand: number,
+  stockValue: number,
+  previousAverage: number,
+  arriving: number,
+  unitCost: number,
+): ReceiptPreview | null {
+  const newQuantity = onHand + arriving;
+  if (newQuantity <= 0) return null;
+  const newValue = stockValue + arriving * unitCost;
+  return { newQuantity, newAverage: newValue / newQuantity, previousAverage };
+}

@@ -33,6 +33,7 @@ export type InventoryTabKey =
   | 'adjustments'
   | 'stock_take'
   | 'negative_stock'
+  | 'provenance'
   | 'price_update'
   | 'import_history';
 
@@ -59,6 +60,11 @@ export const INVENTORY_TABS: InventoryTab[] = [
   // negative filter reads, joins those away. Those are also the ones that cannot
   // be corrected, so they are exactly the rows worth a screen of their own.
   { key: 'negative_stock', label: 'Negative Stock', status: 'ready' },
+  // THINGS THAT DID NOT COME THROUGH THE FRONT DOOR (1.1g §4). A tab rather
+  // than a filter, because it answers three different questions that share one
+  // subject — stock whose arrival is not fully explained by the ledger — and no
+  // single list could hold all three without pretending they were the same shape.
+  { key: 'provenance', label: 'Provenance', status: 'ready' },
   { key: 'import_history', label: 'Import History', status: 'ready' },
   // KEPT AS A TAB, unlike transfers and requisitions, for one reason: selling
   // prices arrive with Food and Beverage, and that module is a disabled entry in
@@ -72,21 +78,24 @@ export const INVENTORY_TABS: InventoryTab[] = [
     soonSummary:
       'Set and change what you CHARGE for the things you sell — the bar list and the menu, repriced in one place.',
     soonDetail:
-      'Nothing in this system has a selling price yet, and this page will not ' +
-      'invent one. What Inventory holds is what stock COST you: the moving ' +
-      'average built from your opening balances and, later, your purchases. ' +
-      'That is a different number from what you sell it for, and it is never ' +
+      'Items already carry a selling price — set one on any item, and see them ' +
+      'on the Products list. What this page will add is changing MANY at once, ' +
+      'and setting a different price per outlet: the same bottle over the bar and ' +
+      'in the restaurant. What Inventory holds beside that is what stock COST ' +
+      'you: the moving average built from your opening balances and your ' +
+      'purchases. That is a different number from what you sell it for, and it is never ' +
       'guessed from a price or a margin — the gap between the two is the ' +
       'variance report this whole module exists to produce, so deriving one ' +
       'from the other would quietly delete the answer.',
     soonNeeds: [
       'The Food and Beverage module, which is where a menu item and a bar list line live.',
-      'A selling price on those lines — the thing this page edits.',
+      'An OUTLET price on those lines — the item already carries the default this would override.',
       'Recipes, so a plated dish knows which stock its price is set against.',
     ],
     soonMeanwhile:
-      'Cost per unit is already here and already correct: open any item on the ' +
-      'Products tab to see its average cost and every movement behind it. Sell ' +
-      'prices are quoted outside the system until the menu arrives.',
+      'Both halves are already here, one item at a time: open any item on the ' +
+      'Products tab to set its selling price, and to see its average cost with ' +
+      'every movement behind it. What is missing is repricing in bulk and per ' +
+      'outlet.',
   },
 ];

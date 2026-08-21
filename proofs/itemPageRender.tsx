@@ -118,6 +118,11 @@ function movement(
     seq,
     unit_cost: null,
     reason: null,
+    // 043's three columns. A fixture that omitted them would be a row the schema
+    // cannot hold, which is a weaker proof than it looks.
+    supplier: null,
+    authorised_by: null,
+    reason_code: null,
     note: null,
     source: 'manual',
     created_at: '2026-08-01T09:00:00Z',
@@ -261,8 +266,12 @@ const unaccounted = unaccountedQuantity(MOVEMENTS);
 
 ok('every writable movement type has a card', totals.length === CARD_MOVEMENT_TYPES.length,
   `${totals.length} cards`);
+// 1.1g GAVE receipt AND wastage THEIR CARDS, so this list is now the types that
+// still have no write path: issues, transfers and consumption, which arrive with
+// the requisition and F&B modules. Updated rather than deleted — the assertion is
+// still the right one, it was just naming two types that have since been built.
 ok('and nothing else does — no card for a type with no write path',
-  !totals.some((t) => ['receipt', 'issue_out', 'consumption'].includes(t.type)),
+  !totals.some((t) => ['issue_out', 'issue_in', 'transfer_out', 'consumption'].includes(t.type)),
   totals.map((t) => t.type).join(', '));
 
 const byType = new Map(totals.map((t) => [t.type, t]));
@@ -290,14 +299,19 @@ ok('and NOT the sum with reversals dropped',
   'dropping reversals would give 103');
 
 // A movement type with no card must SHOW UP rather than be silently absorbed.
-const WITH_RECEIPT: ItemMovement[] = [
+//
+// THIS USED TO USE A RECEIPT, and 1.1g gave receipts a card — which is the alarm
+// this assertion guards working exactly as intended, one shipment later. An ISSUE
+// takes its place: it is declared in the movement enum, it has no write path, and
+// it arrives with the requisition module.
+const WITH_ISSUE: ItemMovement[] = [
   ...MOVEMENTS,
-  { ...movement({ movement_type: 'receipt', quantity: 40, business_date: '2026-07-01', location_id: STORE }), scoped_quantity: 148 },
+  { ...movement({ movement_type: 'issue_out', quantity: -40, business_date: '2026-07-01', location_id: STORE }), scoped_quantity: 68 },
 ];
 ok('a movement with no card is COUNTED as unaccounted, never dropped',
-  unaccountedQuantity(WITH_RECEIPT) === 40, `${unaccountedQuantity(WITH_RECEIPT)}`);
+  unaccountedQuantity(WITH_ISSUE) === -40, `${unaccountedQuantity(WITH_ISSUE)}`);
 ok('and the row then reports that it does not reconcile',
-  !cardsReconcile(summariseByType(WITH_RECEIPT), { ...POSITION, quantity: 148 }));
+  !cardsReconcile(summariseByType(WITH_ISSUE), { ...POSITION, quantity: 68 }));
 
 // ---------------------------------------------------------------------------
 // PART 2 — THE CARD ROW RENDERS THOSE FIGURES, AND SAYS WHEN IT CANNOT
@@ -374,7 +388,7 @@ const emptyHtml = render(
   />,
 );
 ok('a card with no movements is shown but not pressable',
-  (emptyHtml.match(/disabled=""/g) ?? []).length === 4,
+  (emptyHtml.match(/disabled=""/g) ?? []).length === CARD_MOVEMENT_TYPES.length,
   `${(emptyHtml.match(/disabled=""/g) ?? []).length} disabled`);
 ok('and an item that never moved shows a dash, not a confident zero',
   strip(emptyHtml).includes('—'));

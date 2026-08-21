@@ -250,10 +250,17 @@ export async function fetchItemPositionAtScope(
 // A CARD READING "Purchases 0" WOULD TEACH THE WRONG THING — it says the hotel
 // bought nothing, when the truth is that receiving does not exist. The cards
 // arrive with their write paths in 1.1g and the requisition work, and not before.
+// 043 ADDED THE FIRST TWO, and this is the alarm from 1.1f going off as designed.
+// unaccountedQuantity was built to say "these cards no longer add up" the day a
+// movement type got a write path without getting a card — and receipts and
+// write-offs are exactly that day. The change is one line each, because the alarm
+// was the point: nothing else needed touching for the page to stay honest.
 export const CARD_MOVEMENT_TYPES: readonly MovementType[] = [
   'opening',
+  'receipt',
   'adjustment',
   'count_adjustment',
+  'wastage',
   'reversal',
 ];
 
