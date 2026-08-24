@@ -10,7 +10,7 @@ import { isTenantAdminMember } from '../../lib/tenantRole';
 import { SettingsForm } from '../../components/admin/settings/SettingsForm';
 import { OrphanCleanup } from '../../components/admin/settings/OrphanCleanup';
 import { ManagerPinPanel } from '../../components/admin/ManagerPinPanel';
-import { AccountsPanel } from '../../components/admin/settings/AccountsPanel';
+import { AccountsScreen } from '../../components/admin/settings/AccountsScreen';
 import { SiteIcon } from '../../components/ui/icons';
 import type { SettingsRows } from '../../lib/settings/values';
 
@@ -219,7 +219,7 @@ function SettingsScreen({
         // it reads none of the settings rows, so a settings-load failure has no
         // business hiding the chart of accounts.
         <section className="rounded-2xl border border-sand-border bg-white/60 p-4 sm:p-6">
-          <AccountsPanel
+          <AccountsScreen
             tenantId={tenantId}
             propertyId={propertyId}
             propertySlug={slug}

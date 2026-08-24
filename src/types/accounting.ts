@@ -33,7 +33,9 @@ export interface Account {
   account_type: AccountType;
   note: string | null;
   is_active: boolean;
-  display_order: number;
+  // NO display_order. 045 removed it: the chart is ordered by (section rank,
+  // code), which is what a numbered chart means, and the column defaulted to 0
+  // so every added account sorted above 1000 Cash.
   deleted_at: string | null;
   created_at: string;
   updated_at: string;

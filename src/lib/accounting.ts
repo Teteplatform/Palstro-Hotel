@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { boundary } from './rowParse';
+import { boundary, passthrough } from './rowParse';
 import { fetchAllPagedRows } from './fetchAllPaged';
 import {
   PICKER_SEARCH_LIMIT,
@@ -36,10 +36,15 @@ import type {
 // split by nullability, so adding a numeric column fails the build and names the
 // field rather than shipping an unparsed value into a component.
 
-const accounts = boundary<Account>('accounts')(
-  ['display_order'] as const,
-  [] as const,
-);
+// NO NUMERIC FIELDS AT ALL since 045 dropped display_order — `code` is TEXT, and
+// deliberately so: an account number is an identifier that happens to be digits,
+// not a quantity. Nothing adds it up, '1010' must never become 1010, and a
+// leading zero in some future chart has to survive.
+//
+// passthrough<T>() rather than boundary<T>() with two empty lists, because it is
+// the declaration that REFUSES TO COMPILE if Account ever gains a numeric field
+// (rule 24 part 3). An empty boundary would silently keep accepting one.
+const accounts = passthrough<Account>('accounts');
 
 // line_count is int8 over PostgREST — a JSON NUMBER, not a string, unlike the
 // numerics elsewhere in this app. It is declared here anyway, and that is the
@@ -69,9 +74,11 @@ export async function fetchAllAccounts(tenantId: string): Promise<Account[]> {
       .select('*')
       .eq('tenant_id', tenantId) // rule 19
       .is('deleted_at', null) // rule 5
-      .order('account_type', { ascending: true })
-      .order('display_order', { ascending: true })
-      .order('code', { ascending: true }) // stable tiebreak
+      // Ordered CLIENT-SIDE by (section rank, code) — see sortChartOrder. The
+      // server can only sort account_type alphabetically, which puts equity and
+      // expenses between assets and liabilities. A stable order here anyway, so
+      // the paged fetch has a deterministic window.
+      .order('code', { ascending: true })
       .range(from, to),
   );
 }

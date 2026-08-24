@@ -768,16 +768,60 @@ settings, two ways in.
 
 **Where:** sidebar → **Settings** → **Accounts**. Owners and managers only.
 
-This is where each kind of money is pointed at one of your accounts.
+Two tabs. **Chart of accounts** is your list. **Where money posts** is the wiring
+that connects the hotel to it.
+
+#### Chart of accounts
+
+Every account the hotel keeps, numbered and grouped the way a financial
+statement is grouped: Assets, Liabilities, Equity, Revenue, Expenses. This is
+what you print and hand to an auditor.
+
+**The number decides the order.** Accounts sort by their number inside their
+group, so there is no separate ordering to keep in step — put an account in the
+right range and it appears in the right place.
+
+| Group | Numbers |
+| --- | --- |
+| Assets | 1000–1999 |
+| Liabilities | 2000–2999 |
+| Equity | 3000–3999 |
+| Revenue | 4000–4999 |
+| Expenses | 5000–5999 |
+
+**Adding an account.** Press **Add account**, pick the group, type the name. The
+number is filled in for you — the next free one in that group — and the form
+tells you the range, so you never need to remember that a liability starts with
+2. Type your own number if you prefer. If it is already used, the form says so
+before you save.
+
+Three bank accounts need three accounts here. Add them.
+
+**Renaming is always allowed.** Click the name and type. "Bank" becoming "GTBank
+current" is a correction, and everything already posted stays attached.
+
+**The number is frozen once the account has been posted to.** That number is what
+your printed statements and your auditor cite, so changing it would rewrite
+history. Before anything has posted to it, you can renumber freely. If you truly
+need a different number afterwards, add a new account and stop using the old one.
+
+**Switch off rather than delete.** A switched-off account stops being offered for
+new postings and stays on the chart, so past reports still balance. You cannot
+switch one off while a role key still posts to it — the message names the key;
+repoint it on the other tab first. An account with entries against it cannot be
+removed at all.
+
+**There are no sub-groups and no headings inside the five sections.** Current
+versus non-current assets, direct versus overhead costs: a hotel this size does
+not need that, and it is left out deliberately.
+
+#### Where money posts
 
 **Nothing in this system knows an account number.** Every posting names what it
 *is* — "guest ledger", "stock on hand", "rooms", "spoilage" — and this screen
 says which of your accounts each of those means. That is why you can renumber
 your chart, rename an account, or hand the books to a new accountant without
 anything breaking: the postings never referred to the number.
-
-Your chart of accounts arrives ready to use. Rename anything, renumber anything,
-switch off what you do not need, add your own.
 
 **The Last posted column is the one to read.** It says when something last posted
 to that account, worked out from the ledger itself — nobody types it. **Blank

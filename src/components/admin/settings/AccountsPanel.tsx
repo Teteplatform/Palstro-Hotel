@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ScreenHeader } from '../../ui/ScreenHeader';
 import { CalculationNote } from '../../ui/CalculationNote';
 import { useToast } from '../../ui/Toast';
 import { humanizeError } from '../../../lib/errors';
@@ -40,22 +39,20 @@ import {
 // missing mapping refuses rather than guessing, and what an override is for all
 // live behind the ⓘ and in the guide — not in paragraphs above the table.
 
-interface AccountsPanelProps {
+interface MappingsTabProps {
   tenantId: string;
   propertyId: string;
-  propertySlug: string;
   // Owners and managers only. The screen hides the controls for everyone else
   // purely so nobody is offered something they cannot use; 044's
   // is_tenant_admin() policies are the guard (rule 19).
   canEdit: boolean;
 }
 
-export function AccountsPanel({
+export function MappingsTab({
   tenantId,
   propertyId,
-  propertySlug,
   canEdit,
-}: AccountsPanelProps) {
+}: MappingsTabProps) {
   const toast = useToast();
   const [groups, setGroups] = useState<GroupedMappings[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -140,29 +137,7 @@ export function AccountsPanel({
 
   return (
     <div>
-      <ScreenHeader
-        level={2}
-        title="Accounts"
-        purpose="Where each kind of money posts in your chart of accounts."
-        // INLINE, not a hoisted const, and the proof is why. screenHeaderRender
-        // sweeps the JSX props of every ScreenHeader for a guideAnchor; an
-        // `about={ABOUT}` hides it from that sweep, so the ⓘ would pass a check
-        // that never looked at it. The first version of this file did exactly
-        // that and the sweep caught it — a guarantee that can be sidestepped by
-        // moving an object is not a guarantee.
-        about={{
-          title: 'How money finds an account',
-          paragraphs: [
-            'Nothing in this system knows a GL code. Every posting names a role key — "guest ledger", "stock on hand", "rooms" — and this screen is where each key is pointed at one of your accounts. Renumber your chart, rename an account, or hand it to a new accountant: the postings keep working, because they never referred to the number.',
-            'If a key has no account, the posting is refused and the message names the key. It is never guessed at and never parked in a suspense account, because a suspense account is where a wrong figure goes to be forgotten.',
-            'An override lets one property use a different account for one key — two hotels with two tills, where "cash" is genuinely a different account. Remove the override and that property goes back to the group default.',
-            'The Last posted column is worked out from the ledger itself, not recorded here. A blank means nothing has ever posted through that key.',
-          ],
-          guideAnchor: 'accounts',
-          guideLabel: 'Accounts and postings',
-        }}
-        propertySlug={propertySlug}
-      />
+
 
       {error && (
         <p

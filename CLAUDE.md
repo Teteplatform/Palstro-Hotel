@@ -32,10 +32,10 @@ the right order.
 
 ---
 
-## 2. Engineering non-negotiables (26)
+## 2. Engineering non-negotiables (27)
 
-Every one of these came from a real bug — most from a prior product, the last six
-from this one. They are binding.
+Every one of these came from a real bug — most from a prior product, the last
+seven from this one. They are binding.
 
 ### 1. Every list read is bounded correctly — two cases, split below
 A bounded query with no way to reach the rest is **worse** than an unbounded one:
@@ -546,6 +546,41 @@ hold.** A property has four locations; a group with an outlet in every lounge
 reaches twenty without anybody revisiting the decision, and the person who would
 have revisited it is reading a diff where a `<select>` looks fine.
 
+### 27. An assertion that cannot distinguish working from absent is not an assertion
+Rule 22 says a proof must be **made to fail**. This is the sharper form of the
+same rule, and it exists because breaking the code has three times revealed that
+the *assertion* was the broken thing, not the code — each time from a different
+direction, each time green.
+
+An assertion earns its place only if there is a plausible defect it would go RED
+for. Three shapes fail that test, and all three look like thorough testing:
+
+- **It recomputes the answer it is checking.** 1.1g's receipt preview: breaking
+  the weighted average to an unweighted mean left the proof at 35/35, because the
+  assertions rebuilt the expected figure from their own constants and never
+  called the function. *Fix: exercise the function the screen runs, not a copy of
+  its arithmetic.*
+- **It asserts a TOTAL, and the total is insensitive to the rule.** 1.1h's
+  mapping screen: `neverPostedCount` was changed to read the wrong side of the
+  pairing and the headline count stayed green, because in that fixture both sides
+  gave the same number. *A proof of a total is not a proof of the rule that
+  produced it.* Two purpose-built two-row fixtures caught what the 35-row one
+  could not.
+- **Its fixture is already in the state being asserted.** 1.1h1's chart order: a
+  sort that did nothing would pass against pre-sorted rows. *Fix: the fixture is
+  deliberately shuffled, so "it came out right" cannot mean "nothing moved".*
+
+**The test to apply before trusting any assertion: name the defect that turns it
+red.** If you cannot, it is decoration — and worse than nothing, because a green
+run buys confidence it did not earn. Write the defect into the proof's header
+alongside what actually went red, so the next person inherits the reasoning
+rather than the number.
+
+This applies to database dry runs exactly as it applies to render proofs. 045's
+ordering gate runs against the LIVE rows before the migration and again against a
+shuffled fixture in the render proof, because the two catch different things: one
+proves it of the data, the other of the function the screen calls.
+
 ---
 
 ## 3. Multi-tenancy model
@@ -754,7 +789,7 @@ first.
 
 ## 7. Before-you-write-code checklist (run every session)
 
-1. **Read this file.** Confirm the 26 non-negotiables are fresh in mind.
+1. **Read this file.** Confirm the 27 non-negotiables are fresh in mind.
    **Starting a new module?** Read [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
    first — the system map, shared engines, and dependency order that decide where
    the module fits and what must exist before it.
