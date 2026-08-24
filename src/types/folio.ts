@@ -44,9 +44,14 @@ export interface ChargeCategory {
   name: string;                       // display label, freely editable
   is_taxable: boolean;
   service_chargeable: boolean;
-  // Hook for the accounting build: the account_mappings ROLE KEY this category
-  // posts to (rule 4 — never a literal GL code). NULL until account_mappings exists.
-  account_code: string | null;
+  // The account_mappings ROLE KEY this category's revenue posts to (rule 4 —
+  // never a literal GL code). REQUIRED since 044: a category that cannot be
+  // charged to should not exist, because the alternative is the first charge
+  // refusing at the front desk for a configuration mistake made weeks earlier.
+  // Convention is 'revenue_' || code. Renamed from account_code in 044 — the old
+  // name said "code" while holding a key, and a column whose name contradicts
+  // its comment gets used according to its name.
+  account_role_key: string;
   is_active: boolean;
   display_order: number;
   deleted_at: string | null;

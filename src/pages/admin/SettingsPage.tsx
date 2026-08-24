@@ -6,9 +6,11 @@ import { useSettingsData } from '../../hooks/useSettingsData';
 import { usePropertyMedia } from '../../hooks/usePropertyMedia';
 import { SETTINGS_TABS } from '../../lib/settings/tabs';
 import { canHoldManagerPin } from '../../lib/managerPin';
+import { isTenantAdminMember } from '../../lib/tenantRole';
 import { SettingsForm } from '../../components/admin/settings/SettingsForm';
 import { OrphanCleanup } from '../../components/admin/settings/OrphanCleanup';
 import { ManagerPinPanel } from '../../components/admin/ManagerPinPanel';
+import { AccountsPanel } from '../../components/admin/settings/AccountsPanel';
 import { SiteIcon } from '../../components/ui/icons';
 import type { SettingsRows } from '../../lib/settings/values';
 
@@ -28,6 +30,22 @@ import type { SettingsRows } from '../../lib/settings/values';
 // small engine into a large one. It is a tab in the STRIP and its own panel
 // underneath; nothing else about the engine changes.
 const MANAGER_PIN_TAB = { id: 'manager-pin', label: 'Manager PIN' } as const;
+
+// THE ACCOUNTS TAB IS NOT A SETTINGS_TABS ENTRY EITHER, for the same reason the
+// PIN tab is not: SETTINGS_TABS drives the generic form engine, which loads and
+// saves FIELDS on a property_settings / tenant_settings row. The account
+// mappings are neither — they are many rows in their own table, each edited on
+// its own line, with a derived column the engine has no concept of. Modelling
+// them as fields would mean teaching the form engine about a repeating row set,
+// which is exactly the kind of exception that turns a small engine into a large
+// one. A tab in the STRIP, its own panel underneath, and nothing else changes.
+//
+// ADMIN ONLY. Pointing revenue at the wrong account is not a mistake a front
+// desk should be able to make by wandering into settings — and 044's
+// is_tenant_admin() policies would refuse the write anyway, so offering the
+// control to anyone else is offering a control that only ever fails (rule 19:
+// this hides it, the policy is the guard).
+const ACCOUNTS_TAB = { id: 'accounts', label: 'Accounts' } as const;
 
 export function SettingsPage() {
   const { property } = useActiveProperty();
@@ -50,6 +68,7 @@ export function SettingsPage() {
       // set_manager_pin would refuse them anyway (rule 19: this hides a control,
       // the RPC is the guard). Same test as the user menu — lib/managerPin.
       showManagerPin={canHoldManagerPin(memberships, property.tenant_id)}
+      showAccounts={isTenantAdminMember(memberships, property.tenant_id)}
       searchParams={searchParams}
       setSearchParams={setSearchParams}
     />
@@ -61,6 +80,7 @@ function SettingsScreen({
   tenantId,
   slug,
   showManagerPin,
+  showAccounts,
   searchParams,
   setSearchParams,
 }: {
@@ -68,6 +88,7 @@ function SettingsScreen({
   tenantId: string;
   slug: string;
   showManagerPin: boolean;
+  showAccounts: boolean;
   searchParams: URLSearchParams;
   setSearchParams: ReturnType<typeof useSearchParams>[1];
 }) {
@@ -88,13 +109,22 @@ function SettingsScreen({
   // only ever reject them.
   const paramTab = searchParams.get('tab');
   const pinTabActive = showManagerPin && paramTab === MANAGER_PIN_TAB.id;
+  // Same fallback rule as the PIN tab: a non-admin who follows a shared link
+  // naming this tab lands on the first form tab instead, so nobody is put in
+  // front of a control that would only ever reject them.
+  const accountsTabActive = showAccounts && paramTab === ACCOUNTS_TAB.id;
   const activeTab =
     SETTINGS_TABS.find((t) => t.id === paramTab) ?? SETTINGS_TABS[0];
-  // What the tab strip highlights: the PIN tab when it is active, else the form
-  // tab. One value so the strip cannot show two selected tabs.
-  const activeTabId = pinTabActive ? MANAGER_PIN_TAB.id : activeTab.id;
+  // What the tab strip highlights: the PIN or Accounts tab when one is active,
+  // else the form tab. One value so the strip cannot show two selected tabs.
+  const activeTabId = pinTabActive
+    ? MANAGER_PIN_TAB.id
+    : accountsTabActive
+      ? ACCOUNTS_TAB.id
+      : activeTab.id;
   const tabStrip: { id: string; label: string }[] = [
     ...SETTINGS_TABS.map((t) => ({ id: t.id, label: t.label })),
+    ...(showAccounts ? [ACCOUNTS_TAB] : []),
     ...(showManagerPin ? [MANAGER_PIN_TAB] : []),
   ];
 
@@ -184,7 +214,19 @@ function SettingsScreen({
           writes none, so it is deliberately OUTSIDE the loading/error branch
           below — a settings-load failure must not hide the control a manager
           needs in order to approve a reversal at the desk. */}
-      {pinTabActive ? (
+      {accountsTabActive ? (
+        // Outside the loading/error branch for the same reason the PIN tab is:
+        // it reads none of the settings rows, so a settings-load failure has no
+        // business hiding the chart of accounts.
+        <section className="rounded-2xl border border-sand-border bg-white/60 p-4 sm:p-6">
+          <AccountsPanel
+            tenantId={tenantId}
+            propertyId={propertyId}
+            propertySlug={slug}
+            canEdit
+          />
+        </section>
+      ) : pinTabActive ? (
         <section className="rounded-2xl border border-sand-border bg-white/60 p-4 sm:p-6">
           <h2 className="text-lg font-bold tracking-tight text-charcoal">
             Manager PIN

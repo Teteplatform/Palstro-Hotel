@@ -1,4 +1,5 @@
-import { ADMIN_ROLES, type TenantMembership } from '../types/auth';
+import type { TenantMembership } from '../types/auth';
+import { isTenantAdminMember } from './tenantRole';
 
 // WHO MAY HOLD AN APPROVAL PIN — the client's copy of the rule, in ONE place.
 //
@@ -11,6 +12,12 @@ import { ADMIN_ROLES, type TenantMembership } from '../types/auth';
 //
 // Rule 19's shape, again: this hides a control, it does not protect anything.
 //
+// THE TEST ITSELF MOVED TO tenantRole.ts IN 044, and this stayed as the name the
+// PIN surfaces call. The predicate is not about PINs — 044's Accounts tab needs
+// the same one — and a second surface calling `canHoldManagerPin` to decide
+// whether to show a chart of accounts would read as a bug. Keeping this wrapper
+// means neither caller has to know about the other's naming.
+//
 // The tenant that matters is the one that OWNS THE ACTIVE PROPERTY, not "the
 // user's first tenant". A PIN is keyed on (tenant_id, user_id), so a manager who
 // works for two hotel groups holds a separate PIN for each — addressing the wrong
@@ -19,7 +26,5 @@ export function canHoldManagerPin(
   memberships: TenantMembership[],
   tenantId: string | null,
 ): boolean {
-  if (!tenantId) return false;
-  const owning = memberships.find((m) => m.tenant_id === tenantId) ?? null;
-  return owning !== null && ADMIN_ROLES.includes(owning.role);
+  return isTenantAdminMember(memberships, tenantId);
 }

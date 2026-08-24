@@ -460,6 +460,38 @@ const financeFields: SettingsField[] = [
       column: 'posting_locked_through',
     },
   },
+
+  // THE GO-LIVE DATE (044), and it sits directly under the posting lock ON
+  // PURPOSE: they are mirror images, they are one line apart on this form, and
+  // the ONLY thing separating them is the words. The lock REFUSES the document.
+  // This one LETS THE DOCUMENT THROUGH AND BOOKS NOTHING. Somebody who reads the
+  // labels and not the help text will assume they do the same thing, so the help
+  // text has to say the difference in its first sentence rather than its last.
+  //
+  // A FUTURE DATE IS ALLOWED HERE, unlike the lock above, and that is not an
+  // inconsistency — "we open on 1 October" is exactly how this gets set. What the
+  // server refuses instead is CHANGING it once anything has posted, because
+  // moving it later abandons entries already on the books and moving it earlier
+  // implies entries that should exist and now cannot be made. That rule lives in
+  // update_property_finance_settings and states itself in its own words (rule
+  // 21); this field does not restate it.
+  {
+    key: 'gl_start_date',
+    label: 'Books open from',
+    help:
+      'The day this hotel’s accounts begin. Anything dated before it is still ' +
+      'recorded normally — the booking, the stock, the bill are all real — it ' +
+      'simply does not go on the books, so setting-up practice does not land in ' +
+      'your first month’s figures. This is the opposite of the lock above: that ' +
+      'one refuses the record, this one keeps the record and skips the ' +
+      'accounts. Set it once when you go live; it cannot be moved after ' +
+      'anything has posted.',
+    type: 'date',
+    storage: {
+      target: 'property_finance_settings',
+      column: 'gl_start_date',
+    },
+  },
 ];
 
 // --- Tax -------------------------------------------------------------------

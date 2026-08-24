@@ -724,8 +724,8 @@ Everything above, plus the setup. **Where:** sidebar → *Configuration*.
 
 ### Settings
 
-**Where:** sidebar → **Settings**. Six tabs, plus **Manager PIN** for your own
-PIN. The tab you are on is in the address, so you can bookmark or share it.
+**Where:** sidebar → **Settings**. Six tabs, plus **Accounts** and **Manager
+PIN**. The tab you are on is in the address, so you can bookmark or share it.
 Switching tabs with unsaved changes warns you first.
 
 | Tab | What is in it |
@@ -734,8 +734,9 @@ Switching tabs with unsaved changes warns you first.
 | **Content** | Tagline, about text and image, hero images (up to 5), gallery, amenities, which sections show on the guest site and in what order. |
 | **Contact** | Hotel name, phone, email, address, map coordinates with a live pin preview, directions. **Invoices and confirmations read these too.** |
 | **Operations** | Timezone, currency, night-audit time, online booking on/off. |
-| **Finance** | The discount approval threshold, the stock count approval threshold, and the date your postings are locked through. Private to your staff — never shown on the guest site. |
+| **Finance** | The discount approval threshold, the stock count approval threshold, the date your postings are locked through, and the date your books open. Private to your staff — never shown on the guest site. |
 | **Tax** | Default VAT rate for the company, entered as a percentage (e.g. `7.5`). |
+| **Accounts** | Where each kind of money posts in your chart of accounts. See [Accounts](#accounts). |
 
 **Two settings that are not cosmetic:**
 
@@ -762,6 +763,66 @@ difference at all.
 guest site with editing switched on, so you click the thing you want to change
 and see it change. It edits the same values as the tabs above — one set of
 settings, two ways in.
+
+### Accounts
+
+**Where:** sidebar → **Settings** → **Accounts**. Owners and managers only.
+
+This is where each kind of money is pointed at one of your accounts.
+
+**Nothing in this system knows an account number.** Every posting names what it
+*is* — "guest ledger", "stock on hand", "rooms", "spoilage" — and this screen
+says which of your accounts each of those means. That is why you can renumber
+your chart, rename an account, or hand the books to a new accountant without
+anything breaking: the postings never referred to the number.
+
+Your chart of accounts arrives ready to use. Rename anything, renumber anything,
+switch off what you do not need, add your own.
+
+**The Last posted column is the one to read.** It says when something last posted
+to that account, worked out from the ledger itself — nobody types it. **Blank
+means nothing has ever posted there.**
+
+Blank is not automatically a problem. Modules are connected one at a time, so an
+account can be correctly set up and simply have had nothing to record yet. What
+blank tells you is *where to look*: if the bar has been selling all month and
+**Food & Beverage** still says Never, something is not connected, and now you
+know before your accountant does.
+
+**If an account is missing, the posting is refused.** It is never guessed at and
+never parked in a "suspense" account — that is where a wrong figure goes to be
+forgotten. The refusal names exactly which one is missing, so the fix is one line
+on this screen.
+
+**One property, a different account.** Most hotels never need this. If you run
+two properties and each has its own till, open the row and choose **Use a
+different account here** — that property alone will use it. **Use the group
+account** puts it back. The row always shows which group account it is
+overriding, so you can see the choice you made.
+
+**A new charge category needs an account before you can create it.** If you add
+*Spa* to your charge list, tell this screen where spa revenue goes first.
+Otherwise the first spa charge would be refused at the front desk, in front of a
+guest, for a decision made weeks earlier by somebody else.
+
+**When your books open.** The **GL start date** on the Finance tab is the day
+this hotel's accounts begin. Anything dated before it still records normally —
+the booking, the stock, the bill are all real — it simply does not go on the
+books. It exists so the practice runs you did while setting up do not land in
+your first month's figures.
+
+It is the **mirror image** of the posting lock beside it, and the two are easy to
+confuse:
+
+| Setting | What it does |
+| --- | --- |
+| **Posting locked through** | Refuses the whole thing. You cannot record a movement dated inside a closed period at all. |
+| **GL start date** | Lets the thing through and books nothing. The record is made; the accounts ignore it. |
+
+Set the GL start date once, when you go live. **Once anything has posted it
+cannot be moved** — moving it later would abandon entries already on the books,
+and moving it earlier would imply entries that should exist and now cannot be
+created.
 
 ### Room types and rates
 

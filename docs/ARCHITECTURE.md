@@ -146,6 +146,58 @@ be rebuilt once inventory arrived.
 accounting. Inventory moves ahead of the two modules that consume it, and
 accounting lands last, after everything that posts into it exists.
 
+### Plan correction 2 — the ledger spine moved forward (1.1h)
+
+The sequence above was right about the DEPENDENCY order and wrong about the
+CALENDAR, and the difference is go-live.
+
+"Accounting lands last" reads as a safe default, and it is not. **Heledon has not
+gone live**, so there is no trading history — which means wiring the ledger costs
+one shipment and nothing else. The moment the hotel starts selling rooms, every
+module that posts nowhere becomes a stack of documents somebody has to
+reconstruct into a ledger later, under time pressure, with a real balance
+depending on the answer. After go-live the same work costs a project. **The folio
+has been charging and taking payments since 021 and posting nowhere**, which is
+that debt already accruing.
+
+So the **spine** — chart of accounts, `account_mappings`, `journal_entries`,
+`post_journal` — was built in **1.1h**, before purchasing. The dependency rule is
+unchanged and in fact honoured more strictly: account mappings genuinely do come
+before anything that touches money.
+
+**Designed against every posting site, wired progressively.** The role keys were
+derived from the folio, the stock ledger and purchasing at once, so the spine is
+not shaped around whichever module happened to be next. The wiring then lands in
+order:
+
+| Shipment | What starts posting |
+| --- | --- |
+| 1.1h | nothing — the spine, the mappings screen, `gl_start_date` |
+| 1.1h2 | the six existing stock RPCs, and purchasing |
+| 1.1h3 | asset and expense destinations on a purchase line |
+| 1.1h4 | the folio — after tax is captured on the charge at post time |
+
+**1.1h4 also carries two debts 1.1h created**, both recorded in full in 044's
+header and listed here because this table is where somebody looks for *what is
+still owed*:
+
+1. **The charge category form, with the account picker on it**, and the mapping
+   screen listing categories under their role key. 044 added a NOT NULL and a
+   trigger refusing a category whose key is unmapped — and **there is no charge
+   category form anywhere in the client**, so today those guard a path that does
+   not exist. A guard nobody has scheduled the use of is a guard that quietly
+   stops meaning anything.
+2. **Delete the `revenue_misc` fallback from the backfill path** on the day that
+   form ships. A silent default is defensible while the only way to reach it is
+   the SQL editor and no live row takes the branch; it becomes an accounting
+   decision made *for* somebody the moment they can create a category from a
+   screen. Then it is an explicit choice on the form, or the insert refuses.
+
+**Stage 11 is unchanged and is still last.** Every report over the spine — trial
+balance, P&L, balance sheet, bank reconciliation, tax returns, ageing, group
+roll-up — stays there. The test the spine was scoped against: *it gives money
+somewhere to go; it does not give anyone something to read.*
+
 ---
 
 ## Inventory scope
@@ -153,10 +205,22 @@ accounting lands last, after everything that posts into it exists.
 Inventory is the least obvious module, so its scope is spelled out here. It is a
 full stock engine, not a product list:
 
-- **Items** with categories and **units of measure**, including
-  **purchase-to-issue conversions** — stock is *bought* by the carton and
-  *issued* by the piece, so a purchase unit and an issue unit differ and the
-  conversion factor is part of the item.
+- **Items** with categories and **units of measure**, in **base units only**.
+  Stock is held in the smallest unit actually measured — kg, litre, piece — and
+  there is **no conversion factor**, on the item or anywhere else.
+
+  > **Corrected in 1.1h.** This line previously described "purchase-to-issue
+  > conversions… the conversion factor is part of the item", which contradicts
+  > CLAUDE.md §9 and the schema that was actually built. The rule is base units,
+  > and the reason is that a "bag" is ambiguous while a real weight is not: the
+  > point of entering kilos is to catch the 50 kg bag that weighs 47. A stored
+  > factor hides exactly that.
+  >
+  > The real need behind the old line was **data entry**, not schema. A quantity
+  > field may accept `10*24` and show `240` before saving — that is a
+  > **calculator, not a conversion factor**, and nothing persists but the base
+  > quantity. Where the packaging is worth recording for the supplier's benefit,
+  > it goes in a free-text note that nothing does arithmetic on.
 - **Multiple stores within a property**: main store, housekeeping, kitchen, bar.
   Each store holds its own quantities of shared catalogue items.
 - **Movements**: receipts, issues, transfers, adjustments, wastage — the five

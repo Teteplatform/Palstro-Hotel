@@ -109,6 +109,17 @@ export interface PropertyFinanceSettings {
   // means nothing is locked, and is a real value the settings form can write
   // back by clearing the field.
   posting_locked_through: string | null;
+  // 044 §6. THE DAY THE BOOKS OPEN. An entry dated before it books NOTHING —
+  // post_journal returns null and writes no row — while the document that
+  // called it posts completely normally. NULL (the default) means every entry
+  // posts.
+  //
+  // THE MIRROR IMAGE OF posting_locked_through ABOVE, and the two are one line
+  // apart here for the same reason they are one line apart on the form: the
+  // lock REFUSES the document, this one KEEPS the document and skips the
+  // accounts. Two `string | null` dates with opposite effects, and the only
+  // thing that tells them apart is words.
+  gl_start_date: string | null;
   created_at: string;
   updated_at: string;
   created_by: string | null;
