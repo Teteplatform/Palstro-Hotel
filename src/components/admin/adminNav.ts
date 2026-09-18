@@ -229,7 +229,8 @@ export const ADMIN_NAV: AdminNavItem[] = [
     segment: 'purchases',
     module: 'purchases',
     group: 'inventory',
-    status: 'coming_soon',
+    // 1.1h2: orders, receiving, and the journal entry each delivery posts.
+    status: 'ready',
   },
   {
     label: 'Suppliers',
@@ -237,7 +238,10 @@ export const ADMIN_NAV: AdminNavItem[] = [
     segment: 'suppliers',
     module: 'suppliers',
     group: 'inventory',
-    status: 'coming_soon',
+    // 1.1h2: the address book, and the one-sided activity view. SIDE BY SIDE
+    // with Purchases, because they are two halves of one job — who you buy
+    // from, and what you bought.
+    status: 'ready',
   },
   {
     label: 'Stock Counts',

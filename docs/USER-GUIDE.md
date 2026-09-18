@@ -1379,8 +1379,10 @@ in the system is still working from whatever your opening balances said.
 
 Fill in where it arrived, what it was, how much, and **what one unit cost** — the
 unit price from the invoice, not the invoice total. Supplier and a note are
-optional and worth filling in; the supplier is free text for now, and becomes a
-proper record when purchasing arrives.
+optional and worth filling in. The supplier is free text here — this is the form
+for a delivery with **no purchase order** behind it. A delivery against an order
+is recorded on the order instead, where it is matched to a real supplier record;
+see **Recording a delivery**.
 
 Before you post, the form tells you **what the delivery does to this item**: the
 new quantity, the new average cost, and what it was before. That figure is
@@ -1967,6 +1969,154 @@ and arrives with purchasing.
 
 ![screenshot: the import preview with good and bad rows](/help/stock-import.png)
 
+### Purchase orders
+
+**Where:** sidebar → **Purchases**, directly under *Requisitions*.
+
+**A purchase order records what you asked a supplier for, from whom, and where it
+is going.** While it is a draft you can change anything on it. Once you send it,
+what was ordered is fixed — the paper in the supplier's hand and the record here
+are meant to be the same document, and a record that can be edited afterwards is
+not.
+
+The screen opens on **Still open** — the orders that have been sent and still have
+something outstanding. That is the question somebody actually opens Purchases to
+ask. Every other order is one click away in the **State** box; nothing is hidden,
+and the page count under the list always tells you how many there are.
+
+#### Raising one
+
+**New order** asks for four things and then the lines:
+
+- **Supplier** — from your suppliers list. Start typing; it searches every
+  supplier you have, not just the ones on screen.
+- **Going to** — where the goods will be delivered. Usually your main store.
+  Anywhere else is allowed, and the *delivery* will then need a manager's PIN.
+- **Order date** — the day you raised it. **Expected** is when they said it would
+  arrive, and is optional: a made-up date is worse than none, because the late
+  flag is built on it.
+- **Lines** — the item, how much, and what you expect to pay for **one unit**. The
+  order total updates as you type.
+
+**Save as draft** keeps it to yourself. **Save and send** marks it sent, and from
+that moment it cannot be changed.
+
+An order gets its number as soon as it is created, including as a draft, so you
+can talk about PO-000012 before anybody has approved it. Abandoned drafts leave a
+gap in the numbering. That is normal and is not a sign anything is missing.
+
+#### The four figures above the list
+
+Each covers **every order matching the filters, across all pages** — never the
+twenty on screen. The small **i** beside each says exactly what it includes.
+
+- **Still open** — sent, with something outstanding.
+- **Ordered value** — at the prices you ordered at.
+- **Received value** — what has arrived, at the prices you were **invoiced**.
+- **Still outstanding** — what is yet to come, at the ordered prices, because
+  nothing has been invoiced for it.
+
+**Ordered and received can differ even when every quantity matched**, because a
+supplier can charge a different price from the one you agreed. That gap is the
+reason both are shown.
+
+#### Cancelling an order
+
+From the order's own page. **A reason is required** and is kept permanently.
+
+Cancelling an order that has already been part delivered is allowed and is often
+what you want — the supplier has gone quiet and you want it off your list.
+**Anything that already arrived stays exactly where it is**: in stock, and on the
+books. The cancellation only says nothing more is coming.
+
+### Recording a delivery
+
+**Where:** on the order itself — *Purchases* → the order → **Record a delivery**.
+
+The form is on the order because that is the only place the figures you are
+checking against actually live. You are standing next to the goods with a delivery
+note in your hand, asking the same question on every line: **how much of this was
+I expecting?**
+
+Tick the lines that came, and for each one enter **how much arrived** and **what
+the invoice charges for one unit**. Leave out anything that has not come at all —
+it stays outstanding and you can record it on a later delivery.
+
+**The quantity box starts empty on purpose.** It is not pre-filled with what you
+ordered, because a pre-filled figure produces a full delivery nobody counted, and
+catching the one that is three bags short is the whole reason this screen exists.
+
+#### When you have to explain yourself
+
+- **Any difference between what was outstanding and what arrived needs a reason** —
+  short *or* over. "Part delivery, rest Friday" is enough. It is what the
+  short-delivery report reads, and it is the only record of why an order did not
+  come in full.
+- **More than you ordered also needs a manager's PIN.** Accepting it commits the
+  hotel to paying for it, so somebody with the authority to make that call has to
+  be standing there. Their name is recorded against the delivery, permanently.
+- **A delivery going anywhere other than a store** needs a manager's PIN and a
+  reason too — exactly as a hand-keyed delivery does. A purchase order is not a
+  way round "only a store receives".
+
+#### Nothing more coming
+
+If a line will never be completed — the supplier cannot supply it, or simply went
+quiet — tick **Nothing more coming**. That closes the line short: the order stops
+sitting in your outstanding list, and the shortfall stays on the record rather
+than being quietly forgotten.
+
+A line can be closed short with a quantity of zero, which is how you record "this
+never came at all". A zero without that tick is refused, because a delivery of
+nothing that says nothing means nothing.
+
+#### A different price from the one you ordered at
+
+Type the invoiced price and the screen shows the difference immediately, per unit
+and for the line, while the driver is still there. **It is recorded, and the stock
+is valued at the price you actually paid** — that is what moves the item's average
+cost.
+
+**No reason is required for a price change and there is no tolerance setting.** A
+mandatory reason would be answered "price went up" five hundred times, and a
+tolerance is a number somebody sets once and never revisits, after which every
+overcharge underneath it is invisible. Seeing it at the door is what catches one.
+
+#### What the delivery does to your books
+
+Recording it does three things at once, in one go: the stock goes up, the item's
+average cost moves to take the new price into account, and **the accounts are
+posted** — Inventory goes up by what arrived, and what you owe the supplier goes
+up by the invoice total. The order's state moves to *Partly delivered*, or to
+*Complete* once every line is settled.
+
+### Suppliers
+
+**Where:** sidebar → **Suppliers**, beside *Purchases*.
+
+The address book: who the hotel buys from, who to call, and how they get paid.
+**It is shared across every property in the group**, so a supplier is entered once
+however many hotels order from them.
+
+Beside the usual contact details, a supplier carries their **TIN**, a
+**withholding tax rate**, and their **bank details**. Nothing on the screen
+calculates with any of them yet — they are collected now because paying suppliers
+is being built next and will need every one, and because filling them in as you
+add each supplier is far easier than going back through a live list later.
+
+Clicking a supplier's name opens **what this hotel has ordered from them and what
+arrived**, newest first, with anything overdue flagged.
+
+**There is no balance on that view, and its absence is deliberate.** Receiving
+goods increases what you owe, and there is currently no way to record a payment —
+so a figure headed "owed" would be correct until the first payment and quietly
+wrong from then on. Supplier payments are the next shipment, and that view gains
+its second side with them.
+
+**A supplier is never deleted.** Switching one off keeps their purchase history
+readable, which is what a payment will later be matched against, and takes them
+out of the picker on new orders.
+
 ### Requisitions
 
 **Where:** sidebar → **Requisitions**, directly under *Inventory*.
@@ -2067,11 +2217,15 @@ depends on them.
 - **Requisitions** — its own menu entry, below Inventory. The page opens and
   explains the flow it will provide (raise → the store sends → the requester
   confirms) and what it waits on. Transfers between locations come with it.
-- Purchases and suppliers.
 - Selling prices — the **Price Update** tab inside Inventory, marked *soon*, with
   what it needs first. Everything else in **Inventory** — the product list,
   categories, adjustments, stock takes, opening balances and the spreadsheet
   load — *is* built; see the Owner section.
+- **Paying suppliers** — recording what you have paid a supplier and what you
+  still owe them. **Purchases and Suppliers themselves are built**: you can raise
+  orders, receive deliveries and keep a supplier address book today. What is
+  missing is the second half — a payment document — which is why the supplier
+  view shows what was ordered and what arrived rather than a balance.
 - Maintenance, staff, reports, accounting
 - A guests list screen (reach a guest through their booking)
 - Guest profile photos

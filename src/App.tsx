@@ -29,6 +29,9 @@ import { StockCountPage } from './pages/admin/StockCountPage';
 import { StockCountPrintPage } from './pages/admin/StockCountPrintPage';
 import { ProductImportPage } from './pages/admin/ProductImportPage';
 import { RequisitionsPage } from './pages/admin/RequisitionsPage';
+import { PurchasesPage } from './pages/admin/PurchasesPage';
+import { PurchaseOrderPage } from './pages/admin/PurchaseOrderPage';
+import { SuppliersPage } from './pages/admin/SuppliersPage';
 import { BookingsPage } from './pages/admin/BookingsPage';
 import { NewBookingPage } from './pages/admin/NewBookingPage';
 import { BookingDetailPage } from './pages/admin/BookingDetailPage';
@@ -260,6 +263,62 @@ const router = createBrowserRouter([
                 element: (
                   <ModuleGuard module="requisitions">
                     <RequisitionsPage />
+                  </ModuleGuard>
+                ),
+              },
+              // PURCHASES (1.1h2), beside Suppliers in the sidebar. Its own
+              // 'purchases' module flag — 007 already ships it in the default
+              // set — so a tenant without it sees the "not available" page,
+              // while RLS guards the data regardless.
+              //
+              // The static 'new' segment is declared before the dynamic id for
+              // readability; react-router ranks it above the dynamic one anyway,
+              // so /purchases/new can never be read as an order id.
+              {
+                path: 'purchases',
+                element: (
+                  <ModuleGuard module="purchases">
+                    <PurchasesPage />
+                  </ModuleGuard>
+                ),
+              },
+              {
+                path: 'purchases/new',
+                element: (
+                  <ModuleGuard module="purchases">
+                    <PurchaseOrderPage mode="new" />
+                  </ModuleGuard>
+                ),
+              },
+              // ONE ORDER, and RECEIVING happens on it. Its own route rather
+              // than a panel, so a delivery can be linked to ("receive
+              // PO-000004" is a URL), refreshed into, and reached from a phone
+              // at the store door.
+              {
+                path: 'purchases/:purchaseOrderId',
+                element: (
+                  <ModuleGuard module="purchases">
+                    <PurchaseOrderPage mode="view" />
+                  </ModuleGuard>
+                ),
+              },
+              {
+                path: 'purchases/:purchaseOrderId/edit',
+                element: (
+                  <ModuleGuard module="purchases">
+                    <PurchaseOrderPage mode="edit" />
+                  </ModuleGuard>
+                ),
+              },
+              // SUPPLIERS (1.1h2) — the address book and the one-sided activity
+              // view. A first-class module beside Purchases rather than a tab
+              // inside it: the supplier list is TENANT-wide while an order
+              // belongs to one hotel, and a tab would have implied otherwise.
+              {
+                path: 'suppliers',
+                element: (
+                  <ModuleGuard module="suppliers">
+                    <SuppliersPage />
                   </ModuleGuard>
                 ),
               },

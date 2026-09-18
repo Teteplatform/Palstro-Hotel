@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ScreenHeader } from '../../ui/ScreenHeader';
 import { ChartOfAccountsTab } from './ChartOfAccountsTab';
 import { MappingsTab } from './AccountsPanel';
+import { InventoryReconciliationPanel } from './InventoryReconciliationPanel';
 
 // THE ACCOUNTS SCREEN (1.1h1) — one page, two tabs, one ⓘ.
 //
@@ -34,20 +35,28 @@ interface AccountsScreenProps {
   tenantId: string;
   propertyId: string;
   propertySlug: string;
+  // The property's own currency, never a literal (rule 17). Only the
+  // reconciliation tab needs it, and it comes down rather than being read again.
+  currency: string;
   canEdit: boolean;
 }
 
-type TabId = 'chart' | 'mappings';
+type TabId = 'chart' | 'mappings' | 'reconciliation';
 
 const TABS: { id: TabId; label: string }[] = [
   { id: 'chart', label: 'Chart of accounts' },
   { id: 'mappings', label: 'Where money posts' },
+  // 1.1h2. THE THIRD TAB IS THE ONE THAT SAYS WHETHER THE OTHER TWO ARE
+  // WORKING. A chart is a list and a mapping is an intention; this is the only
+  // place that reports whether the money actually went where the mapping says.
+  { id: 'reconciliation', label: 'Does it agree?' },
 ];
 
 export function AccountsScreen({
   tenantId,
   propertyId,
   propertySlug,
+  currency,
   canEdit,
 }: AccountsScreenProps) {
   const [tab, setTab] = useState<TabId>('chart');
@@ -103,11 +112,16 @@ export function AccountsScreen({
 
       {tab === 'chart' ? (
         <ChartOfAccountsTab tenantId={tenantId} canEdit={canEdit} />
-      ) : (
+      ) : tab === 'mappings' ? (
         <MappingsTab
           tenantId={tenantId}
           propertyId={propertyId}
           canEdit={canEdit}
+        />
+      ) : (
+        <InventoryReconciliationPanel
+          propertyId={propertyId}
+          currency={currency}
         />
       )}
     </div>

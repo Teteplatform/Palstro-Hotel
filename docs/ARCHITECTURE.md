@@ -176,6 +176,19 @@ order:
 | 1.1h2 | the six existing stock RPCs, and purchasing |
 | 1.1h3 | asset and expense destinations on a purchase line |
 | 1.1h4 | the folio — after tax is captured on the charge at post time |
+| 1.1h5 | **paying suppliers** — moved forward, before go-live. See below. |
+
+**PAYING SUPPLIERS MOVED FORWARD, AND THE REASON IS THE SAME ONE THE LEDGER
+ITSELF MOVED FOR.** It sat in stage 7.3, after go-live, and that is now wrong.
+From 1.1h2 every goods receipt CREDITS `supplier_payable`, and nothing anywhere
+debits it — so the account only ever grows. Heledon’s first trial balance would
+carry a liability that has never once been paid, and a balance sheet wrong on day
+one in a way anybody who reads one would spot immediately. The debt starts
+accruing with the first delivery, exactly as the folio’s did with the first
+charge. So it is **1.1h5, before go-live**, and three things in 1.1h2 are shaped
+to receive it: `supplier_activity` stays one-sided and keeps that name, no
+balance is invented from receipts alone, and the goods receipt is a stable
+document a payment can be allocated against.
 
 **1.1h4 also carries two debts 1.1h created**, both recorded in full in 044's
 header and listed here because this table is where somebody looks for *what is

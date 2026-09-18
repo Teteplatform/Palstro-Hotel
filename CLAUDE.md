@@ -548,12 +548,12 @@ have revisited it is reading a diff where a `<select>` looks fine.
 
 ### 27. An assertion that cannot distinguish working from absent is not an assertion
 Rule 22 says a proof must be **made to fail**. This is the sharper form of the
-same rule, and it exists because breaking the code has three times revealed that
+same rule, and it exists because breaking the code has FOUR times revealed that
 the *assertion* was the broken thing, not the code — each time from a different
 direction, each time green.
 
 An assertion earns its place only if there is a plausible defect it would go RED
-for. Three shapes fail that test, and all three look like thorough testing:
+for. Four shapes fail that test, and all four look like thorough testing:
 
 - **It recomputes the answer it is checking.** 1.1g's receipt preview: breaking
   the weighted average to an unweighted mean left the proof at 35/35, because the
@@ -569,6 +569,17 @@ for. Three shapes fail that test, and all three look like thorough testing:
 - **Its fixture is already in the state being asserted.** 1.1h1's chart order: a
   sort that did nothing would pass against pre-sorted rows. *Fix: the fixture is
   deliberately shuffled, so "it came out right" cannot mean "nothing moved".*
+- **Its fixture makes the correct and incorrect computations COINCIDE.** *A
+  fixture in which the two answers are the same number cannot test either one.*
+  1.1h2: a reversal valued at the CURRENT moving average instead of the basis it
+  unwinds — precisely what §6 and 038 exist to prevent — left the dry run at
+  76/76, because the fixture reversed a write-off while the average still stood
+  at the same ₦1,100 that write-off had carried out. *Fix: move the value
+  between the act and its reversal, so the two branches are on different
+  numbers.* The same thought fixes a boundary assertion: 1.1h2 asserted that a
+  short delivery asks for a reason, and narrowing the rule to short-only stayed
+  green — because 47 of 50 asks under both the true rule and the broken one.
+  **Assert on the side of the boundary where the two rules DISAGREE.**
 
 **The test to apply before trusting any assertion: name the defect that turns it
 red.** If you cannot, it is decoration — and worse than nothing, because a green

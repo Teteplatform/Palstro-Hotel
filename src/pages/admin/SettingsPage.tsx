@@ -63,6 +63,8 @@ export function SettingsPage() {
       propertyId={property.id}
       tenantId={property.tenant_id}
       slug={property.slug}
+      // The property's own currency (rule 17), for the reconciliation tab.
+      currency={property.currency}
       // Owners and managers of the tenant that OWNS this property only. Front
       // desk, housekeeping and kitchen accounts are not offered the tab, because
       // set_manager_pin would refuse them anyway (rule 19: this hides a control,
@@ -79,6 +81,7 @@ function SettingsScreen({
   propertyId,
   tenantId,
   slug,
+  currency,
   showManagerPin,
   showAccounts,
   searchParams,
@@ -87,6 +90,7 @@ function SettingsScreen({
   propertyId: string;
   tenantId: string;
   slug: string;
+  currency: string;
   showManagerPin: boolean;
   showAccounts: boolean;
   searchParams: URLSearchParams;
@@ -223,6 +227,7 @@ function SettingsScreen({
             tenantId={tenantId}
             propertyId={propertyId}
             propertySlug={slug}
+            currency={currency}
             canEdit
           />
         </section>
