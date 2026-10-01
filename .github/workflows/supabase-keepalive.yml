@@ -92,9 +92,35 @@ jobs:
         run: |
           set -euo pipefail
 
-          if [ -z "${SUPABASE_URL}" ] || [ -z "${SUPABASE_ANON_KEY}" ]; then
-            echo "::error::SUPABASE_URL and SUPABASE_ANON_KEY must both be set as repository secrets."
-            echo "Settings -> Secrets and variables -> Actions. See this file's header."
+          # NAMES THE MISSING ONE, AND SAYS WHERE SECRETS HIDE. The first version
+          # said only "both must be set", which is true and useless: the three
+          # ways a secret can exist and still not arrive are not guessable from
+          # that sentence, and the run that produced it had both of them set
+          # SOMEWHERE.
+          #
+          # NOTHING DERIVED FROM A SECRET IS PRINTED — not a length, not a
+          # prefix. GitHub masks secret VALUES in logs automatically, but this
+          # repository is PUBLIC, so its Actions logs are world-readable and a
+          # length is a hint nobody needs to publish.
+          missing=0
+          [ -n "${SUPABASE_URL}" ]      || { echo "::error::SUPABASE_URL is not set";      missing=1; }
+          [ -n "${SUPABASE_ANON_KEY}" ] || { echo "::error::SUPABASE_ANON_KEY is not set"; missing=1; }
+
+          if [ "${missing}" = "1" ]; then
+            echo ""
+            echo "A secret can exist and still not reach this job. Check, in order:"
+            echo "  1. REPOSITORY secret, exact name, on THIS repo:"
+            echo "     Settings -> Secrets and variables -> Actions -> Repository secrets"
+            echo "  2. ORGANISATION secret whose repository access does not include"
+            echo "     this repo. Org secrets are opt-in per repository — set on the"
+            echo "     org and never granted here is the commonest cause, and it looks"
+            echo "     identical to not being set at all."
+            echo "  3. ENVIRONMENT secret. Those need 'environment:' named on the job;"
+            echo "     this job does not declare one, so environment secrets never"
+            echo "     arrive. Move them to repository secrets."
+            echo ""
+            echo "The names are case-sensitive and must be exactly SUPABASE_URL and"
+            echo "SUPABASE_ANON_KEY — not the VITE_ prefixed names .env.local uses."
             exit 1
           fi
 
