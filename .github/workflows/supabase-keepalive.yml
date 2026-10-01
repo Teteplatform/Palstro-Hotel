@@ -1,0 +1,102 @@
+# Keep the Palstro-Hotels Supabase project from pausing.
+#
+# WHY THIS EXISTS. Supabase pauses a free-tier project after about seven days
+# with no activity, and waking it is a manual step in their dashboard. Heledon
+# has not gone live, so there are stretches where nobody touches the database for
+# a week — which is exactly when it goes to sleep and somebody loses twenty
+# minutes finding out why the app is down.
+#
+# WHAT IT DOES. One HTTP request to PostgREST, every day. That is activity, and
+# activity is all the pause timer watches.
+#
+# WHY NOT A MIGRATION. "Push something to keep it alive" most obviously means a
+# new migration, and that would be the wrong tool: migration numbers in this repo
+# are assigned in strict order and never reused (CLAUDE.md §5), so a no-op 048
+# would permanently pollute a real product's schema history for an operational
+# reason. A keep-alive is not a schema change.
+#
+# WHY THE ANON KEY AND NOT THE DATABASE URL. This needs the lowest-privilege
+# credential that counts as activity, and the publishable browser key is it — the
+# same key the app ships to every guest, behind the same RLS. The database
+# connection string would do the job too and would put a far more dangerous
+# secret in a place it does not need to be.
+#
+# ---------------------------------------------------------------------------
+# SET-UP, which is two secrets and nothing else
+# ---------------------------------------------------------------------------
+#   Settings -> Secrets and variables -> Actions -> New repository secret
+#     SUPABASE_URL       the project URL   (VITE_SUPABASE_URL in .env.local)
+#     SUPABASE_ANON_KEY  the publishable key (VITE_SUPABASE_ANON_KEY)
+#
+# ---------------------------------------------------------------------------
+# THE GOTCHA THAT MAKES THIS FAIL SILENTLY, STATED HERE BECAUSE IT WILL
+# ---------------------------------------------------------------------------
+# GITHUB DISABLES A SCHEDULED WORKFLOW ON A REPOSITORY WITH NO ACTIVITY FOR 60
+# DAYS. That is the same quiet period this job exists to survive, so the two can
+# fail together: the repo goes quiet, GitHub switches the schedule off, and the
+# Supabase project pauses a week later with nothing having errored. GitHub emails
+# the repo admins before it does this. If the project ever pauses anyway, check
+# the Actions tab for a disabled schedule BEFORE assuming this workflow is broken.
+#
+# `workflow_dispatch` is there so it can be run by hand from the Actions tab,
+# which is also how you re-enable a schedule GitHub has switched off.
+
+name: Supabase keep-alive
+
+on:
+  schedule:
+    # 06:17 UTC daily. Daily rather than weekly because the pause window is about
+    # seven days and a weekly job that misses one run is a paused project; the
+    # odd minute avoids the top-of-hour crush, when GitHub's scheduler is
+    # heavily oversubscribed and jobs can be delayed or dropped.
+    - cron: '17 6 * * *'
+  workflow_dispatch:
+
+# Read-only. The job needs nothing from the repository but its own checkout-free
+# runner, so it is given nothing.
+permissions: {}
+
+concurrency:
+  group: supabase-keepalive
+  cancel-in-progress: false
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Touch PostgREST
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${SUPABASE_URL}" ] || [ -z "${SUPABASE_ANON_KEY}" ]; then
+            echo "::error::SUPABASE_URL and SUPABASE_ANON_KEY must both be set as repository secrets."
+            echo "Settings -> Secrets and variables -> Actions. See this file's header."
+            exit 1
+          fi
+
+          # `properties` is read through the storefront's public policy, so this
+          # works with the anon key and returns at most one id. It selects a
+          # single column deliberately: a keep-alive has no business pulling rows
+          # it does not look at.
+          code=$(curl --silent --show-error --fail-with-body \
+            --max-time 30 --retry 3 --retry-delay 10 --retry-all-errors \
+            --output /tmp/keepalive.out --write-out '%{http_code}' \
+            -H "apikey: ${SUPABASE_ANON_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
+            "${SUPABASE_URL}/rest/v1/properties?select=id&limit=1")
+
+          echo "PostgREST responded ${code}"
+
+          # A PAUSED PROJECT STILL ANSWERS, which is the whole reason this checks
+          # the code rather than just that curl exited 0 — a 5xx from a sleeping
+          # project would otherwise read as a successful ping and this job would
+          # go green every day while the database stayed down.
+          if [ "${code}" != "200" ]; then
+            echo "::error::Expected 200, got ${code}. The project may be paused or the key may be wrong."
+            cat /tmp/keepalive.out || true
+            exit 1
+          fi
