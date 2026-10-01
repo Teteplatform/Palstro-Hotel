@@ -40,15 +40,35 @@
 #
 # `workflow_dispatch` is there so it can be run by hand from the Actions tab,
 # which is also how you re-enable a schedule GitHub has switched off.
+#
+# ---------------------------------------------------------------------------
+# WHY IT ALSO RUNS WHEN THIS FILE CHANGES
+# ---------------------------------------------------------------------------
+# A scheduled job is written once and then not thought about until the morning it
+# matters. Editing it and waiting until 06:17 UTC to learn whether the edit was
+# valid — or whether the secrets were ever named correctly — is how a keep-alive
+# sits broken for a week. The `push` trigger is scoped to THIS FILE ALONE, so
+# touching it is also testing it, and a mistake surfaces in the minute it is made
+# rather than the next morning.
 
 name: Supabase keep-alive
 
 on:
+  push:
+    # THIS FILE ONLY. Every other push to main must not run this — a keep-alive
+    # that fires on unrelated commits is noise in the Actions log, and the whole
+    # point is a job whose red state means something.
+    paths:
+      - '.github/workflows/supabase-keepalive.yml'
   schedule:
-    # 06:17 UTC daily. Daily rather than weekly because the pause window is about
-    # seven days and a weekly job that misses one run is a paused project; the
-    # odd minute avoids the top-of-hour crush, when GitHub's scheduler is
-    # heavily oversubscribed and jobs can be delayed or dropped.
+    # 06:17 UTC DAILY, and daily is deliberate rather than lazy. The pause window
+    # is about seven days, so a daily run tolerates SIX consecutive misses before
+    # the project sleeps, where an every-other-day run tolerates three. GitHub's
+    # scheduler is oversubscribed and openly drops or delays runs under load, so
+    # the margin is not theoretical — it is the thing being bought. Running more
+    # often than strictly needed costs nothing on a public repository, where
+    # Actions minutes are free; running less often costs a paused database and
+    # twenty minutes in a dashboard. The odd minute avoids the top-of-hour crush.
     - cron: '17 6 * * *'
   workflow_dispatch:
 
