@@ -21,7 +21,8 @@
     "proof:receive": "vite build --ssr proofs/receiveWriteOffRender.tsx --outDir node_modules/.tmp/rwdist --logLevel error && node node_modules/.tmp/rwdist/receiveWriteOffRender.js",
     "proof:accounts": "vite build --ssr proofs/accountsRender.tsx --outDir node_modules/.tmp/accountsdist --logLevel error && node node_modules/.tmp/accountsdist/accountsRender.js",
     "proof:chart": "vite build --ssr proofs/chartRender.tsx --outDir node_modules/.tmp/chartdist --logLevel error && node node_modules/.tmp/chartdist/chartRender.js",
-    "proof:purchasing": "vite build --ssr proofs/purchasingRender.tsx --outDir node_modules/.tmp/purchasingdist --logLevel error && node node_modules/.tmp/purchasingdist/purchasingRender.js"
+    "proof:purchasing": "vite build --ssr proofs/purchasingRender.tsx --outDir node_modules/.tmp/purchasingdist --logLevel error && node node_modules/.tmp/purchasingdist/purchasingRender.js",
+    "health": "node scripts/health-check.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.7",
