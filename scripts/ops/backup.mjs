@@ -37,10 +37,42 @@
 //  the constraints off, and "who did this" becomes unanswerable for every row.
 //  The customer's primary pain is staff theft; the audit trail is the product.
 //
-//  WHY NOT `storage`. The storage schema holds only the METADATA of uploaded
-//  files. The bytes live in S3 and no pg_dump flag reaches them, so dumping the
-//  metadata alone would produce rows pointing at nothing and read as a backup of
-//  the images. See §4 in docs/backups.md for what actually covers them.
+//  WHY NOT THE `storage` SCHEMA IN THE DUMP. It holds only the METADATA of
+//  uploaded files. The bytes live in S3 and no pg_dump flag reaches them, so
+//  dumping the metadata alone would produce rows pointing at nothing and read
+//  like a backup of the images. The bytes are taken separately, below.
+//
+//  ---------------------------------------------------------------------------
+//  THE STORAGE ARCHIVE, AND WHY IT NEEDS NO NEW CREDENTIAL
+//  ---------------------------------------------------------------------------
+//  media_assets carries no checksum and no source URL. It describes the bytes;
+//  it cannot re-fetch them. So the objects in the bucket are THE ONLY COPY, and
+//  restoring the database alone leaves live rows pointing at nothing — the guest
+//  site renders broken images and nothing in the system can say what they were.
+//
+//  Reaching them costs nothing extra:
+//    * the object list comes from storage.objects over the connection this
+//      script already opens (pg_read_all_data covers the storage schema), which
+//      is the authoritative list rather than media_assets, an index that could
+//      in principle drift from it;
+//    * the BYTES come from the public CDN endpoint with NO credential at all,
+//      because property-media is a public bucket (005/013).
+//  The alternatives were a service-role key (BYPASSRLS, write grants on 66
+//  relations in public and 5 in storage, EXECUTE on 105 functions) or a Supabase
+//  S3 key (project-scoped, full write and DELETE on every bucket, no read-only
+//  variant). Both can destroy the thing this job exists to copy. Neither is used.
+//
+//  EVERY VARIANT IS KEPT, card and thumb included. They are derivable from `full`
+//  in theory; in a real recovery nobody is going to re-run a resize pipeline and
+//  write files back at exact paths while the hotel is down. At 630 KB that choice
+//  is free.
+//
+//  WHEN TO REVISIT: 9 objects / 630 KB today. Projected at ~30 rooms photographed
+//  (8 photos x 3 variants x ~250 KB) plus menu and item images, this is ~180 MB,
+//  which still fits a GitHub artifact at 30-day retention but stops being free.
+//  Revisit when the archive passes ~250 MB or the artifact upload starts taking
+//  longer than the dump: the first lever is keeping only `full` and documenting
+//  that card/thumb must be regenerated. Also in docs/backups.md.
 //
 //  Prints only file names, sizes and counts — never a value, a host or a user.
 //
@@ -52,6 +84,7 @@
 // =============================================================================
 import fs from 'node:fs'
 import path from 'node:path'
+import { createHash } from 'node:crypto'
 import { ageRecipient, runTool, toolPath } from './tools.mjs'
 
 const args = Object.fromEntries(process.argv.slice(2).map(a => {
@@ -59,11 +92,14 @@ const args = Object.fromEntries(process.argv.slice(2).map(a => {
   return m ? [m[1], m[2] ?? true] : [a, true]
 }))
 
-// The unencrypted files this run made. Removed if the run stops for any reason, so
-// a half-made dump never stays behind in plain text on a runner or a laptop.
+// The unencrypted files and staging directories this run made. Removed if the run
+// stops for ANY reason, so a half-made dump -- or a directory of freshly fetched
+// guest-facing images -- never stays behind in plain text on a runner or a laptop.
 const plainFiles = new Set()
+const tempDirs = new Set()
 const die = m => {
   for (const f of plainFiles) fs.rmSync(f, { force: true })
+  for (const d of tempDirs) fs.rmSync(d, { recursive: true, force: true })
   console.error(`backup: ${m}`)
   process.exit(1)
 }
@@ -125,7 +161,110 @@ run('pg_dump', [
   '-n', 'public', '-n', 'auth', '-f', dump,
 ])
 
-// ---- 2. THE MANIFEST: what this dump is supposed to contain ------------------
+// ---- 2. THE STORAGE ARCHIVE ---------------------------------------------------
+// Enumerate the buckets, refuse to continue if any is private, fetch every object
+// from the public endpoint, verify each download against the size the database
+// recorded, checksum it, and tar the lot.
+const storageJson = run('psql', [...conn, '-X', '-q', '-At', '-v', 'ON_ERROR_STOP=1', '-c', `
+SELECT json_build_object(
+  'buckets', (SELECT coalesce(json_agg(json_build_object(
+                'id', b.id, 'public', b.public,
+                'objects', (SELECT count(*) FROM storage.objects o WHERE o.bucket_id = b.id),
+                'bytes', (SELECT coalesce(sum((o.metadata->>'size')::bigint), 0) FROM storage.objects o WHERE o.bucket_id = b.id)
+              ) ORDER BY b.id), '[]'::json) FROM storage.buckets b),
+  'objects', (SELECT coalesce(json_agg(json_build_object(
+                'bucket', o.bucket_id, 'name', o.name,
+                'bytes', (o.metadata->>'size')::bigint,
+                'mime', o.metadata->>'mimetype'
+              ) ORDER BY o.bucket_id, o.name), '[]'::json) FROM storage.objects o)
+)::text`]).trim()
+let store
+try { store = JSON.parse(storageJson) } catch { die('the storage query did not return valid JSON') }
+
+// A PRIVATE BUCKET STOPS THE BACKUP. NEVER SKIPPED, NEVER WARNED PAST.
+// The bytes are reachable without a credential ONLY because the bucket is public
+// -- the public CDN endpoint does not consult storage.objects RLS at all. The day
+// somebody adds a private bucket (guest identity documents are the obvious
+// candidate), the public endpoint stops serving it and a warn-and-continue backup
+// would quietly stop covering the most sensitive files in the system while still
+// going green, still being the right size, and still being trusted. That is worse
+// than no backup. So it is a named, fatal error that says what to do next.
+const privateBuckets = store.buckets.filter(b => b.public !== true)
+if (privateBuckets.length) {
+  die(`REFUSING TO BACK UP: ${privateBuckets.length} storage bucket(s) are NOT public `
+    + `(${privateBuckets.map(b => `${b.id}: ${b.objects} object(s), ${b.bytes} bytes`).join('; ')}).\n`
+    + '               This script fetches object bytes from the PUBLIC CDN endpoint, which cannot reach a\n'
+    + '               private bucket, so continuing would silently omit every object in it. Do NOT make the\n'
+    + '               bucket public to fix this. Give this script a credential that can read the private\n'
+    + '               bucket (a signed-URL mint or an S3 key scoped as tightly as Supabase allows), decide\n'
+    + '               what that credential may do if the runner is compromised, and write the decision in\n'
+    + '               docs/backups.md before enabling it.')
+}
+
+// The project URL is DERIVED from the connection's user name (hotel_backup.<ref>)
+// rather than taken from an environment variable or written in -- rule 17, and it
+// also makes it impossible for the bytes and the database to come from different
+// projects, which a separate SUPABASE_URL secret would allow.
+const projectRef = (decodeURIComponent(u.username).match(/\.([a-z0-9]{16,})$/) ?? [])[1]
+if (!projectRef && store.objects.length) die('cannot read the project ref from the BACKUP_DB_URL user name, so the public storage endpoint cannot be addressed')
+const publicBase = `https://${projectRef}.supabase.co/storage/v1/object/public`
+const encodePath = p => p.split('/').map(encodeURIComponent).join('/')
+
+const storageDir = path.join(out, `storage-${stamp}`)
+const storageTar = path.join(out, `hotel-${stamp}.storage.tar`)
+const storedObjects = []
+if (store.objects.length) {
+  fs.mkdirSync(storageDir, { recursive: true })
+  tempDirs.add(storageDir)
+  let fetched = 0
+  for (const o of store.objects) {
+    const url = `${publicBase}/${o.bucket}/${encodePath(o.name)}`
+    let body
+    try {
+      const r = await fetch(url, { signal: AbortSignal.timeout(120000) })
+      if (!r.ok) {
+        die(`storage object ${o.bucket}/${o.name} could not be fetched (HTTP ${r.status}). `
+          + 'The database has a row for it and the bytes are not there, which is the orphan this backup exists to prevent.')
+      }
+      body = Buffer.from(await r.arrayBuffer())
+    } catch (e) {
+      die(`storage object ${o.bucket}/${o.name} could not be fetched: ${e.message}`)
+    }
+    // VERIFIED AGAINST THE RECORDED SIZE, not merely against a 200. A truncated
+    // or error-page response is a 200 with the wrong length, and an archive of
+    // nine HTML error pages is exactly the right shape.
+    if (String(body.length) !== String(o.bytes)) {
+      die(`storage object ${o.bucket}/${o.name} came back ${body.length} bytes but the database records ${o.bytes}. `
+        + 'Refusing to archive a file that is not the file.')
+    }
+    const target = path.join(storageDir, o.bucket, o.name)
+    fs.mkdirSync(path.dirname(target), { recursive: true })
+    fs.writeFileSync(target, body)
+    storedObjects.push({
+      bucket: o.bucket, name: o.name, bytes: Number(o.bytes), mime: o.mime ?? null,
+      sha256: createHash('sha256').update(body).digest('hex'),
+    })
+    fetched++
+  }
+  // tar, not zip: present on every runner and in Git Bash, so these scripts stay
+  // free of npm dependencies and the workflow needs no install step.
+  //
+  // RUN FROM `out` WITH BASENAMES, never with absolute paths. GNU tar treats an
+  // argument containing a colon as `host:path` and tries to resolve a remote
+  // host, so an absolute Windows path fails with "Cannot connect to C: resolve
+  // failed". --force-local fixes it on GNU tar and does not exist on bsdtar;
+  // passing basenames from a cwd works on both and needs no platform branch.
+  run('tar', ['-cf', path.basename(storageTar), '-C', path.basename(storageDir), '.'], { cwd: out })
+  fs.rmSync(storageDir, { recursive: true, force: true })
+  tempDirs.delete(storageDir)
+  plainFiles.add(storageTar)
+  console.log(`backup: storage archive holds ${fetched} object(s) from ${store.buckets.length} bucket(s), `
+    + `${storedObjects.reduce((a, o) => a + o.bytes, 0)} bytes, each verified against its recorded size and checksummed`)
+} else {
+  console.log('backup: no storage objects to archive')
+}
+
+// ---- 3. THE MANIFEST: what this dump is supposed to contain ------------------
 // The restore test asserts against this file rather than against a list of
 // tables somebody chose, which is the difference between proving the backup is
 // complete and proving the six tables we remembered to check are present.
@@ -263,6 +402,20 @@ if (nonAscii.length) {
 const manifestJson = run('psql', [...conn, '-X', '-q', '-At', '-v', 'ON_ERROR_STOP=1', '-c', manifestSql]).trim()
 let parsed
 try { parsed = JSON.parse(manifestJson) } catch { die('the manifest query did not return valid JSON') }
+
+// The storage half of the manifest, recorded from what was actually fetched and
+// checksummed rather than from what the database said it would be. The restore
+// test verifies the ARCHIVED bytes against these checksums -- it does NOT re-fetch
+// from live, which would make it a monitoring check that fails when the internet
+// is down rather than a restore check that proves the artifact is sound.
+parsed.storage = {
+  archive: store.objects.length ? path.basename(storageTar) : null,
+  buckets: store.buckets,
+  object_count: storedObjects.length,
+  total_bytes: storedObjects.reduce((a, o) => a + o.bytes, 0),
+  objects: storedObjects,
+}
+
 // Written pretty, because the one time somebody reads this by hand is the day the
 // database is gone and they are not having a good day.
 fs.writeFileSync(manifest, JSON.stringify(parsed, null, 2) + '\n')
@@ -271,8 +424,8 @@ const tableCount = parsed.tables.length
 const rowTotal = parsed.tables.reduce((a, t) => a + Number(t.rows), 0)
 const tbRows = parsed.trial_balance.length
 
-// ---- 3. encrypt, and delete the plain copies --------------------------------
-const files = [dump, manifest]
+// ---- 4. encrypt, and delete the plain copies --------------------------------
+const files = store.objects.length ? [dump, storageTar, manifest] : [dump, manifest]
 if (recipient) {
   console.log(`backup: encrypting with ${toolPath('age')}`)
   for (const f of files) {
@@ -284,6 +437,8 @@ if (recipient) {
 for (const f of files.map(f => (recipient ? `${f}.age` : f))) {
   console.log(`backup: ${path.basename(f)} ${(fs.statSync(f).size / 1048576).toFixed(2)} MB`)
 }
+console.log(`backup: storage ${parsed.storage.object_count} object(s), ${parsed.storage.total_bytes} bytes, `
+  + `${parsed.storage.buckets.length} bucket(s) all public, each object checksummed`)
 console.log(`backup: manifest records ${tableCount} tables, ${rowTotal} rows, `
   + `${parsed.finance_settings.length} propert(ies), `
   + `${parsed.document_counters.length} document counter(s), `

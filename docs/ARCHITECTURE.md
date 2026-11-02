@@ -254,6 +254,14 @@ security` away from being a hole, so the sweep should narrow these grants to wha
 the storefront actually reads rather than leaving `TRUNCATE` on the guest ledger
 granted to the anonymous role.
 
+**2b. `anon` also holds full table grants on `storage.objects` and
+`storage.buckets`** — `SELECT, INSERT, UPDATE, DELETE` on both. Same shape as the
+finding above, same sweep, same single layer holding it closed: there is no
+`anon` policy on `storage.objects` at all (013 dropped it deliberately), so RLS
+denies everything and the LIST endpoint returns `[]` to an anonymous caller.
+Measured. The grant is Supabase's default to the browser-facing role, not
+something a migration here asked for, and narrowing it belongs with 2.
+
 **3. Two views have `security_invoker` OFF, and that is CORRECT — do not "fix"
 it.** `stock_take_sheet` and `stock_take_progress` are owned by `postgres` and
 granted `SELECT` to `authenticated`, which looks exactly like a cross-tenant leak
@@ -265,6 +273,50 @@ from the RLS tables beside them. Switching `security_invoker` on would be
 harmless but redundant; *removing* the self-scoping `WHERE` on the assumption that
 RLS covers it would open the leak this note exists to rule out. The other 21
 views in `public` do use `security_invoker = on`.
+
+### A standing rule about storage, written down before it can be broken
+
+**GUEST IDENTITY DOCUMENTS MUST NEVER GO INTO `property-media`, OR INTO ANY
+PUBLIC BUCKET.** Nothing is wrong today, and that is exactly why this is written
+down now rather than later.
+
+The state of things, measured 2 Nov 2026: there is **one** bucket,
+`property-media`, and it is **public**. It holds 9 objects / 645 KB — a hero, a
+logo and one item photo, three size variants each. `018_guests_identity` added
+**structured columns** to `guests` (document type, number, expiry); it added no
+uploads, and no identity document has ever been stored. So the protection people
+assume exists for identity files does not exist — there is simply nothing to
+protect yet.
+
+**Why this is a trap rather than a gap.** The day somebody builds passport
+capture at check-in, the obvious move is to reuse the bucket that already works,
+has an upload path, has RLS policies, and has a tested image pipeline. And a
+public bucket's CDN endpoint **does not consult `storage.objects` RLS at all** —
+`013_storage_list_scope.sql` establishes this in detail and I confirmed it by
+fetching every object with no credential of any kind. The four policies on
+`storage.objects` govern the authenticated and LIST endpoints only. So a passport
+scan written to `property-media` would be downloadable by anyone who knew or
+guessed its path, forever, with no key, and **nothing would error, nothing would
+look wrong, and no policy would have been violated**. The only reason the current
+photos are safe under that rule is that they are marketing images meant to be
+public.
+
+**What to do instead**, when that day comes: a second, **private** bucket, its own
+RLS policies, and signed URLs with short expiry for the few screens that display
+a document. 005 rejected signed URLs for guest photos on cost and complexity
+grounds and was right to; that trade reverses completely for identity documents,
+where the whole point is that the bytes are not public.
+
+**And it will stop the backup, by design.** `scripts/ops/backup.mjs` fetches
+object bytes from the public CDN endpoint, which cannot reach a private bucket.
+It therefore enumerates `storage.buckets` and **refuses to run, fatally and by
+name**, if any bucket is not public — it never skips one and never warns and
+continues. A backup that silently omitted the bucket holding guest identity
+documents would be worse than no backup, because it would be trusted. So adding
+that bucket is a deliberate decision with a deliberate consequence: give the
+backup a credential narrow enough to read it, write down what that credential can
+do if the runner is compromised, and record the decision in
+[`docs/backups.md`](backups.md) before enabling it.
 
 ---
 

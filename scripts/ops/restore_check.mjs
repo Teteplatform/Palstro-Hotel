@@ -4,6 +4,7 @@
 //  against the manifest taken with it.          (docs/backups.md)
 // =============================================================================
 //  node scripts/ops/restore_check.mjs --dump=<hotel-*.dump> --manifest=<hotel-*.manifest.json>
+//                                     [--storage=<hotel-*.storage.tar>]
 //                                     [--db=restore_check_<x>] [--keep]
 //
 //  The throwaway server comes from RESTORE_ADMIN_URL — a superuser on a LOCAL or
@@ -35,6 +36,7 @@
 //  failure wearing the costume of a pass.
 // =============================================================================
 import { spawnSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 
@@ -310,6 +312,88 @@ try {
     } else {
       PASS(`inventory_gl_reconciliation reads 0.00 for all ${results.length} propert(ies)`,
         `${results.join(', ')}; and the stock movements it reads came back intact`)
+    }
+  }
+
+  // ---- 7. THE STORAGE ARCHIVE, AGAINST THE MANIFEST'S CHECKSUMS -----------
+  // Verifies the ARCHIVED bytes. It deliberately does NOT re-fetch from the live
+  // bucket: that would be a monitoring check wearing a restore check's clothes,
+  // red whenever the internet is down or the CDN is slow, and it would tell us
+  // nothing about whether the artifact we are holding is sound. The question here
+  // is only ever "is what we stored still what we stored".
+  console.log('\n=== the storage archive ===')
+  const S = M.storage
+  if (!S) {
+    FAIL('the manifest has no "storage" section', 'it was written before storage was covered; a backup without the image bytes leaves live media_assets rows pointing at nothing')
+  } else if (S.object_count === 0) {
+    VACUOUS('every archived object matches its checksum', 'the manifest records no storage objects, so there is nothing to verify')
+  } else if (!args.storage) {
+    FAIL(`--storage was not given, but the manifest claims ${S.object_count} object(s) (${S.total_bytes} bytes)`,
+      'the archive is missing from the artifact or was not passed in; skipping this would be the same silent omission the private-bucket guard exists to prevent')
+  } else if (!fs.existsSync(args.storage)) {
+    FAIL(`--storage not found: ${args.storage}`)
+  } else {
+    // Extracted into a directory NEXT TO the archive, and tar is run from there
+    // with a relative path. GNU tar reads any argument containing a colon as
+    // `host:path` and tries to resolve a remote host, so an absolute Windows path
+    // fails with "Cannot connect to C: resolve failed". --force-local cures it on
+    // GNU tar and does not exist on bsdtar; a relative path from a cwd works on
+    // both, and keeping the directory beside the archive avoids copying what may
+    // one day be a few hundred megabytes just to read it.
+    const archiveAbs = path.resolve(args.storage)
+    const archiveRel = path.join('..', path.basename(archiveAbs))
+    const dir = fs.mkdtempSync(path.join(path.dirname(archiveAbs), 'restore-storage-'))
+    try {
+      const t = spawnSync('tar', ['-xf', archiveRel], { cwd: dir, encoding: 'utf8' })
+      if (t.status !== 0) {
+        FAIL('the storage archive would not extract', (t.stderr || '').split('\n')[0])
+      } else {
+        const bad = [], missing = []
+        let okCount = 0, okBytes = 0
+        for (const o of S.objects) {
+          const f = path.join(dir, o.bucket, ...o.name.split('/'))
+          if (!fs.existsSync(f)) { missing.push(`${o.bucket}/${o.name}`); continue }
+          const buf = fs.readFileSync(f)
+          if (buf.length !== Number(o.bytes)) {
+            bad.push(`${o.bucket}/${o.name}: ${buf.length} bytes, manifest says ${o.bytes}`); continue
+          }
+          const sha = createHash('sha256').update(buf).digest('hex')
+          if (sha !== o.sha256) { bad.push(`${o.bucket}/${o.name}: checksum differs`); continue }
+          okCount++; okBytes += buf.length
+        }
+        // Anything in the archive the manifest does not account for.
+        const listed = spawnSync('tar', ['-tf', archiveRel], { cwd: dir, encoding: 'utf8' })
+        const inTar = (listed.stdout || '').split('\n')
+          .map(l => l.trim().replace(/^\.\//, '')).filter(l => l && !l.endsWith('/'))
+        const expected = new Set(S.objects.map(o => `${o.bucket}/${o.name}`))
+        const unexpected = inTar.filter(n => !expected.has(n))
+
+        for (const m of missing) FAIL(`archived object absent: ${m}`)
+        for (const b of bad) FAIL(`archived object does not match the manifest — ${b}`)
+        if (!missing.length && !bad.length) {
+          PASS(`all ${okCount} archived object(s) match the manifest by size and SHA-256`, `${okBytes} bytes`)
+        }
+        if (unexpected.length) {
+          console.log(`  note     ${unexpected.length} file(s) in the archive not named by the manifest: ${unexpected.slice(0, 5).join(', ')}`)
+        }
+      }
+    } finally { fs.rmSync(dir, { recursive: true, force: true }) }
+
+    // Every live media_assets row must have a matching archived object, or the
+    // restored site renders a broken image. This is the orphan check from the
+    // other side: the database half came back above, this says the bytes did too.
+    const liveRows = JSON.parse(sql(db, `
+      SELECT coalesce(json_agg(bucket_path ORDER BY bucket_path), '[]'::json)::text
+        FROM public.media_assets WHERE deleted_at IS NULL`).trim())
+    const archived = new Set(S.objects.map(o => o.name))
+    const broken = liveRows.filter(p => !archived.has(p))
+    if (liveRows.length === 0) {
+      VACUOUS('every live media_assets row has its bytes in the archive', 'the restored copy has no live media_assets rows')
+    } else if (broken.length === 0) {
+      PASS(`all ${liveRows.length} live media_assets row(s) have their bytes in the archive`)
+    } else {
+      FAIL(`${broken.length} live media_assets row(s) have no archived file — the restored site would render broken images`,
+        broken.slice(0, 3).join(', '))
     }
   }
 

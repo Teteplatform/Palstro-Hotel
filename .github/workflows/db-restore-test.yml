@@ -1,0 +1,146 @@
+# The monthly restore test.   (docs/backups.md)
+#
+# Takes the newest backup artifact still kept, decrypts it, restores it into a
+# throwaway PostgreSQL 17 inside the runner, and asserts the restored copy
+# against the manifest that was written with it: every table in public and auth
+# by row count, gl_wired_at per property, the document counters as values, the
+# trial balance, the stock side, and every archived storage object by SHA-256.
+#
+# WHY A SEPARATE WORKFLOW AND A SEPARATE SECRET. This is the only job that needs
+# BACKUP_AGE_KEY, the age PRIVATE key. The nightly backup is given only the
+# public key, so a compromised nightly runner cannot read a single backup it has
+# taken. Keeping the decryption key in the job that runs once a month is the
+# whole reason the split exists.
+#
+# WHY IT MATTERS MORE THAN THE BACKUP ITSELF. An untested backup is a belief. The
+# failures this is built to catch all look like success from the outside: a dump
+# that restores with the data silently missing, a storage archive of the right
+# size holding error pages, a counter that comes back rewound so the next booking
+# reuses a number already issued. Every one of those is green until something
+# opens the file and counts.
+#
+# WHAT IT DOES NOT DO: it never re-fetches anything from the live project. The
+# checksums are verified against the ARCHIVED bytes. A restore test that reached
+# out to the internet would go red when the CDN was slow, which teaches people to
+# ignore it, and it would still not answer the only question being asked here --
+# is the artifact we are holding sound.
+#
+# Secret: BACKUP_AGE_KEY (this workflow only; the owner keeps their own copy
+# offline, in a password manager, because it cannot be regenerated).
+name: db-restore-test
+
+on:
+  schedule:
+    - cron: '37 4 1 * *'   # 04:37 UTC on the 1st of every month (off :00, where GitHub queues everything)
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  actions: read            # to list and download the backup artifact
+  issues: write            # for the one failure issue
+
+env:
+  AGE_VERSION: v1.3.2      # https://github.com/FiloSottile/age/releases/tag/v1.3.2
+  AGE_SHA256: cbe24006683f8eb669266162894b9a522a1af52f2665fbc63a4bb032ed26ac10   # age-v1.3.2-linux-amd64.tar.gz
+  AGE_BIN: /usr/local/bin
+
+jobs:
+  restore:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    services:
+      pg:
+        # 17 to match the server the dump came from: pg_restore will not load a
+        # dump taken from a newer server than itself.
+        image: postgres:17
+        env: { POSTGRES_PASSWORD: restore-test-only }
+        ports: ['5432:5432']
+        options: --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: PostgreSQL 17 client
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt noble-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update -q && sudo apt-get install -y -q postgresql-client-17
+
+      - name: age ${{ env.AGE_VERSION }} (the official release, checksum verified)
+        run: |
+          curl -fsSL -o age.tar.gz "https://github.com/FiloSottile/age/releases/download/${AGE_VERSION}/age-${AGE_VERSION}-linux-amd64.tar.gz"
+          echo "${AGE_SHA256}  age.tar.gz" | sha256sum -c -
+          tar -xzf age.tar.gz && sudo install -m 0755 age/age age/age-keygen /usr/local/bin/ && rm -rf age age.tar.gz
+          /usr/local/bin/age --version
+
+      - name: The newest backup still kept
+        env: { GH_TOKEN: '${{ github.token }}' }
+        run: |
+          set -euo pipefail
+          # am or pm, whichever is newer; a run by hand that only checked the
+          # set-up produced no artifact and is skipped by the name filter.
+          read -r run_id name <<< "$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?per_page=100" \
+            --jq '[.artifacts[] | select(.name | startswith("hotel-backup-")) | select(.expired | not)] | sort_by(.created_at) | last | "\(.workflow_run.id) \(.name)"')"
+          test -n "$run_id" && test "$run_id" != null || {
+            echo "::error::no backup artifact to restore. Either no backup has run yet, or every one has passed its retention."
+            exit 1
+          }
+          echo "restoring $name (run $run_id)" | tee -a "$GITHUB_STEP_SUMMARY"
+          gh run download "$run_id" --name "$name" --dir backup-in
+          ls -l backup-in
+
+      - name: Decrypt
+        env: { BACKUP_AGE_KEY: '${{ secrets.BACKUP_AGE_KEY }}' }
+        run: |
+          set -euo pipefail
+          test -n "${BACKUP_AGE_KEY}" || { echo "::error::BACKUP_AGE_KEY is not set, so the backup cannot be opened"; exit 1; }
+          # umask before writing, so the key file is never briefly world-readable.
+          umask 077; printf '%s\n' "$BACKUP_AGE_KEY" > /tmp/age.key
+          for f in backup-in/*.age; do age -d -i /tmp/age.key -o "${f%.age}" "$f"; done
+          rm -f /tmp/age.key
+          ls -l backup-in
+
+      - name: Restore, and hold it to the manifest
+        env:
+          RESTORE_ADMIN_URL: postgresql://postgres:restore-test-only@localhost:5432/postgres
+          PG_BIN: /usr/lib/postgresql/17/bin
+        run: |
+          set -euo pipefail
+          DUMP=$(ls backup-in/*.dump)
+          MANIFEST=$(ls backup-in/*.manifest.json)
+          # The storage archive is passed when it is there. It is NOT optional in
+          # the sense of being skippable: if the manifest claims objects and no
+          # archive arrives, restore_check FAILS rather than passing quietly.
+          STORAGE=$(ls backup-in/*.storage.tar 2>/dev/null || true)
+          if [ -n "$STORAGE" ]; then
+            node scripts/ops/restore_check.mjs --dump="$DUMP" --manifest="$MANIFEST" --storage="$STORAGE" | tee -a "$GITHUB_STEP_SUMMARY"
+          else
+            node scripts/ops/restore_check.mjs --dump="$DUMP" --manifest="$MANIFEST" | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: One issue for the owner (opened on failure, closed by the next good run)
+        if: ${{ !cancelled() }}
+        uses: actions/github-script@v9
+        env:
+          JOB_STATUS: '${{ job.status }}'
+        with:
+          script: |
+            const title = 'Monthly restore test failing'
+            const { owner, repo } = context.repo
+            const run = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`
+            const day = new Date().toISOString().slice(0, 10)
+            const open = (await github.paginate(github.rest.issues.listForRepo, { owner, repo, state: 'open', per_page: 100 }))
+              .filter(i => !i.pull_request && i.title === title)
+              .sort((a, b) => b.number - a.number)
+            if (process.env.JOB_STATUS !== 'success') {
+              if (open.length) {
+                await github.rest.issues.createComment({ owner, repo, issue_number: open[0].number, body: `Failed again on ${day}: ${run}` })
+              } else {
+                await github.rest.issues.create({ owner, repo, title, body: `The latest backup did not restore cleanly against its manifest on ${day}: ${run}\n\nThe backup may be arriving and still be unusable — that is what this test exists to find. Recovery steps and what each check means: docs/backups.md` })
+              }
+            } else {
+              for (const i of open) {
+                await github.rest.issues.createComment({ owner, repo, issue_number: i.number, body: `The restore test passed on ${day}: ${run}` })
+                await github.rest.issues.update({ owner, repo, issue_number: i.number, state: 'closed', state_reason: 'completed' })
+              }
+            }
