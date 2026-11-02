@@ -211,6 +211,61 @@ balance, P&L, balance sheet, bank reconciliation, tax returns, ageing, group
 roll-up — stays there. The test the spine was scoped against: *it gives money
 somewhere to go; it does not give anyone something to read.*
 
+### Owed to shipment 1.3, the security sweep — three findings, measured
+
+Recorded here rather than in the tracker because the tracker records what
+*ships*, and these are facts about the database as it stands. All three were
+measured on live (2 Nov 2026) while building the nightly backup, which needed to
+know exactly what a read-only login can and cannot see. **None of them is fixed
+here, and two of them must not be fixed in a hurry.**
+
+**1. Fifteen `SECURITY DEFINER` functions in `public` are `EXECUTE`-able by
+`PUBLIC`.** A definer function runs as its owner, so it is not bounded by the
+caller's grants — which is the whole point of the pattern and also its risk.
+Most of the fifteen are trigger functions that do nothing useful when called
+directly (`log_field_changes`, `create_property_settings_row`,
+`create_tenant_settings_row`, `create_property_finance_settings_row`,
+`enforce_media_quota`). Three are the read-only helpers **RLS itself calls** on
+every policy evaluation: `get_tenant_ids`, `get_property_ids`, `is_tenant_staff`
+(and `is_tenant_admin`). The remainder do write: `claim_statement_email`,
+`complete_statement_email`, `create_folio_for_booking`,
+`grant_property_to_tenant_admins`, `seed_charge_categories_for_tenant`,
+`seed_tax_charges_for_property`.
+
+**DO NOT revoke `EXECUTE` from `PUBLIC` across the board.** `get_tenant_ids()`
+is invoked by every RLS policy in the database; revoking it breaks every
+signed-in read in the application, and it breaks it *silently and completely*,
+which is the worst possible shape for a security fix to fail in. The sweep's job
+is to go function by function: the trigger functions can lose `PUBLIC` EXECUTE
+with no caller affected, the writers need their real callers identified first,
+and the RLS helpers stay as they are. `scripts/ops/backup_role.sql` carries the
+same caveat, because fuel's equivalent file claims the opposite about its own
+database and the claim must not be inherited.
+
+**2. `anon` holds full table-level grants on 40 tables and 8 views in `public` —
+`SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER` on every one.**
+This is Supabase's default grant to the browser-facing role, not something a
+migration here asked for, and **RLS is the only layer holding it closed.** The
+measurement is the reassuring half: all 40 of those tables have RLS enabled, and
+all 8 of those views carry `security_invoker = on`, so the policies do apply.
+Rule 19 still stands — the active-tenant filter in the client is the second
+layer, not the first. But the floor is one `alter table … disable row level
+security` away from being a hole, so the sweep should narrow these grants to what
+the storefront actually reads rather than leaving `TRUNCATE` on the guest ledger
+granted to the anonymous role.
+
+**3. Two views have `security_invoker` OFF, and that is CORRECT — do not "fix"
+it.** `stock_take_sheet` and `stock_take_progress` are owned by `postgres` and
+granted `SELECT` to `authenticated`, which looks exactly like a cross-tenant leak
+and was investigated as one. It is not: **both views scope themselves**, carrying
+`WHERE t.tenant_id = ANY (get_tenant_ids())` in their own bodies. Verified
+empirically rather than reasoned about — queried as `authenticated` with a `sub`
+belonging to no `tenant_users` row, both views returned **0 rows**, alongside 0
+from the RLS tables beside them. Switching `security_invoker` on would be
+harmless but redundant; *removing* the self-scoping `WHERE` on the assumption that
+RLS covers it would open the leak this note exists to rule out. The other 21
+views in `public` do use `security_invoker = on`.
+
 ---
 
 ## Inventory scope

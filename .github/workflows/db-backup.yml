@@ -1,0 +1,198 @@
+# Our own backup of the live database, morning and night.   (docs/backups.md)
+#
+# A pg_dump of `public` and `auth` plus its trial balance, encrypted with age to
+# the owner's public key, kept as a private artifact named
+# hotel-backup-<Lagos date>-am | pm: the night copy (21:43 Lagos) kept
+# PM_RETENTION_DAYS, the morning copy (05:17 Lagos) AM_RETENTION_DAYS.
+#
+# WHY WE TAKE OUR OWN, when Supabase has backups of its own. Theirs are on their
+# plan, in their account, reachable only through their dashboard, and on the free
+# tier they are not point-in-time. A backup we hold, can decrypt ourselves, and
+# restore into a throwaway Postgres on a runner once a month is the only one we
+# can prove works — and the monthly restore test (db-restore-test.yml) is the
+# proof. An untested backup is a belief.
+#
+# WHY TWICE A DAY, AND WHY THE EVENING SLOT MATTERS MORE HERE. A hotel runs a
+# night audit: the day's room charges post at checkout and the audit rolls the
+# business date over. The 21:43 Lagos copy therefore lands after the day's trade
+# and before the rollover, which is the moment the database is both complete and
+# quiet. The 05:17 copy is the cheap insurance against losing a night.
+#
+# WHY THE SECRET IS A READ-ONLY LOGIN AND NOT `postgres`. BACKUP_DB_URL carries
+# the `hotel_backup` login from scripts/ops/backup_role.sql: it can read every
+# row and change none. A secret that can drop the database is a different
+# category of risk from one that can only read it, and this one lives in GitHub.
+#
+# WHY age AND NOT A SHARED PASSPHRASE. age encrypts to a PUBLIC key, so the
+# runner holds nothing that can decrypt its own output. With a symmetric
+# passphrase, anyone who can read the secret can read every backup ever taken.
+# BACKUP_AGE_KEY (the private key) is needed only by the monthly restore test.
+#
+# WHY AN ARTIFACT AND NOT A SECOND REPOSITORY. A release asset in a backups repo
+# needs a second repo and a PAT with write access to it — two more things to hold
+# and one more credential that can push code. Artifacts have retention built in,
+# are private to the repository, and need no extra secret.
+#
+# ---------------------------------------------------------------------------
+# SET-UP — the secrets, and how to check them without waiting for a slot
+# ---------------------------------------------------------------------------
+#   Settings -> Secrets and variables -> Actions -> New repository secret
+#     BACKUP_DB_URL         the hotel_backup connection string (.env.local)
+#     BACKUP_AGE_RECIPIENT  the owner's age PUBLIC key (age1...)
+#     BACKUP_AGE_KEY        the owner's age PRIVATE key — restore test only
+#     SUPABASE_URL          already set for the keep-alive
+#     SUPABASE_ANON_KEY     already set for the keep-alive
+#
+#   Then run this workflow by hand with mode "check-setup". It audits every
+#   secret and the backup login without taking a backup, and prints only
+#   present / missing / ok / FAIL — never a value. That is how to test a change
+#   to this file in the minute it is made rather than at 04:17 tomorrow.
+#
+# ---------------------------------------------------------------------------
+# THE GOTCHA THAT MAKES THIS FAIL SILENTLY, STATED HERE BECAUSE IT WILL
+# ---------------------------------------------------------------------------
+# GITHUB DISABLES A SCHEDULED WORKFLOW ON A REPOSITORY WITH NO ACTIVITY FOR 60
+# DAYS — the same quiet period a pre-go-live project has most of. GitHub emails
+# the repository admins first. If the backups stop arriving, check the Actions
+# tab for a disabled schedule BEFORE assuming this workflow is broken. The same
+# warning is on supabase-keepalive.yml, for the same reason.
+name: db-backup
+
+on:
+  schedule:
+    # Minutes off :00 and :30, where GitHub queues every schedule at once and
+    # starts them late under load.
+    - cron: '17 4 * * *'    # 04:17 UTC = 05:17 Lagos — the morning copy (am)
+    - cron: '43 20 * * *'   # 20:43 UTC = 21:43 Lagos — the night copy (pm)
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'backup = take a backup now; check-setup = only audit the secrets and the backup login'
+        type: choice
+        options: [backup, check-setup]
+        default: backup
+
+permissions:
+  contents: read
+  issues: write           # for the one failure issue, below
+
+concurrency:
+  group: db-backup
+  cancel-in-progress: false
+
+env:
+  AGE_VERSION: v1.3.2     # https://github.com/FiloSottile/age/releases/tag/v1.3.2
+  AGE_SHA256: cbe24006683f8eb669266162894b9a522a1af52f2665fbc63a4bb032ed26ac10   # age-v1.3.2-linux-amd64.tar.gz
+  AGE_BIN: /usr/local/bin
+  PM_RETENTION_DAYS: 30   # the night copy
+  AM_RETENTION_DAYS: 7    # the morning copy — shorter, so two a day fit comfortably
+
+jobs:
+  backup:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: PostgreSQL 17 client
+        # Version 17 deliberately: it must match the server (Postgres 17.6), because
+        # pg_dump refuses to dump a server newer than itself.
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt noble-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update -q && sudo apt-get install -y -q postgresql-client-17
+
+      - name: age ${{ env.AGE_VERSION }} (the official release, checksum verified)
+        # Pinned by version AND by SHA-256. The thing that encrypts every backup is
+        # the last place to accept whatever the latest tag happens to be today.
+        run: |
+          curl -fsSL -o age.tar.gz "https://github.com/FiloSottile/age/releases/download/${AGE_VERSION}/age-${AGE_VERSION}-linux-amd64.tar.gz"
+          echo "${AGE_SHA256}  age.tar.gz" | sha256sum -c -
+          tar -xzf age.tar.gz && sudo install -m 0755 age/age age/age-keygen /usr/local/bin/ && rm -rf age age.tar.gz
+          /usr/local/bin/age --version
+
+      - name: Check the set-up (no backup taken)
+        if: inputs.mode == 'check-setup'
+        env:
+          BACKUP_DB_URL: ${{ secrets.BACKUP_DB_URL }}
+          BACKUP_AGE_RECIPIENT: ${{ secrets.BACKUP_AGE_RECIPIENT }}
+          BACKUP_AGE_KEY: ${{ secrets.BACKUP_AGE_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          PG_BIN: /usr/lib/postgresql/17/bin
+        run: node scripts/ops/check_backup_setup.mjs
+
+      - name: Backup (encrypted)
+        if: inputs.mode != 'check-setup'
+        env:
+          BACKUP_DB_URL: ${{ secrets.BACKUP_DB_URL }}
+          BACKUP_AGE_RECIPIENT: ${{ secrets.BACKUP_AGE_RECIPIENT }}
+          PG_BIN: /usr/lib/postgresql/17/bin
+        run: node scripts/ops/backup.mjs --out=backup-out
+
+      - name: The backup's name (Lagos date, am / pm) and how long it is kept
+        id: slot
+        if: inputs.mode != 'check-setup'
+        env:
+          SCHEDULE: '${{ github.event.schedule }}'
+        run: |
+          # A scheduled run takes its slot from its SCHEDULE, not from the clock, so a
+          # run GitHub starts two hours late stays in the slot it was meant for and
+          # does not overwrite the other one. A run by hand uses the Lagos hour.
+          case "$SCHEDULE" in
+            '17 4 * * *')  slot=am ;;
+            '43 20 * * *') slot=pm ;;
+            *) if [ "$(TZ=Africa/Lagos date +%H)" -lt 12 ]; then slot=am; else slot=pm; fi ;;
+          esac
+          # The slot's own date in Lagos. Six hours back keeps a night copy that
+          # started after midnight (a late run) on the day it belongs to.
+          if [ "$slot" = pm ]; then
+            day=$(TZ=Africa/Lagos date -d '-6 hours' +%F); days=$PM_RETENTION_DAYS
+          else
+            day=$(TZ=Africa/Lagos date +%F); days=$AM_RETENTION_DAYS
+          fi
+          echo "name=hotel-backup-$day-$slot" >> "$GITHUB_OUTPUT"
+          echo "days=$days" >> "$GITHUB_OUTPUT"
+          echo "hotel-backup-$day-$slot, kept $days days" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v7
+        if: inputs.mode != 'check-setup'
+        with:
+          name: ${{ steps.slot.outputs.name }}
+          path: backup-out/*.age
+          retention-days: ${{ steps.slot.outputs.days }}
+          # A green run with nothing in it is the failure this whole file exists to
+          # avoid. If the dump is missing, say so loudly.
+          if-no-files-found: error
+
+      - name: One issue for the owner (opened on failure, closed by the next good run)
+        # A red run nobody sees is not a signal. This opens ONE issue and adds every
+        # later failure to it as a comment, rather than fifty issues titled the same
+        # thing — and the next successful backup closes it, so the issue list says
+        # whether backups are working right now.
+        if: ${{ !cancelled() && inputs.mode != 'check-setup' }}
+        uses: actions/github-script@v9
+        env:
+          JOB_STATUS: '${{ job.status }}'
+        with:
+          script: |
+            const title = 'Backup failing'
+            const { owner, repo } = context.repo
+            const run = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`
+            const day = new Date().toISOString().slice(0, 10)
+            const open = (await github.paginate(github.rest.issues.listForRepo, { owner, repo, state: 'open', per_page: 100 }))
+              .filter(i => !i.pull_request && i.title === title)
+              .sort((a, b) => b.number - a.number)
+            if (process.env.JOB_STATUS !== 'success') {
+              if (open.length) {
+                await github.rest.issues.createComment({ owner, repo, issue_number: open[0].number, body: `Failed again on ${day}: ${run}` })
+              } else {
+                await github.rest.issues.create({ owner, repo, title, body: `The database backup did not complete on ${day}: ${run}\n\nThis one issue collects every later failure as a comment and is closed by the next successful backup. Set-up and recovery: docs/backups.md` })
+              }
+            } else {
+              for (const i of open) {
+                await github.rest.issues.createComment({ owner, repo, issue_number: i.number, body: `The backup succeeded on ${day}: ${run}` })
+                await github.rest.issues.update({ owner, repo, issue_number: i.number, state: 'closed', state_reason: 'completed' })
+              }
+            }
