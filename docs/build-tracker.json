@@ -395,6 +395,23 @@
      "note": "Closes the gap between go-live and stage 7 purchasing. Without it the average cost freezes at opening and every valuation drifts. Stage 7 later upgrades this into receive-against-order without changing the movement. DEPLOYED 21 Aug (migration 043 applied first, then code — the safe direction). 56 SQL assertions, 310 render assertions across 9 proofs. Three things the proofs found that the reasoning had wrong: the late-openings view keyed on created_at could never have fired, because created_at defaults to now() which is TRANSACTION start time, so rows written together tie to the microsecond — it uses seq instead, the column 036 created for exactly this; a second `|| true` tautology assertion; and a deliberate wrong-average breakage that stayed GREEN because the assertion recomputed from its own constants instead of calling the component. The receive test is kind='store', not is_default_store, so a hotel's second store receives without ceremony."
     },
     {
+     "id": "1.1g2",
+     "t": "A write-off we cannot value says so first",
+     "s": "next",
+     "m": "golive",
+     "size": "S",
+     "r": "—",
+     "ships": [
+      "A second confirm-gate on post_stock_writeoff, fired when the movement would carry no cost basis at all, overridable in the same shape as p_allow_negative",
+      "The same gate on post_stock_adjustment, which has the identical gap",
+      "Its own errcode, so the client can tell this refusal from the negative-stock one and offer the right confirm step",
+      "The message in the database with a hint naming the three ways out: record the opening balance first, date it on or after the first receipt, or confirm writing it off unvalued",
+      "The confirm step on both screens, so the override is a deliberate act rather than a flag the client passes by default"
+     ],
+     "proof": "A back-dated write-off against a position with no prior receipt asks before it posts, and posts when confirmed. The reconciliation then names it in the bucket 048 built: unvaluable_value carries its quantity at the position average and valuation_difference stays at zero.",
+     "note": "Found while fixing 3b, in the gap between two guards that ask different questions. post_stock_writeoff's negative guard asks WHAT IS ON HAND TODAY; the cost basis asks WHAT THE AVERAGE WAS AS AT THE MOVEMENT'S DATE. Write off 4 kg dated 1 October against a position holding 10 kg received on 5 October and on-hand-today is 10, the result is 6, no guard fires — and the as-at average is undefined, so the movement is unvaluable with no warning anywhere. Writing off from an empty shelf is already gated; the back-dated case sails straight through. NOT A REFUSAL, deliberately: §9 holds, blocking teaches staff to invent fake receipts, and a write-off is a storekeeper admitting a loss — refuse the admission and you get either an invisible loss or fabricated purchase data in the system built to catch theft. What changes is that the unvaluable case becomes acknowledged rather than silent. It needs the confirm step on the screens, which is why it is a shipment and not a migration."
+    },
+    {
      "id": "1.1h",
      "t": "The books: accounts, mappings and the journal",
      "s": "done",
@@ -471,7 +488,7 @@
     {
      "id": "1.1h3",
      "t": "Where else a purchase can go: assets and expenses",
-     "s": "later",
+     "s": "next",
      "m": "golive",
      "size": "M",
      "r": "047",
@@ -525,7 +542,7 @@
     {
      "id": "1.1i",
      "t": "Outlet prices and the bulk price tool",
-     "s": "next",
+     "s": "later",
      "m": "golive",
      "size": "M",
      "r": "044",

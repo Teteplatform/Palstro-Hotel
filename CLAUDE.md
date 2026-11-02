@@ -869,6 +869,23 @@ first.
     never in git, so it was rebuilt from a published HTML page twice in one day.
     A build plan that lives in somebody's workspace is one wipe from gone.*
 
+    **Edit the JSON SURGICALLY — never round-trip it through a serialiser.**
+    `JSON.parse` then `JSON.stringify(j, null, 2)` reformats all ~1,700 lines and
+    buries a two-field change in a diff of 1,706 insertions, which no reviewer
+    will read. The file is written with 1-space indent; a default serialiser does
+    not preserve that. Change the exact lines (an editor, or a targeted
+    find-and-replace on unique text) and check `git diff --stat` says single
+    figures before committing. *This happened: the reformat was caught on the
+    diff and reverted. The next person will not catch it.*
+
+    **`git rm --cached` does not survive a `git stash` round-trip.** Untracking
+    the generated HTML and then stashing — to check something against `HEAD`, for
+    instance — silently re-tracks it on `stash pop`, and the next `git add -A`
+    commits the derived file straight back in. *This happened too, and was caught
+    only by reading `git status` one last time before committing.* So: after any
+    stash, rebase or checkout, re-read `git status --porcelain` and confirm
+    `docs/build-tracker.html` is absent from it before you commit.
+
 ---
 
 ## 8. Design conventions
