@@ -12,13 +12,23 @@
 //  WHAT IT PRODUCES
 //   1. pg_dump -Fc of the schemas `public` and `auth` (custom format; no owners,
 //      no privileges, no security labels).
-//   2. The trial balance per tenant, property and account, from
-//      journal_entry_lines — so the monthly restore test has something exact to
-//      compare the restored copy against (§3, docs/backups.md).
+//   2. A MANIFEST — hotel-<stamp>.manifest.json — recording what this dump is
+//      supposed to contain: a row count for EVERY table in both schemas, the
+//      applied-migration count and highest version, gl_wired_at per property,
+//      the document counters as values, and the trial balance as rows. The
+//      monthly restore test asserts the restored copy against this file table by
+//      table, instead of against a handful of tables somebody chose.
 //   3. Both encrypted with age to the owner's PUBLIC key (--recipient or
 //      BACKUP_AGE_RECIPIENT); the plain files are then deleted.
 //      --no-encrypt exists for a local test only and is refused unless
 //      BACKUP_DB_URL names localhost.
+//
+//  WHY A MANIFEST RATHER THAN A CHOSEN LIST OF CHECKS. The failure being guarded
+//  against is a backup that silently contains LESS than it should — and a
+//  hand-picked list of tables cannot catch that in a table nobody picked,
+//  including a table that does not exist yet on the day the list was written.
+//  The manifest is the check I was running by hand to verify my own work; writing
+//  it into the artifact is what lets the restore test run it instead of a person.
 //
 //  WHY `auth` AND NOT JUST `public`. Every table in this database carries
 //  created_by / updated_by referencing auth.users (CLAUDE.md §6, actor columns).
@@ -115,33 +125,154 @@ run('pg_dump', [
   '-n', 'public', '-n', 'auth', '-f', dump,
 ])
 
-// ---- 2. the trial balance, which is what the restore test compares ----------
-// Grouped by tenant AND property: this product's journal is per-property (a
-// tenant is a company, a property is a physical hotel), so a tenant-only grouping
-// would add two hotels together and still balance — a figure that agrees for the
-// wrong reason is worse than one that disagrees.
-// property_id is on journal_entries, not on the lines, hence the join.
-const tb = path.join(out, `hotel-${stamp}.tb.csv`)
-plainFiles.add(tb)
-const tbSql = `COPY (
-  SELECT l.tenant_id,
-         je.property_id,
-         l.account_id,
-         sum(l.debit)::numeric(14,2)  AS debit,
-         sum(l.credit)::numeric(14,2) AS credit,
-         count(*)                     AS lines
-    FROM public.journal_entry_lines l
-    JOIN public.journal_entries je ON je.id = l.journal_entry_id
-   GROUP BY l.tenant_id, je.property_id, l.account_id
-   ORDER BY l.tenant_id, je.property_id, l.account_id
-) TO STDOUT WITH (FORMAT csv, HEADER)`
-fs.writeFileSync(tb, run('psql', [...conn, '-X', '-q', '-v', 'ON_ERROR_STOP=1', '-c', tbSql]))
+// ---- 2. THE MANIFEST: what this dump is supposed to contain ------------------
+// The restore test asserts against this file rather than against a list of
+// tables somebody chose, which is the difference between proving the backup is
+// complete and proving the six tables we remembered to check are present.
+//
+// EVERY table in both dumped schemas, not a chosen few. A backup that silently
+// contains less than it should is the failure this whole file exists to catch,
+// and a hand-picked list cannot catch it in a table nobody picked — including a
+// table that does not exist yet on the day the list was written.
+//
+// Counts come from query_to_xml so that one statement counts every table
+// exactly. count(*) per table in a single pass, no dynamic round trips, and no
+// reliance on pg_class.reltuples, which is an ESTIMATE the planner maintains and
+// is routinely wrong right after a bulk change — an estimate here would make the
+// restore test compare two guesses and call it agreement.
+//
+// EVERY MONETARY AND TIMESTAMP VALUE IS CAST TO text. numeric in JSON becomes a
+// JSON number, and JSON numbers go through JavaScript as doubles — so a kobo
+// could be lost between recording the manifest and comparing it, and the
+// comparison would fail (or worse, pass) for a reason that has nothing to do
+// with the backup. Text compares exactly. Same reason CLAUDE.md §6 types money
+// as string on the way out of PostgREST.
+const manifest = path.join(out, `hotel-${stamp}.manifest.json`)
+plainFiles.add(manifest)
+const manifestSql = `
+SELECT json_build_object(
+  'manifest_version', 1,
+  'taken_at',         to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'),
+  'stamp',            '${stamp}',
+  'server_version',   current_setting('server_version'),
+  'schemas',          json_build_array('public', 'auth'),
 
-const rows = fs.readFileSync(tb, 'utf8').trim().split('\n').slice(1).filter(l => l.trim())
-const properties = new Set(rows.map(l => l.split(',')[1])).size
+  -- the highest applied migration and how many there are: a restored copy whose
+  -- schema history is short is a restored copy of an older database
+  'migrations', (
+    SELECT json_build_object('applied_count', count(*), 'highest', max(version))
+      FROM supabase_migrations.schema_migrations
+  ),
+
+  -- a row count for EVERY table in public and auth
+  'tables', (
+    SELECT coalesce(json_agg(t ORDER BY t.schema, t.table_name), '[]'::json) FROM (
+      SELECT c.table_schema AS schema,
+             c.table_name,
+             ((xpath('/row/n/text()',
+                query_to_xml(format('SELECT count(*) AS n FROM %I.%I', c.table_schema, c.table_name),
+                             false, true, '')))[1]::text)::bigint AS rows
+        FROM information_schema.tables c
+       WHERE c.table_schema IN ('public', 'auth')
+         AND c.table_type = 'BASE TABLE'
+    ) t
+  ),
+
+  -- gl_wired_at per property. 047 stamped it once; it is a FACT about when this
+  -- property's RPCs began posting, it cannot be re-derived from anything, and a
+  -- rebuild from migrations would stamp now() and silently re-explain movements
+  -- that genuinely failed to post. gl_start_date rides along because the pair is
+  -- easy to confuse and the restore should be able to show both.
+  'finance_settings', (
+    SELECT coalesce(json_agg(json_build_object(
+             'property_id',   property_id,
+             'gl_wired_at',   to_char(gl_wired_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
+             'gl_start_date', gl_start_date::text
+           ) ORDER BY property_id), '[]'::json)
+      FROM public.property_finance_settings
+  ),
+
+  -- the counters AS VALUES, not counts. Restore these wrong and the next booking
+  -- reuses a number already issued (CLAUDE.md section 6, document numbering).
+  --
+  -- Columns are listed EXPLICITLY rather than taking to_jsonb(d) of the whole
+  -- row, for two reasons. The rows carry created_at / updated_at, which are audit
+  -- metadata and never the basis for a figure, and a timestamptz rendered
+  -- into JSON takes its text form from the SESSION's TimeZone, so a manifest
+  -- written in one timezone and compared in another would differ on a field
+  -- nobody cares about and fail the restore test for no reason. last_number is
+  -- the value that matters, and it is an integer, so it compares exactly.
+  'document_counters', (
+    SELECT coalesce(json_agg(json_build_object(
+             'tenant_id',   d.tenant_id,
+             'property_id', d.property_id,
+             'doc_type',    d.doc_type,
+             'last_number', d.last_number
+           ) ORDER BY d.tenant_id, d.property_id, d.doc_type), '[]'::json)
+      FROM public.document_counters d
+  ),
+  'document_period_counters', (
+    SELECT coalesce(json_agg(json_build_object(
+             'tenant_id',   p.tenant_id,
+             'property_id', p.property_id,
+             'doc_type',    p.doc_type,
+             'year_month',  p.year_month,
+             'last_number', p.last_number
+           ) ORDER BY p.tenant_id, p.property_id, p.doc_type, p.year_month), '[]'::json)
+      FROM public.document_period_counters p
+  ),
+
+  -- the trial balance as rows, however many there are (today: none).
+  -- Grouped by tenant AND property, because this product's journal is
+  -- per-property. A tenant-only grouping would add two hotels together and
+  -- still balance, and a figure that agrees for the wrong reason is worse than
+  -- one that disagrees. property_id is on journal_entries, not the lines.
+  'trial_balance', (
+    SELECT coalesce(json_agg(json_build_object(
+             'tenant_id',   tb.tenant_id,
+             'property_id', tb.property_id,
+             'account_id',  tb.account_id,
+             'debit',       tb.debit,
+             'credit',      tb.credit,
+             'lines',       tb.lines
+           ) ORDER BY tb.tenant_id, tb.property_id, tb.account_id), '[]'::json)
+      FROM (
+        SELECT l.tenant_id::text   AS tenant_id,
+               je.property_id::text AS property_id,
+               l.account_id::text  AS account_id,
+               sum(l.debit)::numeric(14,2)::text  AS debit,
+               sum(l.credit)::numeric(14,2)::text AS credit,
+               count(*)            AS lines
+          FROM public.journal_entry_lines l
+          JOIN public.journal_entries je ON je.id = l.journal_entry_id
+         GROUP BY l.tenant_id, je.property_id, l.account_id
+      ) tb
+  )
+)::text`
+// EVERY SQL STRING WE SEND STAYS ASCII, and this is checked rather than assumed.
+// A non-ASCII character in the SQL -- an em dash or a section sign in a comment --
+// is handed to psql through the Windows process boundary in the console codepage,
+// and psql rejects it as `invalid byte sequence for encoding "UTF8"`. That message
+// points at the DATA and sends the next person looking for a corrupt row, when the
+// cause is a typographic character in a comment nobody reads. Cost me a run.
+const nonAscii = [...manifestSql].filter(c => c.charCodeAt(0) > 127)
+if (nonAscii.length) {
+  die(`the manifest SQL contains ${nonAscii.length} non-ASCII character(s) (${JSON.stringify([...new Set(nonAscii)].join(''))}). `
+    + 'Keep SQL sent to psql ASCII-only and put the prose in a JS comment instead.')
+}
+const manifestJson = run('psql', [...conn, '-X', '-q', '-At', '-v', 'ON_ERROR_STOP=1', '-c', manifestSql]).trim()
+let parsed
+try { parsed = JSON.parse(manifestJson) } catch { die('the manifest query did not return valid JSON') }
+// Written pretty, because the one time somebody reads this by hand is the day the
+// database is gone and they are not having a good day.
+fs.writeFileSync(manifest, JSON.stringify(parsed, null, 2) + '\n')
+
+const tableCount = parsed.tables.length
+const rowTotal = parsed.tables.reduce((a, t) => a + Number(t.rows), 0)
+const tbRows = parsed.trial_balance.length
 
 // ---- 3. encrypt, and delete the plain copies --------------------------------
-const files = [dump, tb]
+const files = [dump, manifest]
 if (recipient) {
   console.log(`backup: encrypting with ${toolPath('age')}`)
   for (const f of files) {
@@ -153,4 +284,9 @@ if (recipient) {
 for (const f of files.map(f => (recipient ? `${f}.age` : f))) {
   console.log(`backup: ${path.basename(f)} ${(fs.statSync(f).size / 1048576).toFixed(2)} MB`)
 }
-console.log(`backup: trial balance of ${rows.length} account row(s) across ${properties} propert(ies) recorded; ${recipient ? 'encrypted to the owner key' : 'NOT encrypted (local test)'}`)
+console.log(`backup: manifest records ${tableCount} tables, ${rowTotal} rows, `
+  + `${parsed.finance_settings.length} propert(ies), `
+  + `${parsed.document_counters.length} document counter(s), `
+  + `migrations ${parsed.migrations.applied_count} (highest ${parsed.migrations.highest}), `
+  + `trial balance ${tbRows} row(s)${tbRows === 0 ? ' — EMPTY, so the restore test will report that comparison as vacuous rather than passing it' : ''}`)
+console.log(`backup: ${recipient ? 'encrypted to the owner key' : 'NOT encrypted (local test)'}`)
