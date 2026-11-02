@@ -1,0 +1,1710 @@
+{
+ "meta": {
+  "product": "Palstro Hotels",
+  "tagline": "Hotel + restaurant operations platform. Hilton-grade control, small-operator simplicity.",
+  "firstCustomer": "Heledon Hotels & Suites, 30 rooms, Finima, Bonny Island",
+  "updated": "2026-11-02",
+  "statusKey": {
+   "done": "Shipped and proven on the live DB",
+   "wip": "In progress or waiting on one step",
+   "next": "Next up",
+   "later": "Not started"
+  },
+  "milestoneKey": {
+   "golive": "Heledon go-live: the hotel runs end to end without Excel",
+   "market": "Sellable: any Nigerian hotel or restaurant can buy it and run it",
+   "world": "Anywhere: currency, locale, tax, payments and integrations for any market"
+  },
+  "rules": [
+   "A shipment is DONE only when its proof has been run on the live DB. Code review is not proof.",
+   "Every shipment ends with two updates: docs/USER-GUIDE.md and this file, then npm run tracker.",
+   "Talk the shipment through before building it. No code until the shape is clear.",
+   "One shipment at a time. Do not start the next until the current one is proven.",
+   "If a shipment turns out to be two shipments, split it here rather than letting it sprawl."
+  ]
+ },
+ "stages": [
+  {
+   "id": 0,
+   "title": "Already shipped and proven",
+   "why": "The base the rest stands on. Kept visible so the sequence starts from reality, not from zero.",
+   "shipments": [
+    {
+     "id": "0.1",
+     "t": "Tenancy, RLS, roles scaffold, storage, modules, change log, settings engine",
+     "s": "done",
+     "m": "golive",
+     "size": "L",
+     "r": "001–011",
+     "ships": [
+      "Tenant and property model, get_tenant_ids resolution",
+      "Property media bucket with quota, private-by-default for IDs",
+      "enabled_modules gating and the generic change_log",
+      "Schema-driven settings with optimistic concurrency"
+     ],
+     "proof": "Live tenant and property running since day one"
+    },
+    {
+     "id": "0.2",
+     "t": "Guest marketing site + inline visual editor",
+     "s": "done",
+     "m": "golive",
+     "size": "M",
+     "r": "—",
+     "ships": [
+      "DB-driven landing page",
+      "Editor that edits the real page, no forked components",
+      "Image cleanup verified"
+     ],
+     "proof": "Edits render live on the public site"
+    },
+    {
+     "id": "0.3",
+     "t": "Auth, admin shell, settings and theme framework",
+     "s": "done",
+     "m": "golive",
+     "size": "M",
+     "r": "—",
+     "ships": [
+      "Protected routes, URL-based active property",
+      "Grouped nav, toasts, dirty-form block, error boundaries",
+      "Theme override, 6 font pairings, WCAG warnings, live preview"
+     ],
+     "proof": "In daily use"
+    },
+    {
+     "id": "0.4",
+     "t": "Room types, physical rooms, rates",
+     "s": "done",
+     "m": "golive",
+     "size": "M",
+     "r": "002, 012–013",
+     "ships": [
+      "Bookable room types and physical rooms with status and housekeeping_status columns",
+      "Rack, weekend and seasonal rates with resolve precedence"
+     ],
+     "proof": "resolve_room_rate precedence proven"
+    },
+    {
+     "id": "0.5",
+     "t": "Guests, bookings and the overbooking guard",
+     "s": "done",
+     "m": "golive",
+     "size": "L",
+     "r": "014–015",
+     "ships": [
+      "Structured guest records with ID fields",
+      "Bookings and booking_nights with the rate locked per night",
+      "create_booking with lock-before-count"
+     ],
+     "proof": "5 concurrent bookings into 2 rooms, 3 refused, live"
+    },
+    {
+     "id": "0.6",
+     "t": "Companies, negotiated rates, check-in and check-out",
+     "s": "done",
+     "m": "golive",
+     "size": "M",
+     "r": "016–020",
+     "ships": [
+      "Company records and negotiated rates, fixed or % off rack",
+      "check_in and check_out RPCs",
+      "Monthly booking numbers, past-date guard"
+     ],
+     "proof": "Rate resolution proven against company rows"
+    },
+    {
+     "id": "0.7",
+     "t": "Folio engine, tax config, PIN-gated discounts",
+     "s": "done",
+     "m": "golive",
+     "size": "L",
+     "r": "021–022",
+     "ships": [
+      "Generic post_charge driven by charge_categories",
+      "Per-property tax and service charge list, VAT compulsory",
+      "Manager PINs (bcrypt, verify revoked from clients), discount threshold"
+     ],
+     "proof": "130k − 20k discount + 7.6% VAT − 50k deposit = 68,360 exactly; discount refused without a PIN"
+    },
+    {
+     "id": "0.8",
+     "t": "Night audit, arrival and no-show, checkout completes the bill",
+     "s": "done",
+     "m": "golive",
+     "size": "L",
+     "r": "023–026",
+     "ships": [
+      "run_night_audit with per-booking subtransactions, secured cron",
+      "Editable arrival date and time, actual_check_in",
+      "mark_no_show charging one reserved night for company-guaranteed only",
+      "check_out posts all unbilled nights in one transaction"
+     ],
+     "proof": "Reserved 27th, arrived 30th, out 1st charged only 30 and 31; checkout before any audit billed exactly one night"
+    },
+    {
+     "id": "0.9",
+     "t": "Guest ledger, standalone folios, guest-centric flow",
+     "s": "done",
+     "m": "golive",
+     "size": "L",
+     "r": "027–029",
+     "ships": [
+      "Cross-stay FIFO allocation computed at read time",
+      "Standalone folios for non-residents",
+      "Guest home with summary, ledger and stays",
+      "Auto-cancel frees the room"
+     ],
+     "proof": "One payment on the newest of three stays settled the two oldest under FIFO; totals reconcile"
+    },
+    {
+     "id": "0.10",
+     "t": "Guest statement, four export formats, email the PDF",
+     "s": "done",
+     "m": "golive",
+     "size": "L",
+     "r": "030",
+     "ships": [
+      "assembleStatement as one pure source of truth",
+      "PDF, Excel, Word, WhatsApp",
+      "Vercel Node email function sharing the same PDF definition",
+      "statement_emails with claim-before-send"
+     ],
+     "proof": "Word and Excel open clean, pdf.js extracts the ₦ text, forged tokens 401"
+    },
+    {
+     "id": "0.11",
+     "t": "Reversal subsystem",
+     "s": "done",
+     "m": "golive",
+     "size": "L",
+     "r": "031–034",
+     "ships": [
+      "Reverse payment, charge, discount, no-show, cancel, checkout",
+      "Counter-entries never edits, all three money columns mirrored",
+      "Availability re-checked per night before un-cancelling"
+     ],
+     "proof": "169 assertions across the four parts; un-cancel into a full room refused live, accepted once inventory freed"
+    },
+    {
+     "id": "0.12",
+     "t": "Inventory catalogue, units, categories, locations",
+     "s": "done",
+     "m": "golive",
+     "size": "M",
+     "r": "035",
+     "ships": [
+      "Tenant-level item catalogue, raw / finished / both",
+      "Units and categories seeded per tenant",
+      "Property-scoped locations"
+     ],
+     "proof": "30 assertions, Heledon seeded with 16 units, 8 categories, 4 locations"
+    },
+    {
+     "id": "0.13",
+     "t": "Movement-sourced stock, moving-average cost, import",
+     "s": "done",
+     "m": "golive",
+     "size": "L",
+     "r": "036",
+     "ships": [
+      "stock_movements carrying location_id, signed quantity, business_date",
+      "On-hand computed, never stored",
+      "Opening balances and adjustments with mandatory reason",
+      "Validate-then-commit Excel and CSV import"
+     ],
+     "proof": "Moving-average recompute verified; import round-trip verified on both file types"
+    },
+    {
+     "id": "0.14",
+     "t": "Consolidated inventory page",
+     "s": "done",
+     "m": "golive",
+     "size": "M",
+     "r": "—",
+     "ships": [
+      "Location picker, summary card, tab strip",
+      "Products, Categories, Adjustments, Stock Take, Import History, Price Update",
+      "Server-side below-reorder answered against the same rows as the totals"
+     ],
+     "proof": "Aggregates match stock_on_hand_by_item"
+    },
+    {
+     "id": "0.15",
+     "t": "User guide and in-app Help",
+     "s": "done",
+     "m": "golive",
+     "size": "M",
+     "r": "—",
+     "ships": [
+      "Single markdown source imported raw",
+      "Own parser returning a typed React tree, no injection surface",
+      "Front desk, manager and owner task sections plus glossary"
+     ],
+     "proof": "Help page live, contents and search working"
+    }
+   ]
+  },
+  {
+   "id": 1,
+   "title": "Close what is already open",
+   "why": "Nothing new starts while something half-built is still unproven. Small, fast, mostly clean-up.",
+   "shipments": [
+    {
+     "id": "1.1",
+     "t": "Push 037 and walk every inventory tab on the live DB",
+     "s": "next",
+     "m": "golive",
+     "size": "S",
+     "r": "037",
+     "ships": [
+      "Apply 037 to the live DB",
+      "Walk Products, Categories, Adjustments, Stock Take, Import History, Price Update",
+      "Add Product choice dialog, new item fields, one-download opening-stock sheet"
+     ],
+     "proof": "Create an item, post opening stock, adjust it, run a stock take, import a filled CSV and a filled xlsx, export the list. Every figure matches the movement ledger.",
+     "note": "037 is committed to the repo but not applied to the live DB. The tabs were verified by code review only, with no Supabase session. This walkthrough is the first real test."
+    },
+    {
+     "id": "1.1b",
+     "t": "Harden the movement engine before anything else writes to it",
+     "s": "done",
+     "m": "golive",
+     "size": "L",
+     "r": "038",
+     "ships": [
+      "A 'reversal' movement type of its own, because a reversal that reads as an adjustment is invisible to every future variance report",
+      "Counter-movement pointing at the original via reverses_movement_id, set at insert and never updated, so the immutability guarantee holds",
+      "The weighted-average fold taught about reversals, so reversing a receipt unwinds the value it added instead of leaving a residue in the average",
+      "Carried cost recorded on every stock-out, locking cost of sale at the moment stock leaves",
+      "Batch and expiry as nullable columns plus a per-item track-expiry flag",
+      "Posting lock date per property on property_finance_settings, so a closed month rejects postings",
+      "An item or location with stock on hand cannot be deactivated, not just soft-deleted, with quantities named in the message",
+      "Negative-stock view, and the two anon EXECUTE grants 035 left on its trigger wrappers revoked"
+     ],
+     "proof": "100kg at ₦1.50, receive 50 at ₦2.10 so the average reads ₦1.70, reverse that receipt and the average must return to exactly ₦1.50. Backdate a posting into a locked month and watch it refused. Attempt to deactivate an item holding stock and watch it named.",
+     "note": "PUSHED 16 Aug. 72 of 72 proofs pass against the committed schema; the self-verify block ran at apply time on the real database. Re-applying 038 over the committed schema is a clean no-op. Proof rows rolled back, Heledon's data untouched. Four live defects found and closed along the way, and six pre-existing anon grants from 008/030 are now quarantined in SQL for shipment 1.3 rather than recorded in prose."
+    },
+    {
+     "id": "1.1c",
+     "t": "Make the hardening visible",
+     "s": "done",
+     "m": "golive",
+     "size": "M",
+     "r": "—",
+     "ships": [
+      "Reversal action in the per-item stock ledger, reusing an extracted ManagerPinField rather than a fifth copy of the PIN block",
+      "stockErrorMessage fixed to append the server's HINT, so the client shows the instruction as well as the rule and restates neither",
+      "Posting-lock date field in Finance settings, via a new 'date' member of the settings field union",
+      "Track-expiry toggle on the item, with batch and expiry fields appearing on stock-in only",
+      "Negative-stock discrepancy screen on the full list-surface standard, flagging positions behind a removed item or location"
+     ],
+     "proof": "Reverse a movement from the screen, not from psql. Set a lock date and watch a posting refused with a readable message. Switch on track-expiry and confirm the batch fields appear and are required.",
+     "note": "There is no single folio reversal dialog to reuse — four separate forms share only a card shell and copy-paste the PIN block four times. Extracting ManagerPinField now with stock as its first consumer; retrofitting the four existing money-path forms is DEFERRED and recorded here, to ride along the next time the folio is opened for a real reason. The copies have not drifted, and this is code duplication rather than two sources of truth about a rule. BUILT 16 Aug: 40/40 wiring proofs, typecheck and build clean, zero new lint errors, no SQL beyond reads, and zero client strings restating a database rule (grep-proven both ways). Held open pending screenshots — the browser pane was not displayed and every screen is behind auth, which Code will not sign into. CLOSED 16 Aug: reversal exercised live on real seed data — adjustment reversed, ledger shows the counter typed 'reversal' cross-linked to the original, average back to ₦1,500.00 and on hand back to 120 kg. One live defect found by the human look that 40 SQL proofs missed: signedQuantity called .trim() on a value PostgREST returns as a number, crashing the ledger. Fixed at source, de-duplicated across two files, and a render proof added that was made to FAIL before being trusted."
+    },
+    {
+     "id": "1.1d",
+     "t": "Stock take as a real count",
+     "s": "done",
+     "m": "golive",
+     "size": "L",
+     "r": "039, 040, 041",
+     "ships": [
+      "BLIND count: the counter types what they physically counted and sees nothing else — expected quantity and variance appear only after submitting",
+      "stock_takes and stock_take_lines, with expected quantity snapshotted at the moment the count starts",
+      "start, record line, finish RPCs with idempotency keys and the posting-lock check",
+      "A resumable sheet: a count can be left open and finished later, by the same person or another",
+      "Partial counts allowed — a location does not have to be counted whole",
+      "Variance above a threshold needs a manager PIN to finish, same pattern as discounts",
+      "The count_adjustment write path, finally used for what it was declared for",
+      "The count is its own page (/inventory/counts/<id>), no tab strip to lose it by clicking — linkable, refreshable, printable",
+      "Print the count sheet in a clean tab: hotel name, count number, location, date, every shelf, a ruled box to write in, notes and signature lines — blind while open because it reads the same view",
+      "Accordion: Still to count and Already counted, paging independently",
+      "Kebab per row and on the count: carry on, print, open the report, undo",
+      "Undo a finished count reverses every movement it posted, manager PIN at any size, reason mandatory — there is no delete, because deleting the record would delete the evidence that stock moved and a manager approved it",
+      "Finishing warns once when stock moved in the location while the count ran AND the affected items were counted after it moved — the double-count case a snapshot cannot see"
+     ],
+     "proof": "Start a count, post a receipt for a counted item mid-count, finish, and the variance reflects the snapshot rather than the receipt. Refresh mid-count and the sheet comes back. Confirm the expected quantity is not present in the page payload before submission, not merely hidden in the UI.",
+     "note": "Blind is the whole point: if the counter can see what the system expects, they write that number down and the count proves nothing. Postings are deliberately NOT blocked during a count — the 1.1b snapshot is what makes that safe. Today the count lives entirely in component state, the on-hand figure is grabbed per keystroke, and a refresh loses everything. 039 and 040 both PUSHED. 040 added the count-reversal write path after Lanre's feedback, fixed a copy bug where the shared ManagerPinField hardcoded 'reversal' wording onto the count screen, and pulled the posting half of reversal into one shared function because reversing line-by-line would have re-run bcrypt once per line and blown the statement timeout on a large count. Frontend still uncommitted. 041 closed three review findings: the mid-count double count (warn with PT449, name up to five items, confirm with the same idempotency key — never silently subtract, because the system cannot know whether the counter saw the delivery), an ELSE false on the state-shape CHECK which was failing open, and the anon quarantine array replaced by one shared assert_no_anon_security_definer() that future migrations call in one line. 038/039/040 keep their own copies deliberately: editing an applied migration makes the record a lie. DEPLOYED 16 Aug: merged to main at 596cb9e, Vercel building, database and frontend level again. Final tally 178 SQL assertions across three dry runs (each applying its migration twice in one transaction and rolling back), 46 post-push checks against the remote, 36 render assertions. Not yet clicked through by a human — that is batched into 1.1i."
+    },
+    {
+     "id": "1.1d2",
+     "t": "Set Heledon’s tax lines (consumption tax / VAT)",
+     "s": "later",
+     "m": "golive",
+     "size": "S",
+     "r": "—",
+     "ships": [
+      "Ask the accountant which of VAT and Rivers State consumption tax applies to rooms and to F&B",
+      "Seed the property's tax_charges accordingly — the engine already supports either, both, or switching VAT off",
+      "Check a room night and an F&B charge each carry exactly the right lines"
+     ],
+     "proof": "A room night and an F&B charge each carry exactly the tax lines the property is configured for, and the statement foots to the cent.",
+     "note": "ANSWERED by 042's §0: tax_charges.is_compulsory is plain data with no CHECK pinning it, and the compulsory guard only refuses delete/deactivation WHILE the flag is true — so VAT CAN be switched off for a property that charges consumption tax instead. Nothing to build: adding a state consumption tax line is configuration. What remains is asking Heledon's accountant what Rivers State requires and seeding the property's tax lines accordingly."
+    },
+    {
+     "id": "1.1e",
+     "t": "Complete the item record: selling price, valuation, photo",
+     "s": "done",
+     "m": "golive",
+     "size": "M",
+     "r": "042",
+     "ships": [
+      "Default selling price on the item: blank for Ingredient, required for Sold as-is and Both, enforced in the database and in the sheet",
+      "Landing page shows value at cost (moving average) and retail value side by side, plus margin, each labelled so the two can never be confused",
+      "Item photo at tenant level, reusing the existing media_assets pipeline rather than growing a second one",
+      "Searchable typeahead pickers for location and item, filtered server-side against the same query the list uses, because a hotel with 1,000 items cannot scroll a dropdown"
+     ],
+     "proof": "An Ingredient row with a price is rejected and a Sold as-is row without one is rejected. Cost value and retail value each reconcile to a hand-written query. A photo survives a reload and lands nowhere publicly readable that it should not.",
+     "note": "042 PUSHED and verified live; frontend not yet committed. Price is NET of tax, deliberately: 021 adds tax on top of a charge's net_amount, and a tax-inclusive price would have overstated margin by a different amount at every property — silently, with nothing erroring. The sellable-must-be-priced half is a TRIGGER not a CHECK, because adding a constraint validates existing rows and the live database already had an unpriced sellable item; the gap is made findable by a filter instead of blocked by an invented price. Item images go tenant-level through the existing media_assets path — and needed a plain tenant FK beside the composite one, because a composite FK is MATCH SIMPLE and skips checking entirely once property_id is null. Nine pickers converted, not the four the brief named. CLOSED 19 Aug: figures confirmed live — 6 positions, 5 excluded for having no price, cost ₦533,000, retail ₦168,000 (Coke alone, 240 x ₦700), margin ₦60,000 subtracting only Coke's cost rather than the whole shelf."
+    },
+    {
+     "id": "1.1f",
+     "t": "The item gets its own page",
+     "s": "done",
+     "m": "golive",
+     "size": "L",
+     "r": "—",
+     "ships": [
+      "Item detail becomes a page, not an inline expand — the same move that worked for bookings",
+      "The list page carries only summary columns, every value under a labelled heading, nothing floating",
+      "Thumbnail on the list row, click to add or change the picture",
+      "Summary cards on the item page: opening balance, adjustments, purchases, issues, current stock and value",
+      "Clicking a card filters the ledger below to that movement type only",
+      "One simple movement chart: stock level over time, points coloured by movement type",
+      "Edit, Add or correct stock, Remove and Reverse move into a kebab on the item",
+      "Picture tile on the list row is clickable — empty invites the picture, filled replaces it, with no round trip through Edit item",
+      "The item page carries its own searchable location selector, because stock is per location and the item is tenant-wide"
+     ],
+     "proof": "Open an item, click the Adjustments card, and the ledger below shows adjustments only while the card totals still match a hand query. Add a picture from the list row without leaving the page.",
+     "note": "Deliberately before receive and write-off so those shipments wire into this page rather than into an inline expand we are about to delete. Cards render only the movement types that have a write path, and grow as each one lands. The rich variance analytics stay at 6.6 — this chart is stock level over time, not the theft report. CLOSED 20 Aug, no migration needed. Confirmed live on Rice: +120 opening, +50 adjustment, 0 count corrections, −50 reversal, on hand 120 kg, value ₦180,000, and the chart shows the peak and the return. Carries an unaccountedQuantity figure so that when receiving ships without a card the page SAYS it no longer adds up instead of quietly not adding up. Location scope lives in the URL, so a shelf is linkable. Chart is ~60 lines of SVG, no library, +5.6 kB gzipped."
+    },
+    {
+     "id": "1.1g",
+     "t": "Receive stock and write off stock",
+     "s": "done",
+     "m": "golive",
+     "size": "M",
+     "r": "043",
+     "ships": [
+      "Lightweight receipt into the store: date, item, quantity in base units, unit cost, supplier as free text",
+      "Manager-permissioned direct receipt elsewhere, mandatory reason, flagged",
+      "Write-off as its own movement type with reasons: spoilage, breakage, expiry, staff meal, complimentary",
+      "A 'received outside the store' report carrying direct receipts, opening balances and negative stock"
+     ],
+     "proof": "Receive at a higher price and watch the moving average move by the exact weighted amount. Write off a unit and confirm it reads as recorded loss, not as unexplained variance.",
+     "note": "Closes the gap between go-live and stage 7 purchasing. Without it the average cost freezes at opening and every valuation drifts. Stage 7 later upgrades this into receive-against-order without changing the movement. DEPLOYED 21 Aug (migration 043 applied first, then code — the safe direction). 56 SQL assertions, 310 render assertions across 9 proofs. Three things the proofs found that the reasoning had wrong: the late-openings view keyed on created_at could never have fired, because created_at defaults to now() which is TRANSACTION start time, so rows written together tie to the microsecond — it uses seq instead, the column 036 created for exactly this; a second `|| true` tautology assertion; and a deliberate wrong-average breakage that stayed GREEN because the assertion recomputed from its own constants instead of calling the component. The receive test is kind='store', not is_default_store, so a hotel's second store receives without ceremony."
+    },
+    {
+     "id": "1.1h",
+     "t": "The books: accounts, mappings and the journal",
+     "s": "done",
+     "m": "golive",
+     "size": "M",
+     "r": "044",
+     "ships": [
+      "Chart of accounts, seeded for a new tenant the same way categories and units already are, editable",
+      "Account mappings by role key, 27 keys derived from every place money moves in the code today, not from purchasing",
+      "A property can override a mapping; without one the group default applies. Two hotels, two tills, one chart",
+      "Journal entries numbered JE-000001, permanent, never updated, never deleted, reversed only by counter-entry",
+      "One post_journal function: refuses an unbalanced entry, honours the posting lock, posts once per source document",
+      "One rounding line, capped at a naira, because weighted-average cost carries four decimals and the books carry two. Nothing else may absorb a difference",
+      "A missing mapping refuses the posting and names the role key. No suspense account for errors to hide in",
+      "A settings screen showing role key to account, and when something last posted to it, so a missing wiring is visible rather than remembered",
+      "Choosing the account becomes part of creating a charge category, so the failure can never reach the front desk",
+      "gl_start_date per property: the posting lock refuses the document, this lets the document through and books no entry"
+     ],
+     "proof": "Applied to the remote first, then verified directly rather than trusting the exit code: 35 accounts, 31 mappings, 0 charge categories missing a role key, 0 journal entries because nothing is wired yet, RLS on every table, and assert_no_anon_security_definer() passing on the live database. The first real entry posts at 1.1h2, and that is where the end-to-end proof lives.",
+     "note": "Built now, not in stage 11, and that is a reversal. Accounting was placed last on the argument that a ledger built for one module fits one module. The counter-argument is timing: Heledon has not gone live, so there is no trading history to backfill, and every module that posts nothing today becomes history somebody reconstructs later. The folio has been charging and taking payments since 021 with nowhere to post, and that debt should not survive go-live. The scope is deliberately the spine only: somewhere for money to go, not something to read. Trial balance, P&L, balance sheet, reconciliation and tax returns all stay in stage 11, where they become reports over a ledger that was correct from the first entry. The role keys are derived from every posting site in the code today rather than from purchasing, so the spine is wired against all of it once. Wiring order after Code's §0: the spine is designed against the folio, the stock ledger and purchasing at once, then wired progressively. The six stock RPCs that already move money post from 1.1h2, alongside purchasing, so the ledger's inventory balance and the stock valuation can never disagree. The folio follows at 1.1h4. That gap is dated in the migration header rather than left as an exception nobody wrote down. DEPLOYED 23 Aug, commit be8584a, migration applied before the code as always: migration 044, 1,759 lines, 51 SQL assertions with 11 guards removed one at a time and all 11 going red, 343 render assertions across 10 proofs. 35 accounts and 31 mappings seeded, four accounts deliberately unmapped. Two proofs earned their keep: the idempotency guard needed both the lookup and the unique index removed before it went red, because either one masks the other on a single connection, so the index is asserted structurally instead; and a breakage turned two row assertions red while the headline total stayed green, the same lesson 1.1g taught from the other direction, that a total is the assertion most likely to be mistaken for coverage. Code added a guard nobody asked for and should have: the GL start date cannot move once the books have opened. The two debts from the pre-push questions are recorded in 044's header and in the wiring table in ARCHITECTURE.md, which is where someone already looks for what wires when. gl_start_date is deliberately null on Heledon: it gets set once, at go-live."
+    },
+    {
+     "id": "1.1h1",
+     "t": "The chart of accounts, as an accountant expects to see it",
+     "s": "done",
+     "m": "golive",
+     "size": "S",
+     "r": "045",
+     "ships": [
+      "The accounts themselves, listed and grouped in financial-statement order: assets, liabilities, equity, revenue, expenses",
+      "Dense table, one line per account, codes right-aligned in tabular numerals. A spreadsheet, not a settings form",
+      "Add an account, which a hotel with three bank accounts needs on day one",
+      "The code is suggested as the next free number in that group's range, so nobody has to know that a liability starts with 2",
+      "An account that has been posted to can be renamed but never renumbered and never deleted. Deactivate instead, and not while a mapping still points at it",
+      "Search across code and name",
+      "Where money posts becomes the second tab, same density, keeping the role key to account mapping that shipped with the spine",
+      "Accounts ordered by their own code within each section, so an added account lands where its number says it belongs rather than at the top of the chart",
+      "An account that has been posted to cannot change its group either. Moving one from asset to expense would silently restate a balance sheet somebody has already read"
+     ],
+     "proof": "Applied to the remote first, then verified: display_order dropped, the index rebuilt on the code, all four change rules live on the trigger, 35 accounts reading asset to liability to equity to revenue to expense. 24 SQL assertions with 6 guards red when removed, 55 render assertions with 5 breakages. The ordering gate runs against a deliberately shuffled fixture, so a sort that did nothing would fail it.",
+     "note": "Lanre looked at the Accounts tab on live and said it does not read like accounting. He was right, and the gap was mine: I specified a mapping screen and called it the accounts screen. Two different objects. The chart of accounts is the list an auditor is handed and a trial balance is that same list with balances on it, so it cannot wait for stage 11. A hotel could not see its own accounts or add one. Code's read-only pass found the defect that would have shipped: display_order defaults to 0, so the first account a hotel added would have sorted above Cash and looked like a broken screen. Fixed by removing the dependency rather than the default, ordering on the code itself. Group headers and a non-postable flag were dropped after the same pass showed there is no parent column for a header to head and no manual journal screen to protect an account from; that flag is recorded as owed when stage 11 gives someone a way to post by hand. DEPLOYED 24 Aug, commit 5b3b8a3. The sticky header did not work as specified and Code measured rather than guessed: inside the standard table wrapper the header sat 233 pixels off the top of the screen, because a horizontal overflow container is also a vertical one with no height to scroll. The working pattern is extracted with both failure modes written into it, including why sticky must sit on the header cell and never the row, a defect invisible in the browser you build in. Rule 27 went into CLAUDE.md from three sightings in three shipments: an assertion that cannot tell working from absent is not an assertion, so name the defect that turns it red before trusting a green run."
+    },
+    {
+     "id": "1.1h2",
+     "t": "Purchases: suppliers, the order, and receiving it",
+     "s": "wip",
+     "m": "golive",
+     "size": "M",
+     "r": "046, 047",
+     "ships": [
+      "Suppliers as real records, one name only: a partial unique index on the lowercased name stops the same supplier existing twice",
+      "Suppliers carry what paying them will need: tax ID, withholding rate, bank details. Captured now because a column added to an empty table is free and a backfill conversation with a live hotel is not",
+      "Purchase order as the document, numbered PO-000001 from the counter that already exists",
+      "Four statuses: draft, ordered, received, cancelled. 'In transit' is a label the screen derives from outstanding lines, so it can never disagree with the data",
+      "An ordered purchase order is immutable. Reality is recorded against it, never written over it",
+      "Destination on every line (inventory, asset, expense) legal from day one; only inventory can be received in this shipment",
+      "Receive on the order itself, same page. Quantity per line, difference against ordered shown live, a reason required before a difference will post",
+      "Over-receipt allowed on a manager PIN rather than refused, so nobody has to invent numbers",
+      "Cost difference between what was agreed and what the invoice says, shown live and stored, without a mandatory box people learn to type through",
+      "One transaction inside the RPC: receipt, receipt lines and stock movements commit together or not at all",
+      "Supplier activity derived from the documents. No stored balance column, and not called an account until payments give it a second side",
+      "Quantity field accepts 10*24 and stores 240. Base units only, no conversion factor anywhere",
+      "Every receipt posts its own journal through the spine, inside the same transaction. No client-side posting, no backfill page",
+      "The six stock RPCs that already move money post too: opening, adjustment, receipt, write-off, count variance and reversal. Inventory in the books and inventory in the ledger cannot disagree",
+      "Purchases and Suppliers side by side in the sidebar, filling the slot already sitting there marked soon",
+      "The check the ERP could never make: the ledger's inventory balance against an independent recomputation from the movements themselves, on its own Accounts tab, with the rounding residue against the stock valuation shown rather than hidden",
+      "A list of any movement carrying no journal entry, with the reason. An empty reason is the alarm",
+      "A dated alarm rather than a silenced one: movements written before this property's RPCs began posting carry a recorded reason, so the list reads zero on day one and still fires on a movement written after the wiring with no entry",
+      "The rounding residue shown beside the number of movements it accumulated over, and every position that has ever been below zero named on the card with the sentence that explains it"
+     ],
+     "proof": "Order 50kg of rice, receive 47kg: the shortfall demands a reason, the ledger moves by exactly 47, the movement names the goods-received note, and re-sending the same request with a changed quantity is refused rather than silently ignored. Kill the transaction halfway and confirm none of it happened. 77 database assertions on a throwaway property inside the transaction, re-run against seven deliberately broken versions of the migration, plus 63 render assertions with five mutations.",
+     "note": "Modelled on how purchasing actually runs in Palstro ERP after a read-only investigation of that codebase, then corrected where the ERP's own migration history showed the scars: three overloaded status columns that 068 had to arbitrate; no destination field at all; journals posted client-side after the RPC returned, leaving the GL 50,000 adrift from the subledger until 067 repaired it; a receive screen with no quantity input despite a schema that supports one; two near-identical received-quantity columns; receipt numbers from count(*)+1, which races; and a supplier balance column the code itself does not trust. Two decisions changed after Code's read-only §0. Purchasing was going to post no journals, because the hotel schema has no ledger at all. Lanre overruled that and he was right: Heledon has not gone live, so this is the last moment when wiring the books costs one shipment instead of a reconstruction project. The spine lands first as 1.1h and this shipment posts into it from its first line. And goods in transit is a state of the order rather than a real location, because landing stock out of a transit location needs the transfer RPCs that do not exist until 6.1, and because teaching post_stock_receipt that one non-store location is secretly fine is how a guard rots. Nothing built in 1.1g is wasted: purchasing calls the same receipt RPC, extended additively so a movement can name the order it came from, and direct receipt survives as the cash-and-carry exception. Two corrections came out of the build, both mine. The reconciliation I specified, that the inventory account equals the stock valuation to the kobo, is not always true and should not be: the ledger sums per-movement values each rounded to the kobo while the valuation carries an average at full precision, so 3 at 10.00 plus 1 at 11.11 legitimately disagree by a kobo. Asserting the ledger against an independent recomputation from the movements is both true and stronger. And one deliberate breakage stayed green because the fixture made the right and the wrong answer the same number, valuing a reversal at an average that had not moved since. That is rule 27 from a fourth direction and it now carries a corollary: a fixture where the correct and incorrect computations coincide cannot test either one. 047 followed within the day because the first look at live showed both reconciliation surfaces lying: the alarm list read 8 rather than 0, and the difference read 533,000 out, because Heledon holds build-era movements written before anything posted. Fixed with a recorded fact, gl_wired_at, not a tolerance: code that did not exist cannot have posted. Two fudges were rejected by name in the migration header, ignoring anything older than N days, and borrowing gl_start_date to silence it. 046 also asked the wrong question about negative positions, counting the ones below zero today rather than the ones that have ever been below zero, which are the only ones that explain a divergence and are usually positive again by the time anyone looks. Three checks were raised against 047 afterwards. Two came back clean, and the second of those was retracted after being tested rather than argued: two views that read exactly like a cross-tenant leak turn out to scope themselves in their own WHERE. The third is a real defect and is still open: a movement with no cost basis is NOT absent from the valuation, so a back-dated write-off throws the reconciliation out by the value of the stock written off, and the comment in the migration claims the opposite. Measured at minus 4,000 on a fixture. Nothing is wrong on live today because no such movement exists yet."
+    },
+    {
+     "id": "1.1h3",
+     "t": "Where else a purchase can go: assets and expenses",
+     "s": "later",
+     "m": "golive",
+     "size": "M",
+     "r": "047",
+     "ships": [
+      "One expenses table from the start, with a nullable link to the purchase line, so a purchase expense and a standalone expense are never two places to look",
+      "Fixed asset records carrying the supplier and the order that bought them",
+      "Category lists modelled on charge_categories: a stable machine code apart from the display name",
+      "The receive RPC accepts all three destinations"
+     ],
+     "proof": "Rice, a fridge and a delivery charge on one order. Receive it once: stock moves by the rice, the asset register gains the fridge with the supplier on it, the charge lands in cost, and one supplier view shows all three.",
+     "note": "Split out of 1.1h because neither an expenses nor a fixed assets table exists in the schema today, so the destination rule means building two record tables. Records, not modules: no depreciation and no approval flow, those are 8.5 and 7.1. The ERP keeps assets and expenses outside purchasing entirely, which is why a vendor view there has to union three places."
+    },
+    {
+     "id": "1.1h4",
+     "t": "The folio wired into the books",
+     "s": "later",
+     "m": "golive",
+     "size": "M",
+     "r": "048",
+     "ships": [
+      "Tax captured on the charge at post time, before anything is wired. Today it is computed live from the current rate, so changing VAT silently rewrites every past bill, the same defect booking_nights was built to prevent",
+      "Room charges, food and drink charges, taxes, service charge, discounts and payments all post through the spine",
+      "Deposits and refunds post as what they are, a liability taken and released",
+      "Reversals post counter-entries, so a reversed charge leaves both rows visible",
+      "Guest ledger balances agree with the receivable account, and the check that proves it runs on demand",
+      "A void posts a counter-entry rather than becoming unavailable. The front desk keeps its one-click undo and the books stay append-only",
+      "Charge categories get a form for the first time, with the account picker on it. Until this ships, the only way to create one is to type SQL, so the guard 044 added is correct and inert",
+      "The mapping screen shows categories under their key, so a category quietly pointed at Other revenue is visible instead of absent"
+     ],
+     "proof": "Check a guest in, charge a room and a meal, take a part payment, apply a discount, reverse one charge, check out. The guest ledger and the receivable account agree to the naira, and every entry names the folio row it came from.",
+     "note": "The folio has been charging and taking payments since 021 and posting nowhere. Before go-live that is a gap; after go-live it is history to reconstruct. This closes it while there is still nothing to reconstruct. Also carries two commitments made when the spine shipped: the charge category form, because 044's guard protects a path that does not exist on screen yet, and the deletion of the revenue_misc fallback, because a silent default is fine while only SQL can reach it and wrong the moment a person can create a category from a screen."
+    },
+    {
+     "id": "1.1h5",
+     "t": "Paying suppliers",
+     "s": "later",
+     "m": "golive",
+     "size": "M",
+     "r": "049",
+     "ships": [
+      "A payment document: who was paid, from which account, on what date, by what method",
+      "Allocation against receipts, explicit and reversible, reversed by counter-entry like everything else",
+      "An advance is a payment with nothing allocated yet, and it posts a journal like any other. No special case with no entry, which is the bug the ERP needed two migrations to unwind",
+      "Supplier activity becomes a supplier account, with a balance that is the sum of the documents and no stored mirror column",
+      "A statement that paginates and excludes voided entries, neither of which the ERP's does",
+      "Withholding tax deducted at payment where the supplier carries a rate"
+     ],
+     "proof": "Receive ₦500,000 of goods across two orders, pay ₦300,000 against one of them. The supplier balance reads ₦200,000, the payable account in the books agrees with it to the kobo, and the statement shows both documents in order.",
+     "note": "Pulled forward out of stage 7 by a question from Lanre about supplier management. Receiving credits supplier payable and nothing in the plan ever debited it, so Heledon's first trial balance would have carried a liability that had never once gone down. An account that only grows is not a book. What stays in stage 7 is the depth: approvals and spend limits, price history and comparison, ageing analytics."
+    },
+    {
+     "id": "1.1i",
+     "t": "Outlet prices and the bulk price tool",
+     "s": "next",
+     "m": "golive",
+     "size": "M",
+     "r": "044",
+     "ships": [
+      "Location price rows overriding the item's standard price, no row means the standard applies",
+      "Bulk update: pick a location, optionally a category, raise by a percentage or set a value",
+      "Preview before commit showing before and after per item and a count of what changes",
+      "Delta writes only, never a full replace, every change logged",
+      "Rounding rule, default nearest ₦10, configurable"
+     ],
+     "proof": "Raise all Drinks prices in the Bar by 10%, see the preview, commit, and confirm the Restaurant prices did not move and a sale posted yesterday still shows yesterday's price.",
+     "note": "Was 1.1h. Moved down one so purchasing lands first: a hotel buys before it sells, and an outlet price only moves a figure on a screen until something can be sold."
+    },
+    {
+     "id": "1.1j",
+     "t": "One template, one way in",
+     "s": "later",
+     "m": "golive",
+     "size": "L",
+     "r": "—",
+     "ships": [
+      "One sheet creates the item and, for a brand-new item only, its opening balance",
+      "A row whose name already exists is skipped whole, definition and quantity both, so a double upload can never double stock",
+      "Every column: name, code, type, base unit, category, barcode, pack size, purchase cost, min, max, reorder level, selling price, opening quantity, unit cost, location",
+      "Location defaults to the store and can only hold a store",
+      "Corrected sample set: 14 rows covering all three types, seven units and all eight categories, every row valid against the seeded reference data",
+      "Instructions on their own green tab in the xlsx, out of the CSV entirely, and rendered in the app on the download panel",
+      "An unknown unit or category asks once and is created on confirmation, never silently",
+      "Similarity prompt on units and categories, the protection item names already have"
+     ],
+     "proof": "Download and re-upload untouched: every sample row skipped, nothing created. Fill it with a new unit, a new category and a near-duplicate category: three distinct questions, import blocked until answered. Re-upload the filled file: nothing created twice and no quantity moves.",
+     "note": "Last of the inventory shipments because a template can only offer a column that already exists behind it. The sheet gets touched once, not twice. Once it lands, day one for a new hotel is a single file, which is also what shipment 13.2 needs. Was 1.1i."
+    },
+    {
+     "id": "1.1k",
+     "t": "Inventory end-to-end walkthrough, by a human",
+     "s": "later",
+     "m": "golive",
+     "size": "M",
+     "r": "—",
+     "ships": [
+      "Lanre clicks the whole inventory module through as a storekeeper and a manager would",
+      "Every screen 1.1c to 1.1h exercised against a ZZ Test sandbox location and item",
+      "Feedback fed back as fixes before stage 2 starts"
+     ],
+     "proof": "A full day's inventory work — create, load, receive, issue, adjust, count, reverse, write off, reprice — done end to end without asking anyone how, and the numbers reconcile.",
+     "note": "Agreed 16 Aug: per-shipment click-throughs are deferred and batched here, since Code's SQL proofs already run on the live DB. The exception is 1.1c, which gets a short look on its own because every later screen copies its reversal dialog pattern. Was 1.1j. Now covers purchasing too."
+    },
+    {
+     "id": "1.2",
+     "t": "Loose-ends sweep",
+     "s": "later",
+     "m": "golive",
+     "size": "S",
+     "r": "—",
+     "ships": [
+      "3 Vercel env vars for the night-audit cron (CRON_SECRET, service key, URL)",
+      "Rotate the .env.local DB password to alphanumeric",
+      "Server statement locale printing NGN instead of ₦",
+      "Fix the useBookingDraft memoisation trap at source"
+     ],
+     "proof": "Cron fires unattended overnight and posts the right nights; emailed PDF shows ₦; no effect loop when a draft key is watched directly"
+    },
+    {
+     "id": "1.3",
+     "t": "Security sweep: revoke anon on every RPC",
+     "s": "later",
+     "m": "golive",
+     "size": "M",
+     "r": "—",
+     "ships": [
+      "Audit every SECURITY DEFINER function shipped so far",
+      "REVOKE ALL FROM public, anon then GRANT to authenticated",
+      "In-migration assertion that anon EXECUTE is false",
+      "Confirm no internal guard relies on auth.uid() IS NOT NULL"
+     ],
+     "proof": "A query listing anon-executable functions returns only the intended public readers",
+     "note": "This exact hole bit Palstro ERP twice. Sweep it before real staff and real guests are on the system."
+    },
+    {
+     "id": "1.4",
+     "t": "Monitoring, nightly backup and a proven restore",
+     "s": "done",
+     "m": "golive",
+     "size": "S",
+     "r": "—",
+     "ships": [
+      "Twice-daily encrypted backup of the whole database, both Lagos slots, taken by a read-only login that can read every row but write nothing",
+      "The images backed up too, verified byte for byte and checksummed, because the bucket is the only copy of them",
+      "A manifest recorded at backup time: every table's row count, the counters as values, the GL wiring stamp. The restore test asserts against it rather than against a list somebody chose",
+      "A monthly restore into a throwaway database that proves the backup opens and everything the manifest claims about it is true",
+      "The backup refuses to run at all if a private bucket appears, rather than silently skipping it",
+      "Failure opens one issue, comments on repeats, and closes itself on the next good run",
+      "Secrets audited by a check-setup run that names anything missing instead of failing eight seconds in"
+     ],
+     "proof": "Run live on 2 November: 26 setup checks green, a 1.7 MB encrypted artifact in 65 seconds, then restored into a throwaway Postgres and verified, 8 passed, 0 failed, 2 correctly reported as vacuous. Every assertion was made to fail first, including lying to it about the stock movements.",
+     "note": "Pulled forward from after go-live because the books now hold data that cannot be rebuilt from migrations: the chart of accounts, its mappings, the audit trail, and gl_wired_at, which cannot be re-derived from anything. Copied from the Palstro Fuel design rather than the ERP one, because fuel's is the ERP's with each of its failures already fixed. Three things improved on fuel in passing: the project ref derived from the connection string rather than hardcoded, so a backup pointed at the wrong project is caught structurally; storage taken with no new credential at all, since the backup login can already list the objects and the bucket is public; and checks that cannot tell working from absent report themselves as vacuous rather than passing. Found on the way, and worth more than the backup: the keep-alive workflow had failed all 34 times it ran since 1 October, because two secrets were never added. It looked like a safety net in the sidebar. The project stayed awake on the owner's own dashboard activity. Standing rule added: a scheduled job that has never succeeded looks identical to one that has never been needed, so every scheduled job gets a run read by a human within a week of being added. Owed: a first storage recovery drill. The upload half of the runbook has never been run against a live project, and that is written down rather than assumed."
+    }
+   ]
+  },
+  {
+   "id": 2,
+   "title": "People and access",
+   "why": "The unlock. Four separate blockers clear here, and nothing below can be tested by the people who will actually use it until they can log in.",
+   "shipments": [
+    {
+     "id": "2.1",
+     "t": "Staff directory and invitations",
+     "s": "later",
+     "m": "golive",
+     "size": "M",
+     "r": "—",
+     "ships": [
+      "Staff records tied to auth users, scoped to tenant and property",
+      "Invite by email, accept, deactivate",
+      "Names replace raw uuids everywhere approver and receiver are shown"
+     ],
+     "proof": "Invite a staff member, they accept and appear; a discount they approve shows their name, not a uuid"
+    },
+    {
+     "id": "2.2",
+     "t": "Role permission matrix and the front-desk login fix",
+     "s": "later",
+     "m": "golive",
+     "size": "L",
+     "r": "—",
+     "ships": [
+      "Replace the blunt requireAdmin gate with per-permission checks",
+      "Permission matrix: front desk, housekeeping, storekeeper, kitchen, bar, manager, owner",
+      "Server-side enforcement in the RPCs, not just hidden nav"
+     ],
+     "proof": "A front-desk account logs in, sees only its nav, and a blocked RPC called directly is refused by the database, not by the screen",
+     "note": "Gate today: requireAdmin at App.tsx:72, failing closed at ProtectedRoute.tsx:70 against ADMIN_ROLES = owner, manager in types/auth.ts:23."
+    },
+    {
+     "id": "2.2a",
+     "t": "Configurable PIN policy per action",
+     "s": "later",
+     "m": "golive",
+     "size": "S",
+     "r": "—",
+     "ships": [
+      "Which actions demand a manager PIN becomes configuration, not code",
+      "Threshold rules per action"
+     ],
+     "proof": "Turn the PIN requirement on for an action and watch it refuse without one"
+    },
+    {
+     "id": "2.3",
+     "t": "Per-location access",
+     "s": "later",
+     "m": "golive",
+     "size": "M",
+     "r": "—",
+     "ships": [
+      "Staff assigned to locations",
+      "Location selector shows only what the user may see",
+      "Requisition badge wired to real permissions",
+      "Quantity and money are separate permissions: a storekeeper sees quantities and reorder levels because that is their daily job, while cost, value and margin are the manager's and owner's view"
+     ],
+     "proof": "A barman login sees Bar only. A storekeeper sees Store. Neither can post to the other, checked server-side.",
+     "note": "Revised 16 Aug after Lanre's challenge: do NOT hide stock quantities from the storekeeper — knowing what is low and when to buy IS the job. The split that matters is quantity versus money, not visible versus hidden. Blindness on a stock take is a property of the COUNT SHEET plus who does the counting; in a small hotel the count is usually done by someone other than the custodian, which is the real control and is organisational rather than software. Where one person does both, the sheet is still blind, the variance is still attributed, and the manager reviewing the variance is the control."
+    },
+    {
+     "id": "2.4",
+     "t": "Activity log the manager can read",
+     "s": "later",
+     "m": "market",
+     "size": "S",
+     "r": "—",
+     "ships": [
+      "Readable view over change_log",
+      "Filter by person, date, action"
+     ],
+     "proof": "A discount, a reversal and a stock adjustment all appear with names and reasons"
+    }
+   ]
+  },
+  {
+   "id": 3,
+   "title": "The rooms the front desk actually touches",
+   "why": "A booking system that cannot say which room a guest is in is not yet a hotel system.",
+   "shipments": [
+    {
+     "id": "3.1",
+     "t": "Room assignment",
+     "s": "later",
+     "m": "golive",
+     "size": "L",
+     "r": "new migration",
+     "ships": [
+      "Migration adding a room reference to bookings (there is none today)",
+      "Assign a physical room at check-in, change it before arrival",
+      "Reconcile physical assignment with the room-type availability count"
+     ],
+     "proof": "Assign at check-in, then attempt to assign the same room to an overlapping stay and watch it refused. The type-level count and the physical picture agree.",
+     "note": "bookings carries no room_id anywhere in the schema. Open question to answer before building: can type-level availability and physical assignment ever disagree, and which one wins?"
+    },
+    {
+     "id": "3.1a",
+     "t": "Mid-stay room move",
+     "s": "later",
+     "m": "golive",
+     "size": "S",
+     "r": "—",
+     "ships": [
+      "Move a checked-in guest with a mandatory reason",
+      "Old room flips dirty, new room occupied",
+      "Move recorded in the change log"
+     ],
+     "proof": "Move a guest and confirm the folio is untouched and both room statuses are right"
+    },
+    {
+     "id": "3.1b",
+     "t": "Out of order and out of service",
+     "s": "later",
+     "m": "golive",
+     "size": "S",
+     "r": "—",
+     "ships": [
+      "Take a room out with a date range and reason",
+      "Excluded from availability for that range"
+     ],
+     "proof": "count_available drops by one for the blocked dates and recovers after"
+    },
+    {
+     "id": "3.2",
+     "t": "Room status board",
+     "s": "later",
+     "m": "golive",
+     "size": "M",
+     "r": "002 columns exist",
+     "ships": [
+      "Write path for housekeeping_status: dirty, in progress, clean, inspected",
+      "Checkout flips the room dirty automatically",
+      "Board view of the whole property"
+     ],
+     "proof": "Check a guest out, watch the room go dirty, clean it, inspect it, then sell it",
+     "note": "rooms.housekeeping_status already ships in 002. Nothing reads or writes it. This is a UI and write-path build, not a schema build."
+    },
+    {
+     "id": "3.3",
+     "t": "Front-desk daily worklist",
+     "s": "later",
+     "m": "golive",
+     "size": "M",
+     "r": "—",
+     "ships": [
+      "Arrivals, departures, in-house and stayovers for today",
+      "Actions inline: check in, check out, mark no-show",
+      "Counts that match the database"
+     ],
+     "proof": "Open it at 7am and every list matches a hand-written query",
+     "note": "The screen the desk lives in. Nothing like it exists today."
+    },
+    {
+     "id": "3.4",
+     "t": "Registration card",
+     "s": "later",
+     "m": "golive",
+     "size": "S",
+     "r": "—",
+     "ships": [
+      "Printable card carrying guest, stay and rate",
+      "Signature captured and filed against the stay"
+     ],
+     "proof": "Print, sign, retrieve it from the stay a day later"
+    },
+    {
+     "id": "3.5",
+     "t": "Stay changes: extend, depart early, late checkout",
+     "s": "later",
+     "m": "golive",
+     "size": "M",
+     "r": "—",
+     "ships": [
+      "Extend a stay with availability re-checked per night",
+      "Early departure stops future charges",
+      "Late-checkout charge as its own category"
+     ],
+     "proof": "Extend into a full night and watch it refused; extend into a free night and watch the audit charge correctly with no double post"
+    },
+    {
+     "id": "3.6",
+     "t": "Availability calendar (tape chart)",
+     "s": "later",
+     "m": "market",
+     "size": "M",
+     "r": "—",
+     "ships": [
+      "Rooms down, dates across, bookings as blocks",
+      "Drag or click to start a booking on a date"
+     ],
+     "proof": "The grid agrees with count_available for every date shown",
+     "note": "The one screen every front desk asks for on day one. Market rather than go-live only because the worklist covers the daily need first."
+    }
+   ]
+  },
+  {
+   "id": 4,
+   "title": "Cash control",
+   "why": "The biggest unbuilt control gap. Money collected between two people currently has no owner.",
+   "shipments": [
+    {
+     "id": "4.1",
+     "t": "Cashier shifts",
+     "s": "later",
+     "m": "golive",
+     "size": "L",
+     "r": "new migration",
+     "ships": [
+      "Open a shift with a declared float",
+      "Every payment posts under the open shift",
+      "Close with a counted drawer, system total, and the variance recorded"
+     ],
+     "proof": "Take three payments in a shift, close it, and the declared cash minus the float equals the system total or names the difference"
+    },
+    {
+     "id": "4.2",
+     "t": "Shift handover and manager sign-off",
+     "s": "later",
+     "m": "golive",
+     "size": "S",
+     "r": "—",
+     "ships": [
+      "Printable handover report per shift",
+      "Manager sign-off, immutable once signed"
+     ],
+     "proof": "Close a shift, sign it off, then confirm it cannot be edited afterwards"
+    },
+    {
+     "id": "4.3",
+     "t": "Banking, petty cash and expenses out",
+     "s": "later",
+     "m": "market",
+     "size": "M",
+     "r": "—",
+     "ships": [
+      "Record cash banked, with slip reference",
+      "Petty cash float and expenses paid at the property"
+     ],
+     "proof": "Cash on hand equals collections minus banked minus petty cash spent"
+    }
+   ]
+  },
+  {
+   "id": 5,
+   "title": "The owner's view, then go live",
+   "why": "Small to build, and it is what makes the owner trust the system enough to stop running the spreadsheet in parallel.",
+   "shipments": [
+    {
+     "id": "5.1",
+     "t": "Manager dashboard",
+     "s": "later",
+     "m": "golive",
+     "size": "M",
+     "r": "—",
+     "ships": [
+      "Occupancy, ADR, RevPAR, revenue by category",
+      "Today, month to date, versus last month",
+      "Every card foots, every margin labelled"
+     ],
+     "proof": "Each figure reconciles to a folio query run by hand"
+    },
+    {
+     "id": "5.2",
+     "t": "Daily flash pack",
+     "s": "later",
+     "m": "golive",
+     "size": "S",
+     "r": "—",
+     "ships": [
+      "Yesterday in one page: rooms sold, revenue, arrivals, departures, outstanding",
+      "Emailed each morning after the night audit"
+     ],
+     "proof": "The pack matches the dashboard for the same date"
+    },
+    {
+     "id": "5.3",
+     "t": "Weak-network resilience",
+     "s": "later",
+     "m": "golive",
+     "size": "M",
+     "r": "—",
+     "ships": [
+      "Retry queue for postings, clear pending state",
+      "No silent loss when the connection drops mid-write",
+      "Never show a closed or denied screen on a transient error"
+     ],
+     "proof": "Kill the network mid-payment and confirm the posting either completes or is clearly still pending, never lost and never duplicated",
+     "note": "Fail open, not closed. A blip must not lock the desk out."
+    },
+    {
+     "id": "5.4",
+     "t": "Owner's real photos, copy and a design pass",
+     "s": "later",
+     "m": "golive",
+     "size": "S",
+     "r": "—",
+     "ships": [
+      "Real photography and copy replacing every placeholder",
+      "Login and admin design pass"
+     ],
+     "proof": "No placeholder survives anywhere a guest can see",
+     "note": "Biggest non-engineering risk. It has been outstanding the longest and depends on the owner, not on us."
+    },
+    {
+     "id": "5.5",
+     "t": "GO LIVE at Heledon",
+     "s": "later",
+     "m": "golive",
+     "size": "M",
+     "r": "—",
+     "ships": [
+      "Staff trained against the user guide",
+      "Excel retired, or run in parallel for one agreed week",
+      "Support path agreed for the first month",
+      "Clear the test data and open the books: empty the journal, remove the test store and seed items, then set gl_start_date once. Test entries are expected while building and the date cannot be set while any entry exists"
+     ],
+     "proof": "One full week of real operations with no fallback to Excel and a month-end that reconciles"
+    }
+   ]
+  },
+  {
+   "id": 6,
+   "title": "Food, drink and the restaurant product",
+   "why": "This is a second sellable product, not just a hotel module. Build it so a restaurant with no rooms can run on it.",
+   "shipments": [
+    {
+     "id": "6.1",
+     "t": "Requisitions and transfers",
+     "s": "later",
+     "m": "golive",
+     "size": "L",
+     "r": "new migration",
+     "ships": [
+      "Raise a requisition like a POS order",
+      "Store ticks what it actually sends, which may be less than asked",
+      "Requester confirms receipt, and only then does stock move"
+     ],
+     "proof": "Request 20kg, send 18kg, confirm 18kg. Stock leaves the store and arrives in the kitchen only on confirmation, and a delivered-but-unconfirmed line sits visible in between."
+    },
+    {
+     "id": "6.2",
+     "t": "Menu and costed recipes",
+     "s": "later",
+     "m": "golive",
+     "size": "L",
+     "r": "new migration",
+     "ships": [
+      "Sellable items: recipe-based or direct-mapped to one item",
+      "Recipe lines in base units",
+      "Cost computed live from moving-average cost"
+     ],
+     "proof": "Change an ingredient's cost and watch the dish cost follow"
+    },
+    {
+     "id": "6.3",
+     "t": "Outlets and the order screen",
+     "s": "later",
+     "m": "golive",
+     "size": "L",
+     "r": "new migration",
+     "ships": [
+      "Outlets, each tied to a stock location",
+      "Fast order entry, charge to room or pay now",
+      "Consumption deducts the recipe at delivery, not at order"
+     ],
+     "proof": "Order a dish, deliver it, then confirm the folio posted, the kitchen stock dropped by the recipe, and reversing the charge is still possible"
+    },
+    {
+     "id": "6.3a",
+     "t": "Table tabs, split bills, service charge",
+     "s": "later",
+     "m": "market",
+     "size": "M",
+     "r": "—",
+     "ships": [
+      "Open tabs per table",
+      "Split a bill by item or evenly",
+      "Service charge and tips"
+     ],
+     "proof": "Split a four-item tab three ways and watch the totals foot"
+    },
+    {
+     "id": "6.3b",
+     "t": "Kitchen ticket or display",
+     "s": "later",
+     "m": "market",
+     "size": "M",
+     "r": "—",
+     "ships": [
+      "Order prints or displays in the kitchen",
+      "Marked ready, then delivered"
+     ],
+     "proof": "An order reaches the kitchen without anybody carrying paper"
+    },
+    {
+     "id": "6.4",
+     "t": "Restaurant-only mode, proven end to end",
+     "s": "later",
+     "m": "market",
+     "size": "M",
+     "r": "—",
+     "ships": [
+      "Rooms and hotel modules off via enabled_modules",
+      "Guest quick-add at order time: anonymous, name and phone, or find existing",
+      "Pay now or a standalone tab"
+     ],
+     "proof": "A test restaurant tenant runs a full trading day with no room modules visible and reconciles at close",
+     "note": "The moment Palstro becomes two products instead of one."
+    },
+    {
+     "id": "6.5",
+     "t": "Wastage and spoilage",
+     "s": "later",
+     "m": "market",
+     "size": "S",
+     "r": "—",
+     "ships": [
+      "Record breakage and spoilage with reason and attribution"
+     ],
+     "proof": "Recorded waste explains the gap instead of reading as theft"
+    },
+    {
+     "id": "6.6",
+     "t": "Variance and theft analytics",
+     "s": "later",
+     "m": "market",
+     "size": "L",
+     "r": "—",
+     "ships": [
+      "Theoretical versus actual at every location",
+      "Per item per period: opening, received, issued, expected, actual, closing, variance",
+      "Graphs an owner reads without an accountant"
+     ],
+     "proof": "Seed a known discrepancy in one location and confirm the report points at that location and that item",
+     "note": "The differentiator. Nobody builds this for this market at this price."
+    }
+   ]
+  },
+  {
+   "id": 7,
+   "title": "Buying and supplier money",
+   "why": "Depth on top of 1.1h. The order-to-receive core moves up to stage 1 because a hotel buys before it sells; what is left here is what a bigger buyer needs.",
+   "shipments": [
+    {
+     "id": "7.1",
+     "t": "Purchase approvals and spend limits",
+     "s": "later",
+     "m": "market",
+     "size": "M",
+     "r": "—",
+     "ships": [
+      "Approval thresholds by amount and by role",
+      "An order above the limit cannot be sent until it is approved",
+      "Who approved what, on the record"
+     ],
+     "proof": "An order over the limit refuses to leave draft, and the approval shows on the document"
+    },
+    {
+     "id": "7.2",
+     "t": "Supplier price history and comparison",
+     "s": "later",
+     "m": "market",
+     "size": "S",
+     "r": "—",
+     "ships": [
+      "Last price paid per item per supplier",
+      "Price movement over time",
+      "Flag a line priced well above the last purchase"
+     ],
+     "proof": "Buy the same rice from two suppliers at different prices and the comparison is right without a spreadsheet"
+    },
+    {
+     "id": "7.3",
+     "t": "Supplier ageing and spend analytics",
+     "s": "later",
+     "m": "market",
+     "size": "M",
+     "r": "—",
+     "ships": [
+      "Ageing buckets across every supplier",
+      "Spend by supplier, by category, by period",
+      "Bills covering several receipts, where a hotel works that way"
+     ],
+     "proof": "A part-paid balance ages into the right bucket and the total foots against the supplier accounts",
+     "note": "What is left after paying suppliers moved forward to 1.1h5. This is the analysis, not the mechanism."
+    }
+   ]
+  },
+  {
+   "id": 8,
+   "title": "Housekeeping depth, laundry and utilities",
+   "why": "Where a hotel's costs quietly leak. Housekeeping consumes at cleaning time, by a different person, on a different clock.",
+   "shipments": [
+    {
+     "id": "8.1",
+     "t": "Par levels and issue-to-room stocking",
+     "s": "later",
+     "m": "market",
+     "size": "L",
+     "r": "new migration",
+     "ships": [
+      "Standard par per room",
+      "Attendant records what was stocked into which room, on which clean",
+      "Extra-item requests, billable or free per item, nothing pre-ticked"
+     ],
+     "proof": "Stock a room, then issue to an empty room and watch it demand a reason and flag for variance"
+    },
+    {
+     "id": "8.2",
+     "t": "Laundry as its own cost centre",
+     "s": "later",
+     "m": "market",
+     "size": "M",
+     "r": "—",
+     "ships": [
+      "Guest laundry as revenue, house laundry as cost",
+      "Chemicals consumed against kilos processed"
+     ],
+     "proof": "Cost per kilo computes and guest laundry revenue posts to the folio"
+    },
+    {
+     "id": "8.3",
+     "t": "Utilities and diesel",
+     "s": "later",
+     "m": "market",
+     "size": "M",
+     "r": "—",
+     "ships": [
+      "Diesel purchased and consumed, generator hours",
+      "Cost per occupied room",
+      "Grid versus generator split"
+     ],
+     "proof": "A month of diesel reconciles against generator hours and occupancy",
+     "note": "Often the second-largest cost line in a Nigerian hotel and almost nobody tracks it. Strong differentiator."
+    },
+    {
+     "id": "8.4",
+     "t": "Maintenance work orders",
+     "s": "later",
+     "m": "market",
+     "size": "M",
+     "r": "—",
+     "ships": [
+      "Raise a fault against a room or asset",
+      "Assign, complete, link to out-of-order"
+     ],
+     "proof": "A fault takes the room out of sale and puts it back on completion"
+    },
+    {
+     "id": "8.5",
+     "t": "Asset register and preventive schedule",
+     "s": "later",
+     "m": "world",
+     "size": "M",
+     "r": "—",
+     "ships": [
+      "Assets with service intervals",
+      "Due-soon list"
+     ],
+     "proof": "A due service appears before it is overdue"
+    }
+   ]
+  },
+  {
+   "id": 9,
+   "title": "Corporate and receivables",
+   "why": "Company business is most of a Nigerian business hotel's revenue and it is the hardest to bill today.",
+   "shipments": [
+    {
+     "id": "9.1",
+     "t": "Split billing",
+     "s": "later",
+     "m": "market",
+     "size": "L",
+     "r": "new migration",
+     "ships": [
+      "Two folios on one stay: company pays room, guest pays incidentals",
+      "Routing rules by charge category"
+     ],
+     "proof": "One stay produces two statements that together equal the whole bill"
+    },
+    {
+     "id": "9.2",
+     "t": "Corporate view",
+     "s": "later",
+     "m": "market",
+     "size": "M",
+     "r": "—",
+     "ships": [
+      "Who authorised and who is covered",
+      "Bulk no-show with one charge each",
+      "Company-level stay list"
+     ],
+     "proof": "Mark six no-shows at once and confirm exactly six one-night charges"
+    },
+    {
+     "id": "9.3",
+     "t": "City ledger: invoice the company",
+     "s": "later",
+     "m": "market",
+     "size": "L",
+     "r": "—",
+     "ships": [
+      "One invoice covering many stays",
+      "Part payments against an invoice",
+      "AR ageing"
+     ],
+     "proof": "Invoice five stays, pay part of it, and both the invoice and the ageing foot"
+    }
+   ]
+  },
+  {
+   "id": 10,
+   "title": "Selling rooms without a walk-in",
+   "why": "The site cannot take a booking today. This is where the product starts earning outside the front desk.",
+   "shipments": [
+    {
+     "id": "10.1",
+     "t": "Rate plans and packages",
+     "s": "later",
+     "m": "market",
+     "size": "M",
+     "r": "new migration",
+     "ships": [
+      "Room only, bed and breakfast, half board, with inclusions",
+      "Min stay, stop sell, closed to arrival"
+     ],
+     "proof": "A stop-sell date refuses a booking through every entry point"
+    },
+    {
+     "id": "10.2",
+     "t": "Online booking engine",
+     "s": "later",
+     "m": "market",
+     "size": "L",
+     "r": "—",
+     "ships": [
+      "Live availability and rates on the hotel's own site",
+      "Guest details, confirmation email, booking lands in the same tables",
+      "No authenticated app machinery on the public surface"
+     ],
+     "proof": "A booking made from a phone on the public site appears on the front-desk worklist, and the overbooking guard still holds under a concurrent attempt",
+     "note": "Public surface. Fail open on transient errors, never show a closed screen on a blip."
+    },
+    {
+     "id": "10.3",
+     "t": "Online payments",
+     "s": "later",
+     "m": "market",
+     "size": "L",
+     "r": "—",
+     "ships": [
+      "Paystack or Flutterwave behind one provider interface",
+      "Deposit at booking, balance at checkout",
+      "Payment posts to the folio, reversible like any other"
+     ],
+     "proof": "A real test payment posts to the right folio and reverses cleanly"
+    },
+    {
+     "id": "10.4",
+     "t": "Cancellation and modification policy",
+     "s": "later",
+     "m": "market",
+     "size": "M",
+     "r": "—",
+     "ships": [
+      "Policy per rate plan",
+      "Guest-side cancel or change within policy",
+      "Deposit forfeit rules"
+     ],
+     "proof": "Cancel inside and outside the window and watch the two different outcomes"
+    },
+    {
+     "id": "10.5",
+     "t": "Promo codes and vouchers",
+     "s": "later",
+     "m": "world",
+     "size": "S",
+     "r": "—",
+     "ships": [
+      "Codes with limits and expiry",
+      "Discount shown as its own visible line"
+     ],
+     "proof": "A used-up code is refused and the discount line is visible on the folio"
+    }
+   ]
+  },
+  {
+   "id": 11,
+   "title": "Books and statutory",
+   "why": "Built last on purpose. Every posting above is already accountable, so the books assemble from proven data rather than from a parallel truth.",
+   "shipments": [
+    {
+     "id": "11.1",
+     "t": "Chart of accounts and mapping",
+     "s": "later",
+     "m": "market",
+     "size": "M",
+     "r": "new migration",
+     "ships": [
+      "Per-tenant chart of accounts",
+      "Charge categories, tax lines and payment methods mapped to accounts"
+     ],
+     "proof": "Every existing charge category maps to an account with nothing unmapped"
+    },
+    {
+     "id": "11.2",
+     "t": "Journals and trial balance",
+     "s": "later",
+     "m": "market",
+     "size": "L",
+     "r": "—",
+     "ships": [
+      "Postings generate journal entries",
+      "Trial balance per property"
+     ],
+     "proof": "The trial balance balances and ties to folio totals for the period"
+    },
+    {
+     "id": "11.3",
+     "t": "Bank, cash and reconciliation",
+     "s": "later",
+     "m": "market",
+     "size": "M",
+     "r": "—",
+     "ships": [
+      "Bank and cash accounts",
+      "Match banked cash and transfers to statements"
+     ],
+     "proof": "A month reconciles with the unmatched items named"
+    },
+    {
+     "id": "11.4",
+     "t": "P&L, balance sheet and group roll-up",
+     "s": "later",
+     "m": "market",
+     "size": "L",
+     "r": "—",
+     "ships": [
+      "Departmental and property P&L",
+      "Balance sheet",
+      "Group consolidation across properties"
+     ],
+     "proof": "Group total equals the sum of the properties, and every deduction between top and bottom line is visible"
+    },
+    {
+     "id": "11.5",
+     "t": "Tax returns: VAT, consumption tax, WHT",
+     "s": "later",
+     "m": "market",
+     "size": "M",
+     "r": "—",
+     "ships": [
+      "VAT report from the tax lines already posted",
+      "State consumption tax",
+      "Withholding tax on supplier payments"
+     ],
+     "proof": "A period's VAT report equals the sum of VAT lines posted in that period",
+     "note": "A hotel that cannot file will not buy."
+    }
+   ]
+  },
+  {
+   "id": 12,
+   "title": "The guest's own experience",
+   "why": "Turning a stay into the next stay, and keeping guest data handled properly.",
+   "shipments": [
+    {
+     "id": "12.1",
+     "t": "Guest portal",
+     "s": "later",
+     "m": "market",
+     "size": "L",
+     "r": "—",
+     "ships": [
+      "Guests log in to their own stays, folios and statements",
+      "Own data only, enforced by RLS not by the screen"
+     ],
+     "proof": "A guest account can read its own statement and cannot read anyone else's, tested by calling the API directly"
+    },
+    {
+     "id": "12.2",
+     "t": "Guest messaging",
+     "s": "later",
+     "m": "market",
+     "size": "M",
+     "r": "—",
+     "ships": [
+      "Booking confirmation, pre-arrival note, post-stay thank you",
+      "WhatsApp, SMS or email"
+     ],
+     "proof": "A booking triggers exactly one confirmation, and never sends to a guessed number"
+    },
+    {
+     "id": "12.3",
+     "t": "Feedback and reviews",
+     "s": "later",
+     "m": "market",
+     "size": "S",
+     "r": "—",
+     "ships": [
+      "Post-stay feedback request",
+      "Scores visible to the manager"
+     ],
+     "proof": "Feedback lands against the right stay"
+    },
+    {
+     "id": "12.4",
+     "t": "Privacy: consent, retention, ID handling",
+     "s": "later",
+     "m": "market",
+     "size": "M",
+     "r": "—",
+     "ships": [
+      "Consent captured at capture time",
+      "Retention policy and purge path",
+      "ID scans in the private bucket only, never the public one"
+     ],
+     "proof": "An ID scan is unreachable without an authenticated, permitted session"
+    },
+    {
+     "id": "12.5",
+     "t": "Repeat-guest recognition and loyalty",
+     "s": "later",
+     "m": "world",
+     "size": "M",
+     "r": "—",
+     "ships": [
+      "Stay count and value on the guest record",
+      "Simple tiers and recognition at check-in"
+     ],
+     "proof": "A returning guest is flagged before the desk greets them"
+    }
+   ]
+  },
+  {
+   "id": 13,
+   "title": "From one hotel to a product",
+   "why": "Everything above proves the software. This stage proves the business.",
+   "shipments": [
+    {
+     "id": "13.1",
+     "t": "Onboarding wizard",
+     "s": "later",
+     "m": "market",
+     "size": "L",
+     "r": "—",
+     "ships": [
+      "Create tenant, property, rooms, rates, tax and staff in one guided flow",
+      "Sensible defaults so a small hotel finishes in a day"
+     ],
+     "proof": "A new hotel goes from nothing to taking a booking without anyone touching SQL"
+    },
+    {
+     "id": "13.2",
+     "t": "Data migration kit",
+     "s": "later",
+     "m": "market",
+     "size": "M",
+     "r": "—",
+     "ships": [
+      "Import guests, existing bookings and opening stock from Excel",
+      "Validate then commit, idempotent"
+     ],
+     "proof": "A real spreadsheet from a real hotel imports with every rejected row explained"
+    },
+    {
+     "id": "13.3",
+     "t": "Demo and training mode",
+     "s": "later",
+     "m": "market",
+     "size": "M",
+     "r": "—",
+     "ships": [
+      "Sample data set",
+      "Practice without dirtying real books, clearly marked"
+     ],
+     "proof": "Staff can train and reset without touching live data"
+    },
+    {
+     "id": "13.4",
+     "t": "Subscription, plans and billing",
+     "s": "later",
+     "m": "market",
+     "size": "L",
+     "r": "new migration",
+     "ships": [
+      "Plans, trials, renewals",
+      "Module gating per plan on top of enabled_modules",
+      "New features default in for existing tenants"
+     ],
+     "proof": "A new gated feature reaches every existing tenant immediately, and a lapsed trial degrades without deleting anything",
+     "note": "Carry the ERP lessons wholesale: no full-replace config saves, gated features default in, prove parity before flipping anything live."
+    },
+    {
+     "id": "13.5",
+     "t": "Pricing and packaging decision",
+     "s": "later",
+     "m": "market",
+     "size": "S",
+     "r": "—",
+     "ships": [
+      "Hotel, restaurant, or both",
+      "What each tier includes, derived from the real module config"
+     ],
+     "proof": "The pricing page is generated from the same config that enforces access"
+    },
+    {
+     "id": "13.6",
+     "t": "Second pilot customer",
+     "s": "later",
+     "m": "market",
+     "size": "L",
+     "r": "—",
+     "ships": [
+      "A hotel that is not Heledon, onboarded without code changes"
+     ],
+     "proof": "Onboarded end to end with zero Heledon-shaped assumptions found",
+     "note": "The real test of multi-tenancy is the second tenant."
+    },
+    {
+     "id": "13.7",
+     "t": "Performance and scale pass",
+     "s": "later",
+     "m": "market",
+     "size": "M",
+     "r": "—",
+     "ships": [
+      "Index and query budget per screen",
+      "Behaviour checked at realistic data volume"
+     ],
+     "proof": "Every list screen stays fast against a year of data"
+    },
+    {
+     "id": "13.8",
+     "t": "Support playbook and status page",
+     "s": "later",
+     "m": "world",
+     "size": "S",
+     "r": "—",
+     "ships": [
+      "Escalation path, response expectations",
+      "Public status page"
+     ],
+     "proof": "A simulated outage follows the playbook end to end"
+    }
+   ]
+  },
+  {
+   "id": 14,
+   "title": "Anywhere in the world",
+   "why": "Everything above assumes Nigeria. This stage removes that assumption.",
+   "shipments": [
+    {
+     "id": "14.1",
+     "t": "Multi-currency",
+     "s": "later",
+     "m": "world",
+     "size": "L",
+     "r": "new migration",
+     "ships": [
+      "Property base currency, guest-facing currency, stored rate at posting time",
+      "Reporting in base currency"
+     ],
+     "proof": "A guest billed in one currency and paying in another settles to zero with the FX difference visible as its own line"
+    },
+    {
+     "id": "14.2",
+     "t": "Configurable tax templates per country",
+     "s": "later",
+     "m": "world",
+     "size": "M",
+     "r": "—",
+     "ships": [
+      "Country templates on top of the existing per-property tax list",
+      "Inclusive versus exclusive tax, rounding rules"
+     ],
+     "proof": "Switch a property to an inclusive-tax country template and the statement still foots to the cent"
+    },
+    {
+     "id": "14.3",
+     "t": "Locale and language",
+     "s": "later",
+     "m": "world",
+     "size": "L",
+     "r": "—",
+     "ships": [
+      "Date, number and address formats per property",
+      "Translation scaffold with English as the source"
+     ],
+     "proof": "A property set to another locale renders dates and numbers correctly everywhere, including the exports"
+    },
+    {
+     "id": "14.4",
+     "t": "Regional payment providers",
+     "s": "later",
+     "m": "world",
+     "size": "M",
+     "r": "—",
+     "ships": [
+      "One provider interface, several adapters",
+      "Card terminal integration where it matters"
+     ],
+     "proof": "Swap the provider for a property without touching folio code"
+    },
+    {
+     "id": "14.5",
+     "t": "Accessibility pass",
+     "s": "later",
+     "m": "world",
+     "size": "M",
+     "r": "—",
+     "ships": [
+      "Keyboard paths, contrast, labels across the admin",
+      "WCAG AA on the surfaces staff use all day"
+     ],
+     "proof": "Core front-desk tasks complete by keyboard alone at AA contrast"
+    }
+   ]
+  },
+  {
+   "id": 15,
+   "title": "Integrations",
+   "why": "Worth real money to larger buyers, worth nothing before the core is solid. Deliberately last.",
+   "shipments": [
+    {
+     "id": "15.1",
+     "t": "Channel manager",
+     "s": "later",
+     "m": "world",
+     "size": "L",
+     "r": "—",
+     "ships": [
+      "Push rates and availability to Booking.com, Expedia, Hotels.ng",
+      "Pull reservations back into the same tables"
+     ],
+     "proof": "A rate change reaches the channel and an OTA booking reaches the worklist, without breaking the overbooking guard"
+    },
+    {
+     "id": "15.2",
+     "t": "Door locks and key cards",
+     "s": "later",
+     "m": "world",
+     "size": "M",
+     "r": "—",
+     "ships": [
+      "Issue a key on check-in, expire on checkout"
+     ],
+     "proof": "A key stops working at checkout"
+    },
+    {
+     "id": "15.3",
+     "t": "Accounting export",
+     "s": "later",
+     "m": "world",
+     "size": "M",
+     "r": "—",
+     "ships": [
+      "Journal export to QuickBooks, Xero or Sage"
+     ],
+     "proof": "An exported period imports and balances in the target system"
+    },
+    {
+     "id": "15.4",
+     "t": "WhatsApp Business API",
+     "s": "later",
+     "m": "world",
+     "size": "M",
+     "r": "—",
+     "ships": [
+      "Templated confirmations and statements over the official API"
+     ],
+     "proof": "A statement reaches a guest without a manual share step"
+    }
+   ]
+  }
+ ]
+}

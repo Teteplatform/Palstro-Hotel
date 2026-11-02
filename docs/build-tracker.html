@@ -1,0 +1,1810 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1">
+<title>Palstro Hotels — Build Sequence</title>
+<style>:root{color-scheme:light}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}
+:root{color-scheme:light}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}
+
+  :root{
+    --terracotta:#b5532a; --cream:#faf5ee; --ink:#2a2320; --muted:#7a6f66;
+    --line:#e7ddd1; --card:#fffdf9; --green:#276749; --amber:#b7791f; --red:#9b2226;
+    --chip:#f0e7db; --grey:#9a8f83; --blue:#2c5282;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--cream);color:var(--ink);line-height:1.5;-webkit-font-smoothing:antialiased;}
+  header{padding:1.3rem 1.25rem 1rem;border-bottom:1px solid var(--line);background:var(--cream);}
+  .wrap{max-width:980px;margin:0 auto;}
+  h1{margin:0;font-size:1.35rem;letter-spacing:-.01em;}
+  .sub{color:var(--muted);font-size:.85rem;margin-top:.25rem;}
+  main{padding:1.25rem;max-width:980px;margin:0 auto;}
+
+  .goals{display:grid;grid-template-columns:repeat(3,1fr);gap:.75rem;margin-top:1rem;}
+  .goal{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:.7rem .85rem;}
+  .goal .gt{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:700;}
+  .goal .gp{font-size:1.4rem;font-weight:700;line-height:1.2;margin:.1rem 0;}
+  .goal .gd{font-size:.75rem;color:var(--muted);}
+  .bar{height:.45rem;background:#ece2d5;border-radius:99px;overflow:hidden;margin:.3rem 0 .35rem;}
+  .bar i{display:block;height:100%;background:var(--green);}
+  .bar.b2 i{background:var(--terracotta);}
+  .bar.b3 i{background:var(--blue);}
+  @media(max-width:700px){.goals{grid-template-columns:1fr;}}
+
+  .upnext{background:#fff8ef;border:1px solid #f0e2cd;border-left:4px solid var(--terracotta);border-radius:12px;padding:.9rem 1.05rem;margin:1.25rem 0;}
+  .upnext h3{margin:0 0 .45rem;font-size:.95rem;color:var(--terracotta);}
+  .upnext ol{margin:0;padding-left:1.15rem;}
+  .upnext li{font-size:.88rem;margin:.3rem 0;}
+  .upnext .n{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-weight:700;}
+
+  .navrow{display:flex;gap:.35rem;flex-wrap:wrap;margin:1rem 0 .25rem;}
+  .navrow a{font-size:.75rem;color:var(--muted);text-decoration:none;border:1px solid var(--line);background:var(--card);border-radius:99px;padding:.24rem .6rem;}
+  .navrow a:hover{border-color:var(--terracotta);color:var(--ink);}
+
+  .filters{display:flex;gap:.4rem;flex-wrap:wrap;margin:.9rem 0 .3rem;align-items:center;}
+  .flabel{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:700;margin-right:.2rem;}
+  .f{border:1px solid var(--line);background:var(--card);color:var(--muted);font:inherit;font-size:.78rem;
+     padding:.26rem .68rem;border-radius:99px;cursor:pointer;}
+  .f:hover{border-color:var(--terracotta);color:var(--ink);}
+  .f[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:#fff;}
+  .showing{font-size:.78rem;color:var(--muted);margin:.1rem 0 1.1rem;}
+
+  /* --- the sequence table: sticky header, Excel-style --- */
+  .tablewrap{background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:visible;margin-bottom:1.75rem;}
+  table#seq{width:100%;border-collapse:separate;border-spacing:0;font-size:.86rem;}
+  table#seq thead th{
+    position:sticky;top:0;z-index:5;
+    background:#f2e8da;color:var(--muted);
+    font-size:.72rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+    text-align:left;padding:.55rem .7rem;
+    border-bottom:1px solid var(--line);
+    box-shadow:0 1px 0 var(--line);
+  }
+  table#seq thead th:first-child{border-top-left-radius:12px;}
+  table#seq thead th:last-child{border-top-right-radius:12px;}
+  table#seq td{padding:.6rem .7rem;border-bottom:1px solid var(--line);vertical-align:top;}
+  table#seq tbody tr.ship:hover td{background:#fdf9f3;}
+
+  .c-num{width:4.5rem;} .c-proof{width:29%;} .c-st{width:6.5rem;} .c-ms{width:6.5rem;} .c-size{width:3.2rem;} .c-mig{width:7rem;}
+
+  /* stage divider rows, sticky just under the header */
+  tr.grow th{
+    position:sticky;top:2.05rem;z-index:4;
+    background:#efe4d4;text-align:left;padding:.5rem .7rem;
+    border-top:1px solid var(--line);border-bottom:1px solid var(--line);
+    scroll-margin-top:2.05rem;
+  }
+  .gnum{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-weight:700;font-size:.72rem;color:#fff;background:var(--terracotta);
+        border-radius:5px;padding:.1rem .4rem;margin-right:.5rem;}
+  .gtitle{font-size:.85rem;font-weight:700;color:var(--ink);margin-right:.5rem;}
+  .gwhy{font-size:.78rem;font-weight:400;color:var(--muted);}
+  .gtick{float:right;font-size:.74rem;font-weight:600;color:var(--muted);white-space:nowrap;padding-left:.75rem;}
+  tr.grow[id]{scroll-margin-top:2.05rem;}
+
+  td.num{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-weight:700;font-size:.82rem;color:var(--terracotta);white-space:nowrap;}
+  td.what .t{font-weight:600;font-size:.88rem;}
+  td.proof{font-size:.81rem;color:var(--muted);}
+  td.size{font-weight:700;font-size:.78rem;color:var(--muted);text-align:center;}
+  .chip{display:inline-block;font-size:.68rem;font-weight:700;letter-spacing:.03em;text-transform:uppercase;padding:.12rem .42rem;border-radius:5px;white-space:nowrap;}
+  .chip.st.done{background:#e8f0e9;color:var(--green);}
+  .chip.st.wip{background:#fdf3e2;color:var(--amber);}
+  .chip.st.next{background:#fbe9e9;color:var(--red);}
+  .chip.st.later{background:#f2ede6;color:var(--grey);}
+  .chip.ms.golive{background:#eef3ee;color:var(--green);}
+  .chip.ms.market{background:#e9eef5;color:var(--blue);}
+  .chip.ms.world{background:var(--chip);color:var(--grey);}
+  td.mig{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.76rem;color:var(--muted);}
+  .ships{margin:.3rem 0 0;padding-left:1rem;}
+  .ships li{font-size:.79rem;color:var(--muted);margin:.12rem 0;}
+  .snote{font-size:.78rem;color:var(--muted);margin:.35rem 0 0;padding-left:.55rem;border-left:2px solid var(--chip);}
+
+  .callout{background:#fff8ef;border:1px solid #f0e2cd;border-radius:12px;padding:1rem 1.1rem;margin-bottom:1.5rem;}
+  .callout h3{margin:0 0 .5rem;font-size:.95rem;}
+  .callout p{margin:.35rem 0 0;font-size:.88rem;color:var(--muted);}
+  .callout ul{margin:.4rem 0 0;padding-left:1.1rem;}
+  .callout li{margin:.35rem 0;font-size:.86rem;}
+  code{background:var(--chip);padding:.05rem .3rem;border-radius:4px;font-size:.82em;}
+  footer{max-width:980px;margin:0 auto;padding:0 1.25rem 2.5rem;color:var(--muted);font-size:.78rem;}
+  @media(max-width:900px){
+    .c-mig,td.mig{display:none;}
+    .c-size,td.size{display:none;}
+  }
+  @media(max-width:700px){
+    .c-proof,td.proof{display:none;}
+    .c-ms,td:nth-child(5){display:none;}
+    main{padding:1rem .75rem;}
+    .gtick{float:none;display:block;padding-left:0;}
+  }
+  @media print{
+    .filters,.navrow{display:none;}
+    body{background:#fff;}
+    table#seq thead th, tr.grow th{position:static;}
+    tr.ship,.callout{break-inside:avoid;}
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <h1>Palstro Hotels — Build Sequence</h1>
+    <div class="sub">Hotel + restaurant operations platform. Hilton-grade control, small-operator simplicity. &middot; Heledon Hotels &amp; Suites, 30 rooms, Finima, Bonny Island</div>
+    <div class="goals">
+      <div class="goal">
+        <div class="gt">Heledon go-live</div>
+        <div class="gp">43%</div>
+        <div class="bar "><i style="width:43%"></i></div>
+        <div class="gd">24 of 56 shipments</div>
+      </div>
+      <div class="goal">
+        <div class="gt">Sellable product</div>
+        <div class="gp">26%</div>
+        <div class="bar b2"><i style="width:26%"></i></div>
+        <div class="gd">24 of 94 shipments</div>
+      </div>
+      <div class="goal">
+        <div class="gt">Anywhere in the world</div>
+        <div class="gp">22%</div>
+        <div class="bar b3"><i style="width:22%"></i></div>
+        <div class="gd">24 of 107 shipments</div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div class="upnext">
+    <h3>Up next, in order</h3>
+    <ol>
+      <li><span class="n">1.1h2</span> Purchases: suppliers, the order, and receiving it</li>
+      <li><span class="n">1.1</span> Push 037 and walk every inventory tab on the live DB</li>
+      <li><span class="n">1.1i</span> Outlet prices and the bulk price tool</li>
+    </ol>
+  </div>
+
+  <div class="navrow"><a href="#stage-0">0. Already shipped and proven</a><a href="#stage-1">1. Close what is already open</a><a href="#stage-2">2. People and access</a><a href="#stage-3">3. The rooms the front desk actually touches</a><a href="#stage-4">4. Cash control</a><a href="#stage-5">5. The owner's view, then go live</a><a href="#stage-6">6. Food, drink and the restaurant product</a><a href="#stage-7">7. Buying and supplier money</a><a href="#stage-8">8. Housekeeping depth, laundry and utilities</a><a href="#stage-9">9. Corporate and receivables</a><a href="#stage-10">10. Selling rooms without a walk-in</a><a href="#stage-11">11. Books and statutory</a><a href="#stage-12">12. The guest's own experience</a><a href="#stage-13">13. From one hotel to a product</a><a href="#stage-14">14. Anywhere in the world</a><a href="#stage-15">15. Integrations</a></div>
+
+  <div class="filters" role="group" aria-label="Filter by status">
+    <span class="flabel">Status</span>
+    <button class="f" data-k="s" data-v="all" aria-pressed="true">All</button>
+    <button class="f" data-k="s" data-v="done" aria-pressed="false">Done (24)</button>
+    <button class="f" data-k="s" data-v="wip" aria-pressed="false">In progress (1)</button>
+    <button class="f" data-k="s" data-v="next" aria-pressed="false">Next (2)</button>
+    <button class="f" data-k="s" data-v="later" aria-pressed="false">Not started (80)</button>
+  </div>
+  <div class="filters" role="group" aria-label="Filter by milestone">
+    <span class="flabel">Milestone</span>
+    <button class="f" data-k="m" data-v="all" aria-pressed="true">All</button>
+    <button class="f" data-k="m" data-v="golive" aria-pressed="false">Go-live</button>
+    <button class="f" data-k="m" data-v="market" aria-pressed="false">Sellable</button>
+    <button class="f" data-k="m" data-v="world" aria-pressed="false">Anywhere</button>
+  </div>
+  <p class="showing" id="showing"></p>
+
+<div class="callout">
+    <h3>How a shipment works</h3>
+    <ul>
+      <li>A shipment is DONE only when its proof has been run on the live DB. Code review is not proof.</li>
+      <li>Every shipment ends with two updates: docs/USER-GUIDE.md and this file, then npm run tracker.</li>
+      <li>Talk the shipment through before building it. No code until the shape is clear.</li>
+      <li>One shipment at a time. Do not start the next until the current one is proven.</li>
+      <li>If a shipment turns out to be two shipments, split it here rather than letting it sprawl.</li>
+    </ul>
+    <p><strong>Go-live</strong> means Heledon go-live: the hotel runs end to end without Excel. <strong>Sellable</strong> means Sellable: any Nigerian hotel or restaurant can buy it and run it. <strong>Anywhere</strong> means Anywhere: currency, locale, tax, payments and integrations for any market.</p>
+  </div>
+
+  <div class="callout">
+    <h3>Two products, one codebase</h3>
+    <p>The restaurant is a <strong>standalone product</strong>. A restaurant-only tenant runs the same app with the room and hotel modules switched off via <code>enabled_modules</code>. The guest is the universal customer, so a restaurant customer is just a guest with no stay, and F&amp;B posts to a pay-now sale or a standalone folio tab instead of a room folio. Shipment 6.4 is the moment that becomes true rather than intended.</p>
+  </div>
+
+
+  <div class="tablewrap">
+    <table id="seq">
+      <thead>
+        <tr>
+          <th class="c-num">#</th>
+          <th class="c-what">Shipment</th>
+          <th class="c-proof">Proven by</th>
+          <th class="c-st">Status</th>
+          <th class="c-ms">Milestone</th>
+          <th class="c-size">Size</th>
+          <th class="c-mig">Ref</th>
+        </tr>
+      </thead>
+      
+      
+      <tbody>
+        <tr class="grow" data-stage="0" id="stage-0">
+          <th colspan="7" scope="colgroup">
+            <span class="gnum">Stage 0</span>
+            <span class="gtitle">Already shipped and proven</span>
+            <span class="gwhy">The base the rest stands on. Kept visible so the sequence starts from reality, not from zero.</span>
+            <span class="gtick">15 of 15 shipped</span>
+          </th>
+        </tr>
+        <tr class="ship" data-s="done" data-m="golive" data-stage="0">
+          <td class="num">0.1</td>
+          <td class="what">
+            <div class="t">Tenancy, RLS, roles scaffold, storage, modules, change log, settings engine</div>
+            <ul class="ships"><li>Tenant and property model, get_tenant_ids resolution</li><li>Property media bucket with quota, private-by-default for IDs</li><li>enabled_modules gating and the generic change_log</li><li>Schema-driven settings with optimistic concurrency</li></ul>
+            
+          </td>
+          <td class="proof">Live tenant and property running since day one</td>
+          <td><span class="chip st done">Done</span></td>
+          <td><span class="chip ms golive">Go-live</span></td>
+          <td class="size">L</td>
+          <td class="mig">001–011</td>
+        </tr>
+        <tr class="ship" data-s="done" data-m="golive" data-stage="0">
+          <td class="num">0.2</td>
+          <td class="what">
+            <div class="t">Guest marketing site + inline visual editor</div>
+            <ul class="ships"><li>DB-driven landing page</li><li>Editor that edits the real page, no forked components</li><li>Image cleanup verified</li></ul>
+            
+          </td>
+          <td class="proof">Edits render live on the public site</td>
+          <td><span class="chip st done">Done</span></td>
+          <td><span class="chip ms golive">Go-live</span></td>
+          <td class="size">M</td>
+          <td class="mig">—</td>
+        </tr>
+        <tr class="ship" data-s="done" data-m="golive" data-stage="0">
+          <td class="num">0.3</td>
+          <td class="what">
+            <div class="t">Auth, admin shell, settings and theme framework</div>
+            <ul class="ships"><li>Protected routes, URL-based active property</li><li>Grouped nav, toasts, dirty-form block, error boundaries</li><li>Theme override, 6 font pairings, WCAG warnings, live preview</li></ul>
+            
+          </td>
+          <td class="proof">In daily use</td>
+          <td><span class="chip st done">Done</span></td>
+          <td><span class="chip ms golive">Go-live</span></td>
+          <td class="size">M</td>
+          <td class="mig">—</td>
+        </tr>
+        <tr class="ship" data-s="done" data-m="golive" data-stage="0">
+          <td class="num">0.4</td>
+          <td class="what">
+            <div class="t">Room types, physical rooms, rates</div>
+            <ul class="ships"><li>Bookable room types and physical rooms with status and housekeeping_status columns</li><li>Rack, weekend and seasonal rates with resolve precedence</li></ul>
+            
+          </td>
+          <td class="proof">resolve_room_rate precedence proven</td>
+          <td><span class="chip st done">Done</span></td>
+          <td><span class="chip ms golive">Go-live</span></td>
+          <td class="size">M</td>
+          <td class="mig">002, 012–013</td>
+        </tr>
+        <tr class="ship" data-s="done" data-m="golive" data-stage="0">
+          <td class="num">0.5</td>
+          <td class="what">
+            <div class="t">Guests, bookings and the overbooking guard</div>
+            <ul class="ships"><li>Structured guest records with ID fields</li><li>Bookings and booking_nights with the rate locked per night</li><li>create_booking with lock-before-count</li></ul>
+            
+          </td>
+          <td class="proof">5 concurrent bookings into 2 rooms, 3 refused, live</td>
+          <td><span class="chip st done">Done</span></td>
+          <td><span class="chip ms golive">Go-live</span></td>
+          <td class="size">L</td>
+          <td class="mig">014–015</td>
+        </tr>
+        <tr class="ship" data-s="done" data-m="golive" data-stage="0">
+          <td class="num">0.6</td>
+          <td class="what">
+            <div class="t">Companies, negotiated rates, check-in and check-out</div>
+            <ul class="ships"><li>Company records and negotiated rates, fixed or % off rack</li><li>check_in and check_out RPCs</li><li>Monthly booking numbers, past-date guard</li></ul>
+            
+          </td>
+          <td class="proof">Rate resolution proven against company rows</td>
+          <td><span class="chip st done">Done</span></td>
+          <td><span class="chip ms golive">Go-live</span></td>
+          <td class="size">M</td>
+          <td class="mig">016–020</td>
+        </tr>
+        <tr class="ship" data-s="done" data-m="golive" data-stage="0">
+          <td class="num">0.7</td>
+          <td class="what">
+            <div class="t">Folio engine, tax config, PIN-gated discounts</div>
+            <ul class="ships"><li>Generic post_charge driven by charge_categories</li><li>Per-property tax and service charge list, VAT compulsory</li><li>Manager PINs (bcrypt, verify revoked from clients), discount threshold</li></ul>
+            
+          </td>
+          <td class="proof">130k − 20k discount + 7.6% VAT − 50k deposit = 68,360 exactly; discount refused without a PIN</td>
+          <td><span class="chip st done">Done</span></td>
+          <td><span class="chip ms golive">Go-live</span></td>
+          <td class="size">L</td>
+          <td class="mig">021–022</td>
+        </tr>
+        <tr class="ship" data-s="done" data-m="golive" data-stage="0">
+          <td class="num">0.8</td>
+          <td class="what">
+            <div class="t">Night audit, arrival and no-show, checkout completes the bill</div>
+            <ul class="ships"><li>run_night_audit with per-booking subtransactions, secured cron</li><li>Editable arrival date and time, actual_check_in</li><li>mark_no_show charging one reserved night for company-guaranteed only</li><li>check_out posts all unbilled nights in one transaction</li></ul>
+            
+          </td>
+          <td class="proof">Reserved 27th, arrived 30th, out 1st charged only 30 and 31; checkout before any audit billed exactly one night</td>
+          <td><span class="chip st done">Done</span></td>
+          <td><span class="chip ms golive">Go-live</span></td>
+          <td class="size">L</td>
+          <td class="mig">023–026</td>
+        </tr>
+        <tr class="ship" data-s="done" data-m="golive" data-stage="0">
+          <td class="num">0.9</td>
+          <td class="what">
+            <div class="t">Guest ledger, standalone folios, guest-centric flow</div>
+            <ul class="ships"><li>Cross-stay FIFO allocation computed at read time</li><li>Standalone folios for non-residents</li><li>Guest home with summary, ledger and stays</li><li>Auto-cancel frees the room</li></ul>
+            
+          </td>
+          <td class="proof">One payment on the newest of three stays settled the two oldest under FIFO; totals reconcile</td>
+          <td><span class="chip st done">Done</span></td>
+          <td><span class="chip ms golive">Go-live</span></td>
+          <td class="size">L</td>
+          <td class="mig">027–029</td>
+        </tr>
+        <tr class="ship" data-s="done" data-m="golive" data-stage="0">
+          <td class="num">0.10</td>
+          <td class="what">
+            <div class="t">Guest statement, four export formats, email the PDF</div>
+            <ul class="ships"><li>assembleStatement as one pure source of truth</li><li>PDF, Excel, Word, WhatsApp</li><li>Vercel Node email function sharing the same PDF definition</li><li>statement_emails with claim-before-send</li></ul>
+            
+          </td>
+          <td class="proof">Word and Excel open clean, pdf.js extracts the ₦ text, forged tokens 401</td>
+          <td><span class="chip st done">Done</span></td>
+          <td><span class="chip ms golive">Go-live</span></td>
+          <td class="size">L</td>
+          <td class="mig">030</td>
+        </tr>
+        <tr class="ship" data-s="done" data-m="golive" data-stage="0">
+          <td class="num">0.11</td>
+          <td class="what">
+            <div class="t">Reversal subsystem</div>
+            <ul class="ships"><li>Reverse payment, charge, discount, no-show, cancel, checkout</li><li>Counter-entries never edits, all three money columns mirrored</li><li>Availability re-checked per night before un-cancelling</li></ul>
+            
+          </td>
+          <td class="proof">169 assertions across the four parts; un-cancel into a full room refused live, accepted once inventory freed</td>
+          <td><span class="chip st done">Done</span></td>
+          <td><span class="chip ms golive">Go-live</span></td>
+          <td class="size">L</td>
+          <td class="mig">031–034</td>
+        </tr>
+        <tr class="ship" data-s="done" data-m="golive" data-stage="0">
+          <td class="num">0.12</td>
+          <td class="what">
+            <div class="t">Inventory catalogue, units, categories, locations</div>
+            <ul class="ships"><li>Tenant-level item catalogue, raw / finished / both</li><li>Units and categories seeded per tenant</li><li>Property-scoped locations</li></ul>
+            
+          </td>
+          <td class="proof">30 assertions, Heledon seeded with 16 units, 8 categories, 4 locations</td>
+          <td><span class="chip st done">Done</span></td>
+          <td><span class="chip ms golive">Go-live</span></td>
+          <td class="size">M</td>
+          <td class="mig">035</td>
+        </tr>
+        <tr class="ship" data-s="done" data-m="golive" data-stage="0">
+          <td class="num">0.13</td>
+          <td class="what">
+            <div class="t">Movement-sourced stock, moving-average cost, import</div>
+            <ul class="ships"><li>stock_movements carrying location_id, signed quantity, business_date</li><li>On-hand computed, never stored</li><li>Opening balances and adjustments with mandatory reason</li><li>Validate-then-commit Excel and CSV import</li></ul>
+            
+          </td>
+          <td class="proof">Moving-average recompute verified; import round-trip verified on both file types</td>
+          <td><span class="chip st done">Done</span></td>
+          <td><span class="chip ms golive">Go-live</span></td>
+          <td class="size">L</td>
+          <td class="mig">036</td>
+        </tr>
+        <tr class="ship" data-s="done" data-m="golive" data-stage="0">
+          <td class="num">0.14</td>
+          <td class="what">
+            <div class="t">Consolidated inventory page</div>
+            <ul class="ships"><li>Location picker, summary card, tab strip</li><li>Products, Categories, Adjustments, Stock Take, Import History, Price Update</li><li>Server-side below-reorder answered against the same rows as the totals</li></ul>
+            
+          </td>
+          <td class="proof">Aggregates match stock_on_hand_by_item</td>
+          <td><span class="chip st done">Done</span></td>
+          <td><span class="chip ms golive">Go-live</span></td>
+          <td class="size">M</td>
+          <td class="mig">—</td>
+        </tr>
+        <tr class="ship" data-s="done" data-m="golive" data-stage="0">
+          <td class="num">0.15</td>
+          <td class="what">
+            <div class="t">User guide and in-app Help</div>
+            <ul class="ships"><li>Single markdown source imported raw</li><li>Own parser returning a typed React tree, no injection surface</li><li>Front desk, manager and owner task sections plus glossary</li></ul>
+            
+          </td>
+          <td class="proof">Help page live, contents and search working</td>
+          <td><span class="chip st done">Done</span></td>
+          <td><span class="chip ms golive">Go-live</span></td>
+          <td class="size">M</td>
+          <td class="mig">—</td>
+        </tr>
+        <tr class="grow" data-stage="1" id="stage-1">
+          <th colspan="7" scope="colgroup">
+            <span class="gnum">Stage 1</span>
+            <span class="gtitle">Close what is already open</span>
+            <span class="gwhy">Nothing new starts while something half-built is still unproven. Small, fast, mostly clean-up.</span>
+            <span class="gtick">9 of 20 shipped</span>
+          </th>
+        </tr>
+        <tr class="ship" data-s="next" data-m="golive" data-stage="1">
+          <td class="num">1.1</td>
+          <td class="what">
+            <div class="t">Push 037 and walk every inventory tab on the live DB</div>
+            <ul class="ships"><li>Apply 037 to the live DB</li><li>Walk Products, Categories, Adjustments, Stock Take, Import History, Price Update</li><li>Add Product choice dialog, new item fields, one-download opening-stock sheet</li></ul>
+            <div class="snote">037 is committed to the repo but not applied to the live DB. The tabs were verified by code review only, with no Supabase session. This walkthrough is the first real test.</div>
+          </td>
+          <td class="proof">Create an item, post opening stock, adjust it, run a stock take, import a filled CSV and a filled xlsx, export the list. Every figure matches the movement ledger.</td>
+          <td><span class="chip st next">Next</span></td>
+          <td><span class="chip ms golive">Go-live</span></td>
+          <td class="size">S</td>
+          <td class="mig">037</td>
+        </tr>
+        <tr class="ship" data-s="done" data-m="golive" data-stage="1">
+          <td class="num">1.1b</td>
+          <td class="what">
+            <div class="t">Harden the movement engine before anything else writes to it</div>
+            <ul class="ships"><li>A 'reversal' movement type of its own, because a reversal that reads as an adjustment is invisible to every future variance report</li><li>Counter-movement pointing at the original via reverses_movement_id, set at insert and never updated, so the immutability guarantee holds</li><li>The weighted-average fold taught about reversals, so reversing a receipt unwinds the value it added instead of leaving a residue in the average</li><li>Carried cost recorded on every stock-out, locking cost of sale at the moment stock leaves</li><li>Batch and expiry as nullable columns plus a per-item track-expiry flag</li><li>Posting lock date per property on property_finance_settings, so a closed month rejects postings</li><li>An item or location with stock on hand cannot be deactivated, not just soft-deleted, with quantities named in the message</li><li>Negative-stock view, and the two anon EXECUTE grants 035 left on its trigger wrappers revoked</li></ul>
+            <div class="snote">PUSHED 16 Aug. 72 of 72 proofs pass against the committed schema; the self-verify block ran at apply time on the real database. Re-applying 038 over the committed schema is a clean no-op. Proof rows rolled back, Heledon's data untouched. Four live defects found and closed along the way, and six pre-existing anon grants from 008/030 are now quarantined in SQL for shipment 1.3 rather than recorded in prose.</div>
+          </td>
+          <td class="proof">100kg at ₦1.50, receive 50 at ₦2.10 so the average reads ₦1.70, reverse that receipt and the average must return to exactly ₦1.50. Backdate a posting into a locked month and watch it refused. Attempt to deactivate an item holding stock and watch it named.</td>
+          <td><span class="chip st done">Done</span></td>
+          <td><span class="chip ms golive">Go-live</span></td>
+          <td class="size">L</td>
+          <td class="mig">038</td>
+        </tr>
+        <tr class="ship" data-s="done" data-m="golive" data-stage="1">
+          <td class="num">1.1c</td>
+          <td class="what">
+            <div class="t">Make the hardening visible</div>
+            <ul class="ships"><li>Reversal action in the per-item stock ledger, reusing an extracted ManagerPinField rather than a fifth copy of the PIN block</li><li>stockErrorMessage fixed to append the server's HINT, so the client shows the instruction as well as the rule and restates neither</li><li>Posting-lock date field in Finance settings, via a new 'date' member of the settings field union</li><li>Track-expiry toggle on the item, with batch and expiry fields appearing on stock-in only</li><li>Negative-stock discrepancy screen on the full list-surface standard, flagging positions behind a removed item or location</li></ul>
+            <div class="snote">There is no single folio reversal dialog to reuse — four separate forms share only a card shell and copy-paste the PIN block four times. Extracting ManagerPinField now with stock as its first consumer; retrofitting the four existing money-path forms is DEFERRED and recorded here, to ride along the next time the folio is opened for a real reason. The copies have not drifted, and this is code duplication rather than two sources of truth about a rule. BUILT 16 Aug: 40/40 wiring proofs, typecheck and build clean, zero new lint errors, no SQL beyond reads, and zero client strings restating a database rule (grep-proven both ways). Held open pending screenshots — the browser pane was not displayed and every screen is behind auth, which Code will not sign into. CLOSED 16 Aug: reversal exercised live on real seed data — adjustment reversed, ledger shows the counter typed 'reversal' cross-linked to the original, average back to ₦1,500.00 and on hand back to 120 kg. One live defect found by the human look that 40 SQL proofs missed: signedQuantity called .trim() on a value PostgREST returns as a number, crashing the ledger. Fixed at source, de-duplicated across two files, and a render proof added that was made to FAIL before being trusted.</div>
+          </td>
+          <td class="proof">Reverse a movement from the screen, not from psql. Set a lock date and watch a posting refused with a readable message. Switch on track-expiry and confirm the batch fields appear and are required.</td>
+          <td><span class="chip st done">Done</span></td>
+          <td><span class="chip ms golive">Go-live</span></td>
+          <td class="size">M</td>
+          <td class="mig">—</td>
+        </tr>
+        <tr class="ship" data-s="done" data-m="golive" data-stage="1">
+          <td class="num">1.1d</td>
+          <td class="what">
+            <div class="t">Stock take as a real count</div>
+            <ul class="ships"><li>BLIND count: the counter types what they physically counted and sees nothing else — expected quantity and variance appear only after submitting</li><li>stock_takes and stock_take_lines, with expected quantity snapshotted at the moment the count starts</li><li>start, record line, finish RPCs with idempotency keys and the posting-lock check</li><li>A resumable sheet: a count can be left open and finished later, by the same person or another</li><li>Partial counts allowed — a location does not have to be counted whole</li><li>Variance above a threshold needs a manager PIN to finish, same pattern as discounts</li><li>The count_adjustment write path, finally used for what it was declared for</li><li>The count is its own page (/inventory/counts/&lt;id&gt;), no tab strip to lose it by clicking — linkable, refreshable, printable</li><li>Print the count sheet in a clean tab: hotel name, count number, location, date, every shelf, a ruled box to write in, notes and signature lines — blind while open because it reads the same view</li><li>Accordion: Still to count and Already counted, paging independently</li><li>Kebab per row and on the count: carry on, print, open the report, undo</li><li>Undo a finished count reverses every movement it posted, manager PIN at any size, reason mandatory — there is no delete, because deleting the record would delete the evidence that stock moved and a manager approved it</li><li>Finishing warns once when stock moved in the location while the count ran AND the affected items were counted after it moved — the double-count case a snapshot cannot see</li></ul>
+            <div class="snote">Blind is the whole point: if the counter can see what the system expects, they write that number down and the count proves nothing. Postings are deliberately NOT blocked during a count — the 1.1b snapshot is what makes that safe. Today the count lives entirely in component state, the on-hand figure is grabbed per keystroke, and a refresh loses everything. 039 and 040 both PUSHED. 040 added the count-reversal write path after Lanre's feedback, fixed a copy bug where the shared ManagerPinField hardcoded 'reversal' wording onto the count screen, and pulled the posting half of reversal into one shared function because reversing line-by-line would have re-run bcrypt once per line and blown the statement timeout on a large count. Frontend still uncommitted. 041 closed three review findings: the mid-count double count (warn with PT449, name up to five items, confirm with the same idempotency key — never silently subtract, because the system cannot know whether the counter saw the delivery), an ELSE false on the state-shape CHECK which was failing open, and the anon quarantine array replaced by one shared assert_no_anon_security_definer() that future migrations call in one line. 038/039/040 keep their own copies deliberately: editing an applied migration makes the record a lie. DEPLOYED 16 Aug: merged to main at 596cb9e, Vercel building, database and frontend level again. Final tally 178 SQL assertions across three dry runs (each applying its migration twice in one transaction and rolling back), 46 post-push checks against the remote, 36 render assertions. Not yet clicked through by a human — that is batched into 1.1i.</div>
+          </td>
+          <td class="proof">Start a count, post a receipt for a counted item mid-count, finish, and the variance reflects the snapshot rather than the receipt. Refresh mid-count and the sheet comes back. Confirm the expected quantity is not present in the page payload before submission, not merely hidden in the UI.</td>
+          <td><span class="chip st done">Done</span></td>
+          <td><span class="chip ms golive">Go-live</span></td>
+          <td class="size">L</td>
+          <td class="mig">039, 040, 041</td>
+        </tr>
+        <tr class="ship" data-s="later" data-m="golive" data-stage="1">
+          <td class="num">1.1d2</td>
+          <td class="what">
+            <div class="t">Set Heledon’s tax lines (consumption tax / VAT)</div>
+            <ul class="ships"><li>Ask the accountant which of VAT and Rivers State consumption tax applies to rooms and to F&amp;B</li><li>Seed the property's tax_charges accordingly — the engine already supports either, both, or switching VAT off</li><li>Check a room night and an F&amp;B charge each carry exactly the right lines</li></ul>
+            <div class="snote">ANSWERED by 042's §0: tax_charges.is_compulsory is plain data with no CHECK pinning it, and the compulsory guard only refuses delete/deactivation WHILE the flag is true — so VAT CAN be switched off for a property that charges consumption tax instead. Nothing to build: adding a state consumption tax line is configuration. What remains is asking Heledon's accountant what Rivers State requires and seeding the property's tax lines accordingly.</div>
+          </td>
+          <td class="proof">A room night and an F&amp;B charge each carry exactly the tax lines the property is configured for, and the statement foots to the cent.</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms golive">Go-live</span></td>
+          <td class="size">S</td>
+          <td class="mig">—</td>
+        </tr>
+        <tr class="ship" data-s="done" data-m="golive" data-stage="1">
+          <td class="num">1.1e</td>
+          <td class="what">
+            <div class="t">Complete the item record: selling price, valuation, photo</div>
+            <ul class="ships"><li>Default selling price on the item: blank for Ingredient, required for Sold as-is and Both, enforced in the database and in the sheet</li><li>Landing page shows value at cost (moving average) and retail value side by side, plus margin, each labelled so the two can never be confused</li><li>Item photo at tenant level, reusing the existing media_assets pipeline rather than growing a second one</li><li>Searchable typeahead pickers for location and item, filtered server-side against the same query the list uses, because a hotel with 1,000 items cannot scroll a dropdown</li></ul>
+            <div class="snote">042 PUSHED and verified live; frontend not yet committed. Price is NET of tax, deliberately: 021 adds tax on top of a charge's net_amount, and a tax-inclusive price would have overstated margin by a different amount at every property — silently, with nothing erroring. The sellable-must-be-priced half is a TRIGGER not a CHECK, because adding a constraint validates existing rows and the live database already had an unpriced sellable item; the gap is made findable by a filter instead of blocked by an invented price. Item images go tenant-level through the existing media_assets path — and needed a plain tenant FK beside the composite one, because a composite FK is MATCH SIMPLE and skips checking entirely once property_id is null. Nine pickers converted, not the four the brief named. CLOSED 19 Aug: figures confirmed live — 6 positions, 5 excluded for having no price, cost ₦533,000, retail ₦168,000 (Coke alone, 240 x ₦700), margin ₦60,000 subtracting only Coke's cost rather than the whole shelf.</div>
+          </td>
+          <td class="proof">An Ingredient row with a price is rejected and a Sold as-is row without one is rejected. Cost value and retail value each reconcile to a hand-written query. A photo survives a reload and lands nowhere publicly readable that it should not.</td>
+          <td><span class="chip st done">Done</span></td>
+          <td><span class="chip ms golive">Go-live</span></td>
+          <td class="size">M</td>
+          <td class="mig">042</td>
+        </tr>
+        <tr class="ship" data-s="done" data-m="golive" data-stage="1">
+          <td class="num">1.1f</td>
+          <td class="what">
+            <div class="t">The item gets its own page</div>
+            <ul class="ships"><li>Item detail becomes a page, not an inline expand — the same move that worked for bookings</li><li>The list page carries only summary columns, every value under a labelled heading, nothing floating</li><li>Thumbnail on the list row, click to add or change the picture</li><li>Summary cards on the item page: opening balance, adjustments, purchases, issues, current stock and value</li><li>Clicking a card filters the ledger below to that movement type only</li><li>One simple movement chart: stock level over time, points coloured by movement type</li><li>Edit, Add or correct stock, Remove and Reverse move into a kebab on the item</li><li>Picture tile on the list row is clickable — empty invites the picture, filled replaces it, with no round trip through Edit item</li><li>The item page carries its own searchable location selector, because stock is per location and the item is tenant-wide</li></ul>
+            <div class="snote">Deliberately before receive and write-off so those shipments wire into this page rather than into an inline expand we are about to delete. Cards render only the movement types that have a write path, and grow as each one lands. The rich variance analytics stay at 6.6 — this chart is stock level over time, not the theft report. CLOSED 20 Aug, no migration needed. Confirmed live on Rice: +120 opening, +50 adjustment, 0 count corrections, −50 reversal, on hand 120 kg, value ₦180,000, and the chart shows the peak and the return. Carries an unaccountedQuantity figure so that when receiving ships without a card the page SAYS it no longer adds up instead of quietly not adding up. Location scope lives in the URL, so a shelf is linkable. Chart is ~60 lines of SVG, no library, +5.6 kB gzipped.</div>
+          </td>
+          <td class="proof">Open an item, click the Adjustments card, and the ledger below shows adjustments only while the card totals still match a hand query. Add a picture from the list row without leaving the page.</td>
+          <td><span class="chip st done">Done</span></td>
+          <td><span class="chip ms golive">Go-live</span></td>
+          <td class="size">L</td>
+          <td class="mig">—</td>
+        </tr>
+        <tr class="ship" data-s="done" data-m="golive" data-stage="1">
+          <td class="num">1.1g</td>
+          <td class="what">
+            <div class="t">Receive stock and write off stock</div>
+            <ul class="ships"><li>Lightweight receipt into the store: date, item, quantity in base units, unit cost, supplier as free text</li><li>Manager-permissioned direct receipt elsewhere, mandatory reason, flagged</li><li>Write-off as its own movement type with reasons: spoilage, breakage, expiry, staff meal, complimentary</li><li>A 'received outside the store' report carrying direct receipts, opening balances and negative stock</li></ul>
+            <div class="snote">Closes the gap between go-live and stage 7 purchasing. Without it the average cost freezes at opening and every valuation drifts. Stage 7 later upgrades this into receive-against-order without changing the movement. DEPLOYED 21 Aug (migration 043 applied first, then code — the safe direction). 56 SQL assertions, 310 render assertions across 9 proofs. Three things the proofs found that the reasoning had wrong: the late-openings view keyed on created_at could never have fired, because created_at defaults to now() which is TRANSACTION start time, so rows written together tie to the microsecond — it uses seq instead, the column 036 created for exactly this; a second `|| true` tautology assertion; and a deliberate wrong-average breakage that stayed GREEN because the assertion recomputed from its own constants instead of calling the component. The receive test is kind='store', not is_default_store, so a hotel's second store receives without ceremony.</div>
+          </td>
+          <td class="proof">Receive at a higher price and watch the moving average move by the exact weighted amount. Write off a unit and confirm it reads as recorded loss, not as unexplained variance.</td>
+          <td><span class="chip st done">Done</span></td>
+          <td><span class="chip ms golive">Go-live</span></td>
+          <td class="size">M</td>
+          <td class="mig">043</td>
+        </tr>
+        <tr class="ship" data-s="done" data-m="golive" data-stage="1">
+          <td class="num">1.1h</td>
+          <td class="what">
+            <div class="t">The books: accounts, mappings and the journal</div>
+            <ul class="ships"><li>Chart of accounts, seeded for a new tenant the same way categories and units already are, editable</li><li>Account mappings by role key, 27 keys derived from every place money moves in the code today, not from purchasing</li><li>A property can override a mapping; without one the group default applies. Two hotels, two tills, one chart</li><li>Journal entries numbered JE-000001, permanent, never updated, never deleted, reversed only by counter-entry</li><li>One post_journal function: refuses an unbalanced entry, honours the posting lock, posts once per source document</li><li>One rounding line, capped at a naira, because weighted-average cost carries four decimals and the books carry two. Nothing else may absorb a difference</li><li>A missing mapping refuses the posting and names the role key. No suspense account for errors to hide in</li><li>A settings screen showing role key to account, and when something last posted to it, so a missing wiring is visible rather than remembered</li><li>Choosing the account becomes part of creating a charge category, so the failure can never reach the front desk</li><li>gl_start_date per property: the posting lock refuses the document, this lets the document through and books no entry</li></ul>
+            <div class="snote">Built now, not in stage 11, and that is a reversal. Accounting was placed last on the argument that a ledger built for one module fits one module. The counter-argument is timing: Heledon has not gone live, so there is no trading history to backfill, and every module that posts nothing today becomes history somebody reconstructs later. The folio has been charging and taking payments since 021 with nowhere to post, and that debt should not survive go-live. The scope is deliberately the spine only: somewhere for money to go, not something to read. Trial balance, P&amp;L, balance sheet, reconciliation and tax returns all stay in stage 11, where they become reports over a ledger that was correct from the first entry. The role keys are derived from every posting site in the code today rather than from purchasing, so the spine is wired against all of it once. Wiring order after Code's §0: the spine is designed against the folio, the stock ledger and purchasing at once, then wired progressively. The six stock RPCs that already move money post from 1.1h2, alongside purchasing, so the ledger's inventory balance and the stock valuation can never disagree. The folio follows at 1.1h4. That gap is dated in the migration header rather than left as an exception nobody wrote down. DEPLOYED 23 Aug, commit be8584a, migration applied before the code as always: migration 044, 1,759 lines, 51 SQL assertions with 11 guards removed one at a time and all 11 going red, 343 render assertions across 10 proofs. 35 accounts and 31 mappings seeded, four accounts deliberately unmapped. Two proofs earned their keep: the idempotency guard needed both the lookup and the unique index removed before it went red, because either one masks the other on a single connection, so the index is asserted structurally instead; and a breakage turned two row assertions red while the headline total stayed green, the same lesson 1.1g taught from the other direction, that a total is the assertion most likely to be mistaken for coverage. Code added a guard nobody asked for and should have: the GL start date cannot move once the books have opened. The two debts from the pre-push questions are recorded in 044's header and in the wiring table in ARCHITECTURE.md, which is where someone already looks for what wires when. gl_start_date is deliberately null on Heledon: it gets set once, at go-live.</div>
+          </td>
+          <td class="proof">Applied to the remote first, then verified directly rather than trusting the exit code: 35 accounts, 31 mappings, 0 charge categories missing a role key, 0 journal entries because nothing is wired yet, RLS on every table, and assert_no_anon_security_definer() passing on the live database. The first real entry posts at 1.1h2, and that is where the end-to-end proof lives.</td>
+          <td><span class="chip st done">Done</span></td>
+          <td><span class="chip ms golive">Go-live</span></td>
+          <td class="size">M</td>
+          <td class="mig">044</td>
+        </tr>
+        <tr class="ship" data-s="done" data-m="golive" data-stage="1">
+          <td class="num">1.1h1</td>
+          <td class="what">
+            <div class="t">The chart of accounts, as an accountant expects to see it</div>
+            <ul class="ships"><li>The accounts themselves, listed and grouped in financial-statement order: assets, liabilities, equity, revenue, expenses</li><li>Dense table, one line per account, codes right-aligned in tabular numerals. A spreadsheet, not a settings form</li><li>Add an account, which a hotel with three bank accounts needs on day one</li><li>The code is suggested as the next free number in that group's range, so nobody has to know that a liability starts with 2</li><li>An account that has been posted to can be renamed but never renumbered and never deleted. Deactivate instead, and not while a mapping still points at it</li><li>Search across code and name</li><li>Where money posts becomes the second tab, same density, keeping the role key to account mapping that shipped with the spine</li><li>Accounts ordered by their own code within each section, so an added account lands where its number says it belongs rather than at the top of the chart</li><li>An account that has been posted to cannot change its group either. Moving one from asset to expense would silently restate a balance sheet somebody has already read</li></ul>
+            <div class="snote">Lanre looked at the Accounts tab on live and said it does not read like accounting. He was right, and the gap was mine: I specified a mapping screen and called it the accounts screen. Two different objects. The chart of accounts is the list an auditor is handed and a trial balance is that same list with balances on it, so it cannot wait for stage 11. A hotel could not see its own accounts or add one. Code's read-only pass found the defect that would have shipped: display_order defaults to 0, so the first account a hotel added would have sorted above Cash and looked like a broken screen. Fixed by removing the dependency rather than the default, ordering on the code itself. Group headers and a non-postable flag were dropped after the same pass showed there is no parent column for a header to head and no manual journal screen to protect an account from; that flag is recorded as owed when stage 11 gives someone a way to post by hand. DEPLOYED 24 Aug, commit 5b3b8a3. The sticky header did not work as specified and Code measured rather than guessed: inside the standard table wrapper the header sat 233 pixels off the top of the screen, because a horizontal overflow container is also a vertical one with no height to scroll. The working pattern is extracted with both failure modes written into it, including why sticky must sit on the header cell and never the row, a defect invisible in the browser you build in. Rule 27 went into CLAUDE.md from three sightings in three shipments: an assertion that cannot tell working from absent is not an assertion, so name the defect that turns it red before trusting a green run.</div>
+          </td>
+          <td class="proof">Applied to the remote first, then verified: display_order dropped, the index rebuilt on the code, all four change rules live on the trigger, 35 accounts reading asset to liability to equity to revenue to expense. 24 SQL assertions with 6 guards red when removed, 55 render assertions with 5 breakages. The ordering gate runs against a deliberately shuffled fixture, so a sort that did nothing would fail it.</td>
+          <td><span class="chip st done">Done</span></td>
+          <td><span class="chip ms golive">Go-live</span></td>
+          <td class="size">S</td>
+          <td class="mig">045</td>
+        </tr>
+        <tr class="ship" data-s="wip" data-m="golive" data-stage="1">
+          <td class="num">1.1h2</td>
+          <td class="what">
+            <div class="t">Purchases: suppliers, the order, and receiving it</div>
+            <ul class="ships"><li>Suppliers as real records, one name only: a partial unique index on the lowercased name stops the same supplier existing twice</li><li>Suppliers carry what paying them will need: tax ID, withholding rate, bank details. Captured now because a column added to an empty table is free and a backfill conversation with a live hotel is not</li><li>Purchase order as the document, numbered PO-000001 from the counter that already exists</li><li>Four statuses: draft, ordered, received, cancelled. 'In transit' is a label the screen derives from outstanding lines, so it can never disagree with the data</li><li>An ordered purchase order is immutable. Reality is recorded against it, never written over it</li><li>Destination on every line (inventory, asset, expense) legal from day one; only inventory can be received in this shipment</li><li>Receive on the order itself, same page. Quantity per line, difference against ordered shown live, a reason required before a difference will post</li><li>Over-receipt allowed on a manager PIN rather than refused, so nobody has to invent numbers</li><li>Cost difference between what was agreed and what the invoice says, shown live and stored, without a mandatory box people learn to type through</li><li>One transaction inside the RPC: receipt, receipt lines and stock movements commit together or not at all</li><li>Supplier activity derived from the documents. No stored balance column, and not called an account until payments give it a second side</li><li>Quantity field accepts 10*24 and stores 240. Base units only, no conversion factor anywhere</li><li>Every receipt posts its own journal through the spine, inside the same transaction. No client-side posting, no backfill page</li><li>The six stock RPCs that already move money post too: opening, adjustment, receipt, write-off, count variance and reversal. Inventory in the books and inventory in the ledger cannot disagree</li><li>Purchases and Suppliers side by side in the sidebar, filling the slot already sitting there marked soon</li><li>The check the ERP could never make: the ledger's inventory balance against an independent recomputation from the movements themselves, on its own Accounts tab, with the rounding residue against the stock valuation shown rather than hidden</li><li>A list of any movement carrying no journal entry, with the reason. An empty reason is the alarm</li><li>A dated alarm rather than a silenced one: movements written before this property's RPCs began posting carry a recorded reason, so the list reads zero on day one and still fires on a movement written after the wiring with no entry</li><li>The rounding residue shown beside the number of movements it accumulated over, and every position that has ever been below zero named on the card with the sentence that explains it</li></ul>
+            <div class="snote">Modelled on how purchasing actually runs in Palstro ERP after a read-only investigation of that codebase, then corrected where the ERP's own migration history showed the scars: three overloaded status columns that 068 had to arbitrate; no destination field at all; journals posted client-side after the RPC returned, leaving the GL 50,000 adrift from the subledger until 067 repaired it; a receive screen with no quantity input despite a schema that supports one; two near-identical received-quantity columns; receipt numbers from count(*)+1, which races; and a supplier balance column the code itself does not trust. Two decisions changed after Code's read-only §0. Purchasing was going to post no journals, because the hotel schema has no ledger at all. Lanre overruled that and he was right: Heledon has not gone live, so this is the last moment when wiring the books costs one shipment instead of a reconstruction project. The spine lands first as 1.1h and this shipment posts into it from its first line. And goods in transit is a state of the order rather than a real location, because landing stock out of a transit location needs the transfer RPCs that do not exist until 6.1, and because teaching post_stock_receipt that one non-store location is secretly fine is how a guard rots. Nothing built in 1.1g is wasted: purchasing calls the same receipt RPC, extended additively so a movement can name the order it came from, and direct receipt survives as the cash-and-carry exception. Two corrections came out of the build, both mine. The reconciliation I specified, that the inventory account equals the stock valuation to the kobo, is not always true and should not be: the ledger sums per-movement values each rounded to the kobo while the valuation carries an average at full precision, so 3 at 10.00 plus 1 at 11.11 legitimately disagree by a kobo. Asserting the ledger against an independent recomputation from the movements is both true and stronger. And one deliberate breakage stayed green because the fixture made the right and the wrong answer the same number, valuing a reversal at an average that had not moved since. That is rule 27 from a fourth direction and it now carries a corollary: a fixture where the correct and incorrect computations coincide cannot test either one. 047 followed within the day because the first look at live showed both reconciliation surfaces lying: the alarm list read 8 rather than 0, and the difference read 533,000 out, because Heledon holds build-era movements written before anything posted. Fixed with a recorded fact, gl_wired_at, not a tolerance: code that did not exist cannot have posted. Two fudges were rejected by name in the migration header, ignoring anything older than N days, and borrowing gl_start_date to silence it. 046 also asked the wrong question about negative positions, counting the ones below zero today rather than the ones that have ever been below zero, which are the only ones that explain a divergence and are usually positive again by the time anyone looks. Three checks were raised against 047 afterwards. Two came back clean, and the second of those was retracted after being tested rather than argued: two views that read exactly like a cross-tenant leak turn out to scope themselves in their own WHERE. The third is a real defect and is still open: a movement with no cost basis is NOT absent from the valuation, so a back-dated write-off throws the reconciliation out by the value of the stock written off, and the comment in the migration claims the opposite. Measured at minus 4,000 on a fixture. Nothing is wrong on live today because no such movement exists yet.</div>
+          </td>
+          <td class="proof">Order 50kg of rice, receive 47kg: the shortfall demands a reason, the ledger moves by exactly 47, the movement names the goods-received note, and re-sending the same request with a changed quantity is refused rather than silently ignored. Kill the transaction halfway and confirm none of it happened. 77 database assertions on a throwaway property inside the transaction, re-run against seven deliberately broken versions of the migration, plus 63 render assertions with five mutations.</td>
+          <td><span class="chip st wip">In progress</span></td>
+          <td><span class="chip ms golive">Go-live</span></td>
+          <td class="size">M</td>
+          <td class="mig">046, 047</td>
+        </tr>
+        <tr class="ship" data-s="later" data-m="golive" data-stage="1">
+          <td class="num">1.1h3</td>
+          <td class="what">
+            <div class="t">Where else a purchase can go: assets and expenses</div>
+            <ul class="ships"><li>One expenses table from the start, with a nullable link to the purchase line, so a purchase expense and a standalone expense are never two places to look</li><li>Fixed asset records carrying the supplier and the order that bought them</li><li>Category lists modelled on charge_categories: a stable machine code apart from the display name</li><li>The receive RPC accepts all three destinations</li></ul>
+            <div class="snote">Split out of 1.1h because neither an expenses nor a fixed assets table exists in the schema today, so the destination rule means building two record tables. Records, not modules: no depreciation and no approval flow, those are 8.5 and 7.1. The ERP keeps assets and expenses outside purchasing entirely, which is why a vendor view there has to union three places.</div>
+          </td>
+          <td class="proof">Rice, a fridge and a delivery charge on one order. Receive it once: stock moves by the rice, the asset register gains the fridge with the supplier on it, the charge lands in cost, and one supplier view shows all three.</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms golive">Go-live</span></td>
+          <td class="size">M</td>
+          <td class="mig">047</td>
+        </tr>
+        <tr class="ship" data-s="later" data-m="golive" data-stage="1">
+          <td class="num">1.1h4</td>
+          <td class="what">
+            <div class="t">The folio wired into the books</div>
+            <ul class="ships"><li>Tax captured on the charge at post time, before anything is wired. Today it is computed live from the current rate, so changing VAT silently rewrites every past bill, the same defect booking_nights was built to prevent</li><li>Room charges, food and drink charges, taxes, service charge, discounts and payments all post through the spine</li><li>Deposits and refunds post as what they are, a liability taken and released</li><li>Reversals post counter-entries, so a reversed charge leaves both rows visible</li><li>Guest ledger balances agree with the receivable account, and the check that proves it runs on demand</li><li>A void posts a counter-entry rather than becoming unavailable. The front desk keeps its one-click undo and the books stay append-only</li><li>Charge categories get a form for the first time, with the account picker on it. Until this ships, the only way to create one is to type SQL, so the guard 044 added is correct and inert</li><li>The mapping screen shows categories under their key, so a category quietly pointed at Other revenue is visible instead of absent</li></ul>
+            <div class="snote">The folio has been charging and taking payments since 021 and posting nowhere. Before go-live that is a gap; after go-live it is history to reconstruct. This closes it while there is still nothing to reconstruct. Also carries two commitments made when the spine shipped: the charge category form, because 044's guard protects a path that does not exist on screen yet, and the deletion of the revenue_misc fallback, because a silent default is fine while only SQL can reach it and wrong the moment a person can create a category from a screen.</div>
+          </td>
+          <td class="proof">Check a guest in, charge a room and a meal, take a part payment, apply a discount, reverse one charge, check out. The guest ledger and the receivable account agree to the naira, and every entry names the folio row it came from.</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms golive">Go-live</span></td>
+          <td class="size">M</td>
+          <td class="mig">048</td>
+        </tr>
+        <tr class="ship" data-s="later" data-m="golive" data-stage="1">
+          <td class="num">1.1h5</td>
+          <td class="what">
+            <div class="t">Paying suppliers</div>
+            <ul class="ships"><li>A payment document: who was paid, from which account, on what date, by what method</li><li>Allocation against receipts, explicit and reversible, reversed by counter-entry like everything else</li><li>An advance is a payment with nothing allocated yet, and it posts a journal like any other. No special case with no entry, which is the bug the ERP needed two migrations to unwind</li><li>Supplier activity becomes a supplier account, with a balance that is the sum of the documents and no stored mirror column</li><li>A statement that paginates and excludes voided entries, neither of which the ERP's does</li><li>Withholding tax deducted at payment where the supplier carries a rate</li></ul>
+            <div class="snote">Pulled forward out of stage 7 by a question from Lanre about supplier management. Receiving credits supplier payable and nothing in the plan ever debited it, so Heledon's first trial balance would have carried a liability that had never once gone down. An account that only grows is not a book. What stays in stage 7 is the depth: approvals and spend limits, price history and comparison, ageing analytics.</div>
+          </td>
+          <td class="proof">Receive ₦500,000 of goods across two orders, pay ₦300,000 against one of them. The supplier balance reads ₦200,000, the payable account in the books agrees with it to the kobo, and the statement shows both documents in order.</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms golive">Go-live</span></td>
+          <td class="size">M</td>
+          <td class="mig">049</td>
+        </tr>
+        <tr class="ship" data-s="next" data-m="golive" data-stage="1">
+          <td class="num">1.1i</td>
+          <td class="what">
+            <div class="t">Outlet prices and the bulk price tool</div>
+            <ul class="ships"><li>Location price rows overriding the item's standard price, no row means the standard applies</li><li>Bulk update: pick a location, optionally a category, raise by a percentage or set a value</li><li>Preview before commit showing before and after per item and a count of what changes</li><li>Delta writes only, never a full replace, every change logged</li><li>Rounding rule, default nearest ₦10, configurable</li></ul>
+            <div class="snote">Was 1.1h. Moved down one so purchasing lands first: a hotel buys before it sells, and an outlet price only moves a figure on a screen until something can be sold.</div>
+          </td>
+          <td class="proof">Raise all Drinks prices in the Bar by 10%, see the preview, commit, and confirm the Restaurant prices did not move and a sale posted yesterday still shows yesterday's price.</td>
+          <td><span class="chip st next">Next</span></td>
+          <td><span class="chip ms golive">Go-live</span></td>
+          <td class="size">M</td>
+          <td class="mig">044</td>
+        </tr>
+        <tr class="ship" data-s="later" data-m="golive" data-stage="1">
+          <td class="num">1.1j</td>
+          <td class="what">
+            <div class="t">One template, one way in</div>
+            <ul class="ships"><li>One sheet creates the item and, for a brand-new item only, its opening balance</li><li>A row whose name already exists is skipped whole, definition and quantity both, so a double upload can never double stock</li><li>Every column: name, code, type, base unit, category, barcode, pack size, purchase cost, min, max, reorder level, selling price, opening quantity, unit cost, location</li><li>Location defaults to the store and can only hold a store</li><li>Corrected sample set: 14 rows covering all three types, seven units and all eight categories, every row valid against the seeded reference data</li><li>Instructions on their own green tab in the xlsx, out of the CSV entirely, and rendered in the app on the download panel</li><li>An unknown unit or category asks once and is created on confirmation, never silently</li><li>Similarity prompt on units and categories, the protection item names already have</li></ul>
+            <div class="snote">Last of the inventory shipments because a template can only offer a column that already exists behind it. The sheet gets touched once, not twice. Once it lands, day one for a new hotel is a single file, which is also what shipment 13.2 needs. Was 1.1i.</div>
+          </td>
+          <td class="proof">Download and re-upload untouched: every sample row skipped, nothing created. Fill it with a new unit, a new category and a near-duplicate category: three distinct questions, import blocked until answered. Re-upload the filled file: nothing created twice and no quantity moves.</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms golive">Go-live</span></td>
+          <td class="size">L</td>
+          <td class="mig">—</td>
+        </tr>
+        <tr class="ship" data-s="later" data-m="golive" data-stage="1">
+          <td class="num">1.1k</td>
+          <td class="what">
+            <div class="t">Inventory end-to-end walkthrough, by a human</div>
+            <ul class="ships"><li>Lanre clicks the whole inventory module through as a storekeeper and a manager would</li><li>Every screen 1.1c to 1.1h exercised against a ZZ Test sandbox location and item</li><li>Feedback fed back as fixes before stage 2 starts</li></ul>
+            <div class="snote">Agreed 16 Aug: per-shipment click-throughs are deferred and batched here, since Code's SQL proofs already run on the live DB. The exception is 1.1c, which gets a short look on its own because every later screen copies its reversal dialog pattern. Was 1.1j. Now covers purchasing too.</div>
+          </td>
+          <td class="proof">A full day's inventory work — create, load, receive, issue, adjust, count, reverse, write off, reprice — done end to end without asking anyone how, and the numbers reconcile.</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms golive">Go-live</span></td>
+          <td class="size">M</td>
+          <td class="mig">—</td>
+        </tr>
+        <tr class="ship" data-s="later" data-m="golive" data-stage="1">
+          <td class="num">1.2</td>
+          <td class="what">
+            <div class="t">Loose-ends sweep</div>
+            <ul class="ships"><li>3 Vercel env vars for the night-audit cron (CRON_SECRET, service key, URL)</li><li>Rotate the .env.local DB password to alphanumeric</li><li>Server statement locale printing NGN instead of ₦</li><li>Fix the useBookingDraft memoisation trap at source</li></ul>
+            
+          </td>
+          <td class="proof">Cron fires unattended overnight and posts the right nights; emailed PDF shows ₦; no effect loop when a draft key is watched directly</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms golive">Go-live</span></td>
+          <td class="size">S</td>
+          <td class="mig">—</td>
+        </tr>
+        <tr class="ship" data-s="later" data-m="golive" data-stage="1">
+          <td class="num">1.3</td>
+          <td class="what">
+            <div class="t">Security sweep: revoke anon on every RPC</div>
+            <ul class="ships"><li>Audit every SECURITY DEFINER function shipped so far</li><li>REVOKE ALL FROM public, anon then GRANT to authenticated</li><li>In-migration assertion that anon EXECUTE is false</li><li>Confirm no internal guard relies on auth.uid() IS NOT NULL</li></ul>
+            <div class="snote">This exact hole bit Palstro ERP twice. Sweep it before real staff and real guests are on the system.</div>
+          </td>
+          <td class="proof">A query listing anon-executable functions returns only the intended public readers</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms golive">Go-live</span></td>
+          <td class="size">M</td>
+          <td class="mig">—</td>
+        </tr>
+        <tr class="ship" data-s="done" data-m="golive" data-stage="1">
+          <td class="num">1.4</td>
+          <td class="what">
+            <div class="t">Monitoring, nightly backup and a proven restore</div>
+            <ul class="ships"><li>Twice-daily encrypted backup of the whole database, both Lagos slots, taken by a read-only login that can read every row but write nothing</li><li>The images backed up too, verified byte for byte and checksummed, because the bucket is the only copy of them</li><li>A manifest recorded at backup time: every table's row count, the counters as values, the GL wiring stamp. The restore test asserts against it rather than against a list somebody chose</li><li>A monthly restore into a throwaway database that proves the backup opens and everything the manifest claims about it is true</li><li>The backup refuses to run at all if a private bucket appears, rather than silently skipping it</li><li>Failure opens one issue, comments on repeats, and closes itself on the next good run</li><li>Secrets audited by a check-setup run that names anything missing instead of failing eight seconds in</li></ul>
+            <div class="snote">Pulled forward from after go-live because the books now hold data that cannot be rebuilt from migrations: the chart of accounts, its mappings, the audit trail, and gl_wired_at, which cannot be re-derived from anything. Copied from the Palstro Fuel design rather than the ERP one, because fuel's is the ERP's with each of its failures already fixed. Three things improved on fuel in passing: the project ref derived from the connection string rather than hardcoded, so a backup pointed at the wrong project is caught structurally; storage taken with no new credential at all, since the backup login can already list the objects and the bucket is public; and checks that cannot tell working from absent report themselves as vacuous rather than passing. Found on the way, and worth more than the backup: the keep-alive workflow had failed all 34 times it ran since 1 October, because two secrets were never added. It looked like a safety net in the sidebar. The project stayed awake on the owner's own dashboard activity. Standing rule added: a scheduled job that has never succeeded looks identical to one that has never been needed, so every scheduled job gets a run read by a human within a week of being added. Owed: a first storage recovery drill. The upload half of the runbook has never been run against a live project, and that is written down rather than assumed.</div>
+          </td>
+          <td class="proof">Run live on 2 November: 26 setup checks green, a 1.7 MB encrypted artifact in 65 seconds, then restored into a throwaway Postgres and verified, 8 passed, 0 failed, 2 correctly reported as vacuous. Every assertion was made to fail first, including lying to it about the stock movements.</td>
+          <td><span class="chip st done">Done</span></td>
+          <td><span class="chip ms golive">Go-live</span></td>
+          <td class="size">S</td>
+          <td class="mig">—</td>
+        </tr>
+        <tr class="grow" data-stage="2" id="stage-2">
+          <th colspan="7" scope="colgroup">
+            <span class="gnum">Stage 2</span>
+            <span class="gtitle">People and access</span>
+            <span class="gwhy">The unlock. Four separate blockers clear here, and nothing below can be tested by the people who will actually use it until they can log in.</span>
+            <span class="gtick">0 of 5 shipped</span>
+          </th>
+        </tr>
+        <tr class="ship" data-s="later" data-m="golive" data-stage="2">
+          <td class="num">2.1</td>
+          <td class="what">
+            <div class="t">Staff directory and invitations</div>
+            <ul class="ships"><li>Staff records tied to auth users, scoped to tenant and property</li><li>Invite by email, accept, deactivate</li><li>Names replace raw uuids everywhere approver and receiver are shown</li></ul>
+            
+          </td>
+          <td class="proof">Invite a staff member, they accept and appear; a discount they approve shows their name, not a uuid</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms golive">Go-live</span></td>
+          <td class="size">M</td>
+          <td class="mig">—</td>
+        </tr>
+        <tr class="ship" data-s="later" data-m="golive" data-stage="2">
+          <td class="num">2.2</td>
+          <td class="what">
+            <div class="t">Role permission matrix and the front-desk login fix</div>
+            <ul class="ships"><li>Replace the blunt requireAdmin gate with per-permission checks</li><li>Permission matrix: front desk, housekeeping, storekeeper, kitchen, bar, manager, owner</li><li>Server-side enforcement in the RPCs, not just hidden nav</li></ul>
+            <div class="snote">Gate today: requireAdmin at App.tsx:72, failing closed at ProtectedRoute.tsx:70 against ADMIN_ROLES = owner, manager in types/auth.ts:23.</div>
+          </td>
+          <td class="proof">A front-desk account logs in, sees only its nav, and a blocked RPC called directly is refused by the database, not by the screen</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms golive">Go-live</span></td>
+          <td class="size">L</td>
+          <td class="mig">—</td>
+        </tr>
+        <tr class="ship" data-s="later" data-m="golive" data-stage="2">
+          <td class="num">2.2a</td>
+          <td class="what">
+            <div class="t">Configurable PIN policy per action</div>
+            <ul class="ships"><li>Which actions demand a manager PIN becomes configuration, not code</li><li>Threshold rules per action</li></ul>
+            
+          </td>
+          <td class="proof">Turn the PIN requirement on for an action and watch it refuse without one</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms golive">Go-live</span></td>
+          <td class="size">S</td>
+          <td class="mig">—</td>
+        </tr>
+        <tr class="ship" data-s="later" data-m="golive" data-stage="2">
+          <td class="num">2.3</td>
+          <td class="what">
+            <div class="t">Per-location access</div>
+            <ul class="ships"><li>Staff assigned to locations</li><li>Location selector shows only what the user may see</li><li>Requisition badge wired to real permissions</li><li>Quantity and money are separate permissions: a storekeeper sees quantities and reorder levels because that is their daily job, while cost, value and margin are the manager's and owner's view</li></ul>
+            <div class="snote">Revised 16 Aug after Lanre's challenge: do NOT hide stock quantities from the storekeeper — knowing what is low and when to buy IS the job. The split that matters is quantity versus money, not visible versus hidden. Blindness on a stock take is a property of the COUNT SHEET plus who does the counting; in a small hotel the count is usually done by someone other than the custodian, which is the real control and is organisational rather than software. Where one person does both, the sheet is still blind, the variance is still attributed, and the manager reviewing the variance is the control.</div>
+          </td>
+          <td class="proof">A barman login sees Bar only. A storekeeper sees Store. Neither can post to the other, checked server-side.</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms golive">Go-live</span></td>
+          <td class="size">M</td>
+          <td class="mig">—</td>
+        </tr>
+        <tr class="ship" data-s="later" data-m="market" data-stage="2">
+          <td class="num">2.4</td>
+          <td class="what">
+            <div class="t">Activity log the manager can read</div>
+            <ul class="ships"><li>Readable view over change_log</li><li>Filter by person, date, action</li></ul>
+            
+          </td>
+          <td class="proof">A discount, a reversal and a stock adjustment all appear with names and reasons</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms market">Sellable</span></td>
+          <td class="size">S</td>
+          <td class="mig">—</td>
+        </tr>
+        <tr class="grow" data-stage="3" id="stage-3">
+          <th colspan="7" scope="colgroup">
+            <span class="gnum">Stage 3</span>
+            <span class="gtitle">The rooms the front desk actually touches</span>
+            <span class="gwhy">A booking system that cannot say which room a guest is in is not yet a hotel system.</span>
+            <span class="gtick">0 of 8 shipped</span>
+          </th>
+        </tr>
+        <tr class="ship" data-s="later" data-m="golive" data-stage="3">
+          <td class="num">3.1</td>
+          <td class="what">
+            <div class="t">Room assignment</div>
+            <ul class="ships"><li>Migration adding a room reference to bookings (there is none today)</li><li>Assign a physical room at check-in, change it before arrival</li><li>Reconcile physical assignment with the room-type availability count</li></ul>
+            <div class="snote">bookings carries no room_id anywhere in the schema. Open question to answer before building: can type-level availability and physical assignment ever disagree, and which one wins?</div>
+          </td>
+          <td class="proof">Assign at check-in, then attempt to assign the same room to an overlapping stay and watch it refused. The type-level count and the physical picture agree.</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms golive">Go-live</span></td>
+          <td class="size">L</td>
+          <td class="mig">new migration</td>
+        </tr>
+        <tr class="ship" data-s="later" data-m="golive" data-stage="3">
+          <td class="num">3.1a</td>
+          <td class="what">
+            <div class="t">Mid-stay room move</div>
+            <ul class="ships"><li>Move a checked-in guest with a mandatory reason</li><li>Old room flips dirty, new room occupied</li><li>Move recorded in the change log</li></ul>
+            
+          </td>
+          <td class="proof">Move a guest and confirm the folio is untouched and both room statuses are right</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms golive">Go-live</span></td>
+          <td class="size">S</td>
+          <td class="mig">—</td>
+        </tr>
+        <tr class="ship" data-s="later" data-m="golive" data-stage="3">
+          <td class="num">3.1b</td>
+          <td class="what">
+            <div class="t">Out of order and out of service</div>
+            <ul class="ships"><li>Take a room out with a date range and reason</li><li>Excluded from availability for that range</li></ul>
+            
+          </td>
+          <td class="proof">count_available drops by one for the blocked dates and recovers after</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms golive">Go-live</span></td>
+          <td class="size">S</td>
+          <td class="mig">—</td>
+        </tr>
+        <tr class="ship" data-s="later" data-m="golive" data-stage="3">
+          <td class="num">3.2</td>
+          <td class="what">
+            <div class="t">Room status board</div>
+            <ul class="ships"><li>Write path for housekeeping_status: dirty, in progress, clean, inspected</li><li>Checkout flips the room dirty automatically</li><li>Board view of the whole property</li></ul>
+            <div class="snote">rooms.housekeeping_status already ships in 002. Nothing reads or writes it. This is a UI and write-path build, not a schema build.</div>
+          </td>
+          <td class="proof">Check a guest out, watch the room go dirty, clean it, inspect it, then sell it</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms golive">Go-live</span></td>
+          <td class="size">M</td>
+          <td class="mig">002 columns exist</td>
+        </tr>
+        <tr class="ship" data-s="later" data-m="golive" data-stage="3">
+          <td class="num">3.3</td>
+          <td class="what">
+            <div class="t">Front-desk daily worklist</div>
+            <ul class="ships"><li>Arrivals, departures, in-house and stayovers for today</li><li>Actions inline: check in, check out, mark no-show</li><li>Counts that match the database</li></ul>
+            <div class="snote">The screen the desk lives in. Nothing like it exists today.</div>
+          </td>
+          <td class="proof">Open it at 7am and every list matches a hand-written query</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms golive">Go-live</span></td>
+          <td class="size">M</td>
+          <td class="mig">—</td>
+        </tr>
+        <tr class="ship" data-s="later" data-m="golive" data-stage="3">
+          <td class="num">3.4</td>
+          <td class="what">
+            <div class="t">Registration card</div>
+            <ul class="ships"><li>Printable card carrying guest, stay and rate</li><li>Signature captured and filed against the stay</li></ul>
+            
+          </td>
+          <td class="proof">Print, sign, retrieve it from the stay a day later</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms golive">Go-live</span></td>
+          <td class="size">S</td>
+          <td class="mig">—</td>
+        </tr>
+        <tr class="ship" data-s="later" data-m="golive" data-stage="3">
+          <td class="num">3.5</td>
+          <td class="what">
+            <div class="t">Stay changes: extend, depart early, late checkout</div>
+            <ul class="ships"><li>Extend a stay with availability re-checked per night</li><li>Early departure stops future charges</li><li>Late-checkout charge as its own category</li></ul>
+            
+          </td>
+          <td class="proof">Extend into a full night and watch it refused; extend into a free night and watch the audit charge correctly with no double post</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms golive">Go-live</span></td>
+          <td class="size">M</td>
+          <td class="mig">—</td>
+        </tr>
+        <tr class="ship" data-s="later" data-m="market" data-stage="3">
+          <td class="num">3.6</td>
+          <td class="what">
+            <div class="t">Availability calendar (tape chart)</div>
+            <ul class="ships"><li>Rooms down, dates across, bookings as blocks</li><li>Drag or click to start a booking on a date</li></ul>
+            <div class="snote">The one screen every front desk asks for on day one. Market rather than go-live only because the worklist covers the daily need first.</div>
+          </td>
+          <td class="proof">The grid agrees with count_available for every date shown</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms market">Sellable</span></td>
+          <td class="size">M</td>
+          <td class="mig">—</td>
+        </tr>
+        <tr class="grow" data-stage="4" id="stage-4">
+          <th colspan="7" scope="colgroup">
+            <span class="gnum">Stage 4</span>
+            <span class="gtitle">Cash control</span>
+            <span class="gwhy">The biggest unbuilt control gap. Money collected between two people currently has no owner.</span>
+            <span class="gtick">0 of 3 shipped</span>
+          </th>
+        </tr>
+        <tr class="ship" data-s="later" data-m="golive" data-stage="4">
+          <td class="num">4.1</td>
+          <td class="what">
+            <div class="t">Cashier shifts</div>
+            <ul class="ships"><li>Open a shift with a declared float</li><li>Every payment posts under the open shift</li><li>Close with a counted drawer, system total, and the variance recorded</li></ul>
+            
+          </td>
+          <td class="proof">Take three payments in a shift, close it, and the declared cash minus the float equals the system total or names the difference</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms golive">Go-live</span></td>
+          <td class="size">L</td>
+          <td class="mig">new migration</td>
+        </tr>
+        <tr class="ship" data-s="later" data-m="golive" data-stage="4">
+          <td class="num">4.2</td>
+          <td class="what">
+            <div class="t">Shift handover and manager sign-off</div>
+            <ul class="ships"><li>Printable handover report per shift</li><li>Manager sign-off, immutable once signed</li></ul>
+            
+          </td>
+          <td class="proof">Close a shift, sign it off, then confirm it cannot be edited afterwards</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms golive">Go-live</span></td>
+          <td class="size">S</td>
+          <td class="mig">—</td>
+        </tr>
+        <tr class="ship" data-s="later" data-m="market" data-stage="4">
+          <td class="num">4.3</td>
+          <td class="what">
+            <div class="t">Banking, petty cash and expenses out</div>
+            <ul class="ships"><li>Record cash banked, with slip reference</li><li>Petty cash float and expenses paid at the property</li></ul>
+            
+          </td>
+          <td class="proof">Cash on hand equals collections minus banked minus petty cash spent</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms market">Sellable</span></td>
+          <td class="size">M</td>
+          <td class="mig">—</td>
+        </tr>
+        <tr class="grow" data-stage="5" id="stage-5">
+          <th colspan="7" scope="colgroup">
+            <span class="gnum">Stage 5</span>
+            <span class="gtitle">The owner's view, then go live</span>
+            <span class="gwhy">Small to build, and it is what makes the owner trust the system enough to stop running the spreadsheet in parallel.</span>
+            <span class="gtick">0 of 5 shipped</span>
+          </th>
+        </tr>
+        <tr class="ship" data-s="later" data-m="golive" data-stage="5">
+          <td class="num">5.1</td>
+          <td class="what">
+            <div class="t">Manager dashboard</div>
+            <ul class="ships"><li>Occupancy, ADR, RevPAR, revenue by category</li><li>Today, month to date, versus last month</li><li>Every card foots, every margin labelled</li></ul>
+            
+          </td>
+          <td class="proof">Each figure reconciles to a folio query run by hand</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms golive">Go-live</span></td>
+          <td class="size">M</td>
+          <td class="mig">—</td>
+        </tr>
+        <tr class="ship" data-s="later" data-m="golive" data-stage="5">
+          <td class="num">5.2</td>
+          <td class="what">
+            <div class="t">Daily flash pack</div>
+            <ul class="ships"><li>Yesterday in one page: rooms sold, revenue, arrivals, departures, outstanding</li><li>Emailed each morning after the night audit</li></ul>
+            
+          </td>
+          <td class="proof">The pack matches the dashboard for the same date</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms golive">Go-live</span></td>
+          <td class="size">S</td>
+          <td class="mig">—</td>
+        </tr>
+        <tr class="ship" data-s="later" data-m="golive" data-stage="5">
+          <td class="num">5.3</td>
+          <td class="what">
+            <div class="t">Weak-network resilience</div>
+            <ul class="ships"><li>Retry queue for postings, clear pending state</li><li>No silent loss when the connection drops mid-write</li><li>Never show a closed or denied screen on a transient error</li></ul>
+            <div class="snote">Fail open, not closed. A blip must not lock the desk out.</div>
+          </td>
+          <td class="proof">Kill the network mid-payment and confirm the posting either completes or is clearly still pending, never lost and never duplicated</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms golive">Go-live</span></td>
+          <td class="size">M</td>
+          <td class="mig">—</td>
+        </tr>
+        <tr class="ship" data-s="later" data-m="golive" data-stage="5">
+          <td class="num">5.4</td>
+          <td class="what">
+            <div class="t">Owner's real photos, copy and a design pass</div>
+            <ul class="ships"><li>Real photography and copy replacing every placeholder</li><li>Login and admin design pass</li></ul>
+            <div class="snote">Biggest non-engineering risk. It has been outstanding the longest and depends on the owner, not on us.</div>
+          </td>
+          <td class="proof">No placeholder survives anywhere a guest can see</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms golive">Go-live</span></td>
+          <td class="size">S</td>
+          <td class="mig">—</td>
+        </tr>
+        <tr class="ship" data-s="later" data-m="golive" data-stage="5">
+          <td class="num">5.5</td>
+          <td class="what">
+            <div class="t">GO LIVE at Heledon</div>
+            <ul class="ships"><li>Staff trained against the user guide</li><li>Excel retired, or run in parallel for one agreed week</li><li>Support path agreed for the first month</li><li>Clear the test data and open the books: empty the journal, remove the test store and seed items, then set gl_start_date once. Test entries are expected while building and the date cannot be set while any entry exists</li></ul>
+            
+          </td>
+          <td class="proof">One full week of real operations with no fallback to Excel and a month-end that reconciles</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms golive">Go-live</span></td>
+          <td class="size">M</td>
+          <td class="mig">—</td>
+        </tr>
+        <tr class="grow" data-stage="6" id="stage-6">
+          <th colspan="7" scope="colgroup">
+            <span class="gnum">Stage 6</span>
+            <span class="gtitle">Food, drink and the restaurant product</span>
+            <span class="gwhy">This is a second sellable product, not just a hotel module. Build it so a restaurant with no rooms can run on it.</span>
+            <span class="gtick">0 of 8 shipped</span>
+          </th>
+        </tr>
+        <tr class="ship" data-s="later" data-m="golive" data-stage="6">
+          <td class="num">6.1</td>
+          <td class="what">
+            <div class="t">Requisitions and transfers</div>
+            <ul class="ships"><li>Raise a requisition like a POS order</li><li>Store ticks what it actually sends, which may be less than asked</li><li>Requester confirms receipt, and only then does stock move</li></ul>
+            
+          </td>
+          <td class="proof">Request 20kg, send 18kg, confirm 18kg. Stock leaves the store and arrives in the kitchen only on confirmation, and a delivered-but-unconfirmed line sits visible in between.</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms golive">Go-live</span></td>
+          <td class="size">L</td>
+          <td class="mig">new migration</td>
+        </tr>
+        <tr class="ship" data-s="later" data-m="golive" data-stage="6">
+          <td class="num">6.2</td>
+          <td class="what">
+            <div class="t">Menu and costed recipes</div>
+            <ul class="ships"><li>Sellable items: recipe-based or direct-mapped to one item</li><li>Recipe lines in base units</li><li>Cost computed live from moving-average cost</li></ul>
+            
+          </td>
+          <td class="proof">Change an ingredient's cost and watch the dish cost follow</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms golive">Go-live</span></td>
+          <td class="size">L</td>
+          <td class="mig">new migration</td>
+        </tr>
+        <tr class="ship" data-s="later" data-m="golive" data-stage="6">
+          <td class="num">6.3</td>
+          <td class="what">
+            <div class="t">Outlets and the order screen</div>
+            <ul class="ships"><li>Outlets, each tied to a stock location</li><li>Fast order entry, charge to room or pay now</li><li>Consumption deducts the recipe at delivery, not at order</li></ul>
+            
+          </td>
+          <td class="proof">Order a dish, deliver it, then confirm the folio posted, the kitchen stock dropped by the recipe, and reversing the charge is still possible</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms golive">Go-live</span></td>
+          <td class="size">L</td>
+          <td class="mig">new migration</td>
+        </tr>
+        <tr class="ship" data-s="later" data-m="market" data-stage="6">
+          <td class="num">6.3a</td>
+          <td class="what">
+            <div class="t">Table tabs, split bills, service charge</div>
+            <ul class="ships"><li>Open tabs per table</li><li>Split a bill by item or evenly</li><li>Service charge and tips</li></ul>
+            
+          </td>
+          <td class="proof">Split a four-item tab three ways and watch the totals foot</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms market">Sellable</span></td>
+          <td class="size">M</td>
+          <td class="mig">—</td>
+        </tr>
+        <tr class="ship" data-s="later" data-m="market" data-stage="6">
+          <td class="num">6.3b</td>
+          <td class="what">
+            <div class="t">Kitchen ticket or display</div>
+            <ul class="ships"><li>Order prints or displays in the kitchen</li><li>Marked ready, then delivered</li></ul>
+            
+          </td>
+          <td class="proof">An order reaches the kitchen without anybody carrying paper</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms market">Sellable</span></td>
+          <td class="size">M</td>
+          <td class="mig">—</td>
+        </tr>
+        <tr class="ship" data-s="later" data-m="market" data-stage="6">
+          <td class="num">6.4</td>
+          <td class="what">
+            <div class="t">Restaurant-only mode, proven end to end</div>
+            <ul class="ships"><li>Rooms and hotel modules off via enabled_modules</li><li>Guest quick-add at order time: anonymous, name and phone, or find existing</li><li>Pay now or a standalone tab</li></ul>
+            <div class="snote">The moment Palstro becomes two products instead of one.</div>
+          </td>
+          <td class="proof">A test restaurant tenant runs a full trading day with no room modules visible and reconciles at close</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms market">Sellable</span></td>
+          <td class="size">M</td>
+          <td class="mig">—</td>
+        </tr>
+        <tr class="ship" data-s="later" data-m="market" data-stage="6">
+          <td class="num">6.5</td>
+          <td class="what">
+            <div class="t">Wastage and spoilage</div>
+            <ul class="ships"><li>Record breakage and spoilage with reason and attribution</li></ul>
+            
+          </td>
+          <td class="proof">Recorded waste explains the gap instead of reading as theft</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms market">Sellable</span></td>
+          <td class="size">S</td>
+          <td class="mig">—</td>
+        </tr>
+        <tr class="ship" data-s="later" data-m="market" data-stage="6">
+          <td class="num">6.6</td>
+          <td class="what">
+            <div class="t">Variance and theft analytics</div>
+            <ul class="ships"><li>Theoretical versus actual at every location</li><li>Per item per period: opening, received, issued, expected, actual, closing, variance</li><li>Graphs an owner reads without an accountant</li></ul>
+            <div class="snote">The differentiator. Nobody builds this for this market at this price.</div>
+          </td>
+          <td class="proof">Seed a known discrepancy in one location and confirm the report points at that location and that item</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms market">Sellable</span></td>
+          <td class="size">L</td>
+          <td class="mig">—</td>
+        </tr>
+        <tr class="grow" data-stage="7" id="stage-7">
+          <th colspan="7" scope="colgroup">
+            <span class="gnum">Stage 7</span>
+            <span class="gtitle">Buying and supplier money</span>
+            <span class="gwhy">Depth on top of 1.1h. The order-to-receive core moves up to stage 1 because a hotel buys before it sells; what is left here is what a bigger buyer needs.</span>
+            <span class="gtick">0 of 3 shipped</span>
+          </th>
+        </tr>
+        <tr class="ship" data-s="later" data-m="market" data-stage="7">
+          <td class="num">7.1</td>
+          <td class="what">
+            <div class="t">Purchase approvals and spend limits</div>
+            <ul class="ships"><li>Approval thresholds by amount and by role</li><li>An order above the limit cannot be sent until it is approved</li><li>Who approved what, on the record</li></ul>
+            
+          </td>
+          <td class="proof">An order over the limit refuses to leave draft, and the approval shows on the document</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms market">Sellable</span></td>
+          <td class="size">M</td>
+          <td class="mig">—</td>
+        </tr>
+        <tr class="ship" data-s="later" data-m="market" data-stage="7">
+          <td class="num">7.2</td>
+          <td class="what">
+            <div class="t">Supplier price history and comparison</div>
+            <ul class="ships"><li>Last price paid per item per supplier</li><li>Price movement over time</li><li>Flag a line priced well above the last purchase</li></ul>
+            
+          </td>
+          <td class="proof">Buy the same rice from two suppliers at different prices and the comparison is right without a spreadsheet</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms market">Sellable</span></td>
+          <td class="size">S</td>
+          <td class="mig">—</td>
+        </tr>
+        <tr class="ship" data-s="later" data-m="market" data-stage="7">
+          <td class="num">7.3</td>
+          <td class="what">
+            <div class="t">Supplier ageing and spend analytics</div>
+            <ul class="ships"><li>Ageing buckets across every supplier</li><li>Spend by supplier, by category, by period</li><li>Bills covering several receipts, where a hotel works that way</li></ul>
+            <div class="snote">What is left after paying suppliers moved forward to 1.1h5. This is the analysis, not the mechanism.</div>
+          </td>
+          <td class="proof">A part-paid balance ages into the right bucket and the total foots against the supplier accounts</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms market">Sellable</span></td>
+          <td class="size">M</td>
+          <td class="mig">—</td>
+        </tr>
+        <tr class="grow" data-stage="8" id="stage-8">
+          <th colspan="7" scope="colgroup">
+            <span class="gnum">Stage 8</span>
+            <span class="gtitle">Housekeeping depth, laundry and utilities</span>
+            <span class="gwhy">Where a hotel's costs quietly leak. Housekeeping consumes at cleaning time, by a different person, on a different clock.</span>
+            <span class="gtick">0 of 5 shipped</span>
+          </th>
+        </tr>
+        <tr class="ship" data-s="later" data-m="market" data-stage="8">
+          <td class="num">8.1</td>
+          <td class="what">
+            <div class="t">Par levels and issue-to-room stocking</div>
+            <ul class="ships"><li>Standard par per room</li><li>Attendant records what was stocked into which room, on which clean</li><li>Extra-item requests, billable or free per item, nothing pre-ticked</li></ul>
+            
+          </td>
+          <td class="proof">Stock a room, then issue to an empty room and watch it demand a reason and flag for variance</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms market">Sellable</span></td>
+          <td class="size">L</td>
+          <td class="mig">new migration</td>
+        </tr>
+        <tr class="ship" data-s="later" data-m="market" data-stage="8">
+          <td class="num">8.2</td>
+          <td class="what">
+            <div class="t">Laundry as its own cost centre</div>
+            <ul class="ships"><li>Guest laundry as revenue, house laundry as cost</li><li>Chemicals consumed against kilos processed</li></ul>
+            
+          </td>
+          <td class="proof">Cost per kilo computes and guest laundry revenue posts to the folio</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms market">Sellable</span></td>
+          <td class="size">M</td>
+          <td class="mig">—</td>
+        </tr>
+        <tr class="ship" data-s="later" data-m="market" data-stage="8">
+          <td class="num">8.3</td>
+          <td class="what">
+            <div class="t">Utilities and diesel</div>
+            <ul class="ships"><li>Diesel purchased and consumed, generator hours</li><li>Cost per occupied room</li><li>Grid versus generator split</li></ul>
+            <div class="snote">Often the second-largest cost line in a Nigerian hotel and almost nobody tracks it. Strong differentiator.</div>
+          </td>
+          <td class="proof">A month of diesel reconciles against generator hours and occupancy</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms market">Sellable</span></td>
+          <td class="size">M</td>
+          <td class="mig">—</td>
+        </tr>
+        <tr class="ship" data-s="later" data-m="market" data-stage="8">
+          <td class="num">8.4</td>
+          <td class="what">
+            <div class="t">Maintenance work orders</div>
+            <ul class="ships"><li>Raise a fault against a room or asset</li><li>Assign, complete, link to out-of-order</li></ul>
+            
+          </td>
+          <td class="proof">A fault takes the room out of sale and puts it back on completion</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms market">Sellable</span></td>
+          <td class="size">M</td>
+          <td class="mig">—</td>
+        </tr>
+        <tr class="ship" data-s="later" data-m="world" data-stage="8">
+          <td class="num">8.5</td>
+          <td class="what">
+            <div class="t">Asset register and preventive schedule</div>
+            <ul class="ships"><li>Assets with service intervals</li><li>Due-soon list</li></ul>
+            
+          </td>
+          <td class="proof">A due service appears before it is overdue</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms world">Anywhere</span></td>
+          <td class="size">M</td>
+          <td class="mig">—</td>
+        </tr>
+        <tr class="grow" data-stage="9" id="stage-9">
+          <th colspan="7" scope="colgroup">
+            <span class="gnum">Stage 9</span>
+            <span class="gtitle">Corporate and receivables</span>
+            <span class="gwhy">Company business is most of a Nigerian business hotel's revenue and it is the hardest to bill today.</span>
+            <span class="gtick">0 of 3 shipped</span>
+          </th>
+        </tr>
+        <tr class="ship" data-s="later" data-m="market" data-stage="9">
+          <td class="num">9.1</td>
+          <td class="what">
+            <div class="t">Split billing</div>
+            <ul class="ships"><li>Two folios on one stay: company pays room, guest pays incidentals</li><li>Routing rules by charge category</li></ul>
+            
+          </td>
+          <td class="proof">One stay produces two statements that together equal the whole bill</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms market">Sellable</span></td>
+          <td class="size">L</td>
+          <td class="mig">new migration</td>
+        </tr>
+        <tr class="ship" data-s="later" data-m="market" data-stage="9">
+          <td class="num">9.2</td>
+          <td class="what">
+            <div class="t">Corporate view</div>
+            <ul class="ships"><li>Who authorised and who is covered</li><li>Bulk no-show with one charge each</li><li>Company-level stay list</li></ul>
+            
+          </td>
+          <td class="proof">Mark six no-shows at once and confirm exactly six one-night charges</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms market">Sellable</span></td>
+          <td class="size">M</td>
+          <td class="mig">—</td>
+        </tr>
+        <tr class="ship" data-s="later" data-m="market" data-stage="9">
+          <td class="num">9.3</td>
+          <td class="what">
+            <div class="t">City ledger: invoice the company</div>
+            <ul class="ships"><li>One invoice covering many stays</li><li>Part payments against an invoice</li><li>AR ageing</li></ul>
+            
+          </td>
+          <td class="proof">Invoice five stays, pay part of it, and both the invoice and the ageing foot</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms market">Sellable</span></td>
+          <td class="size">L</td>
+          <td class="mig">—</td>
+        </tr>
+        <tr class="grow" data-stage="10" id="stage-10">
+          <th colspan="7" scope="colgroup">
+            <span class="gnum">Stage 10</span>
+            <span class="gtitle">Selling rooms without a walk-in</span>
+            <span class="gwhy">The site cannot take a booking today. This is where the product starts earning outside the front desk.</span>
+            <span class="gtick">0 of 5 shipped</span>
+          </th>
+        </tr>
+        <tr class="ship" data-s="later" data-m="market" data-stage="10">
+          <td class="num">10.1</td>
+          <td class="what">
+            <div class="t">Rate plans and packages</div>
+            <ul class="ships"><li>Room only, bed and breakfast, half board, with inclusions</li><li>Min stay, stop sell, closed to arrival</li></ul>
+            
+          </td>
+          <td class="proof">A stop-sell date refuses a booking through every entry point</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms market">Sellable</span></td>
+          <td class="size">M</td>
+          <td class="mig">new migration</td>
+        </tr>
+        <tr class="ship" data-s="later" data-m="market" data-stage="10">
+          <td class="num">10.2</td>
+          <td class="what">
+            <div class="t">Online booking engine</div>
+            <ul class="ships"><li>Live availability and rates on the hotel's own site</li><li>Guest details, confirmation email, booking lands in the same tables</li><li>No authenticated app machinery on the public surface</li></ul>
+            <div class="snote">Public surface. Fail open on transient errors, never show a closed screen on a blip.</div>
+          </td>
+          <td class="proof">A booking made from a phone on the public site appears on the front-desk worklist, and the overbooking guard still holds under a concurrent attempt</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms market">Sellable</span></td>
+          <td class="size">L</td>
+          <td class="mig">—</td>
+        </tr>
+        <tr class="ship" data-s="later" data-m="market" data-stage="10">
+          <td class="num">10.3</td>
+          <td class="what">
+            <div class="t">Online payments</div>
+            <ul class="ships"><li>Paystack or Flutterwave behind one provider interface</li><li>Deposit at booking, balance at checkout</li><li>Payment posts to the folio, reversible like any other</li></ul>
+            
+          </td>
+          <td class="proof">A real test payment posts to the right folio and reverses cleanly</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms market">Sellable</span></td>
+          <td class="size">L</td>
+          <td class="mig">—</td>
+        </tr>
+        <tr class="ship" data-s="later" data-m="market" data-stage="10">
+          <td class="num">10.4</td>
+          <td class="what">
+            <div class="t">Cancellation and modification policy</div>
+            <ul class="ships"><li>Policy per rate plan</li><li>Guest-side cancel or change within policy</li><li>Deposit forfeit rules</li></ul>
+            
+          </td>
+          <td class="proof">Cancel inside and outside the window and watch the two different outcomes</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms market">Sellable</span></td>
+          <td class="size">M</td>
+          <td class="mig">—</td>
+        </tr>
+        <tr class="ship" data-s="later" data-m="world" data-stage="10">
+          <td class="num">10.5</td>
+          <td class="what">
+            <div class="t">Promo codes and vouchers</div>
+            <ul class="ships"><li>Codes with limits and expiry</li><li>Discount shown as its own visible line</li></ul>
+            
+          </td>
+          <td class="proof">A used-up code is refused and the discount line is visible on the folio</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms world">Anywhere</span></td>
+          <td class="size">S</td>
+          <td class="mig">—</td>
+        </tr>
+        <tr class="grow" data-stage="11" id="stage-11">
+          <th colspan="7" scope="colgroup">
+            <span class="gnum">Stage 11</span>
+            <span class="gtitle">Books and statutory</span>
+            <span class="gwhy">Built last on purpose. Every posting above is already accountable, so the books assemble from proven data rather than from a parallel truth.</span>
+            <span class="gtick">0 of 5 shipped</span>
+          </th>
+        </tr>
+        <tr class="ship" data-s="later" data-m="market" data-stage="11">
+          <td class="num">11.1</td>
+          <td class="what">
+            <div class="t">Chart of accounts and mapping</div>
+            <ul class="ships"><li>Per-tenant chart of accounts</li><li>Charge categories, tax lines and payment methods mapped to accounts</li></ul>
+            
+          </td>
+          <td class="proof">Every existing charge category maps to an account with nothing unmapped</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms market">Sellable</span></td>
+          <td class="size">M</td>
+          <td class="mig">new migration</td>
+        </tr>
+        <tr class="ship" data-s="later" data-m="market" data-stage="11">
+          <td class="num">11.2</td>
+          <td class="what">
+            <div class="t">Journals and trial balance</div>
+            <ul class="ships"><li>Postings generate journal entries</li><li>Trial balance per property</li></ul>
+            
+          </td>
+          <td class="proof">The trial balance balances and ties to folio totals for the period</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms market">Sellable</span></td>
+          <td class="size">L</td>
+          <td class="mig">—</td>
+        </tr>
+        <tr class="ship" data-s="later" data-m="market" data-stage="11">
+          <td class="num">11.3</td>
+          <td class="what">
+            <div class="t">Bank, cash and reconciliation</div>
+            <ul class="ships"><li>Bank and cash accounts</li><li>Match banked cash and transfers to statements</li></ul>
+            
+          </td>
+          <td class="proof">A month reconciles with the unmatched items named</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms market">Sellable</span></td>
+          <td class="size">M</td>
+          <td class="mig">—</td>
+        </tr>
+        <tr class="ship" data-s="later" data-m="market" data-stage="11">
+          <td class="num">11.4</td>
+          <td class="what">
+            <div class="t">P&amp;L, balance sheet and group roll-up</div>
+            <ul class="ships"><li>Departmental and property P&amp;L</li><li>Balance sheet</li><li>Group consolidation across properties</li></ul>
+            
+          </td>
+          <td class="proof">Group total equals the sum of the properties, and every deduction between top and bottom line is visible</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms market">Sellable</span></td>
+          <td class="size">L</td>
+          <td class="mig">—</td>
+        </tr>
+        <tr class="ship" data-s="later" data-m="market" data-stage="11">
+          <td class="num">11.5</td>
+          <td class="what">
+            <div class="t">Tax returns: VAT, consumption tax, WHT</div>
+            <ul class="ships"><li>VAT report from the tax lines already posted</li><li>State consumption tax</li><li>Withholding tax on supplier payments</li></ul>
+            <div class="snote">A hotel that cannot file will not buy.</div>
+          </td>
+          <td class="proof">A period's VAT report equals the sum of VAT lines posted in that period</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms market">Sellable</span></td>
+          <td class="size">M</td>
+          <td class="mig">—</td>
+        </tr>
+        <tr class="grow" data-stage="12" id="stage-12">
+          <th colspan="7" scope="colgroup">
+            <span class="gnum">Stage 12</span>
+            <span class="gtitle">The guest's own experience</span>
+            <span class="gwhy">Turning a stay into the next stay, and keeping guest data handled properly.</span>
+            <span class="gtick">0 of 5 shipped</span>
+          </th>
+        </tr>
+        <tr class="ship" data-s="later" data-m="market" data-stage="12">
+          <td class="num">12.1</td>
+          <td class="what">
+            <div class="t">Guest portal</div>
+            <ul class="ships"><li>Guests log in to their own stays, folios and statements</li><li>Own data only, enforced by RLS not by the screen</li></ul>
+            
+          </td>
+          <td class="proof">A guest account can read its own statement and cannot read anyone else's, tested by calling the API directly</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms market">Sellable</span></td>
+          <td class="size">L</td>
+          <td class="mig">—</td>
+        </tr>
+        <tr class="ship" data-s="later" data-m="market" data-stage="12">
+          <td class="num">12.2</td>
+          <td class="what">
+            <div class="t">Guest messaging</div>
+            <ul class="ships"><li>Booking confirmation, pre-arrival note, post-stay thank you</li><li>WhatsApp, SMS or email</li></ul>
+            
+          </td>
+          <td class="proof">A booking triggers exactly one confirmation, and never sends to a guessed number</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms market">Sellable</span></td>
+          <td class="size">M</td>
+          <td class="mig">—</td>
+        </tr>
+        <tr class="ship" data-s="later" data-m="market" data-stage="12">
+          <td class="num">12.3</td>
+          <td class="what">
+            <div class="t">Feedback and reviews</div>
+            <ul class="ships"><li>Post-stay feedback request</li><li>Scores visible to the manager</li></ul>
+            
+          </td>
+          <td class="proof">Feedback lands against the right stay</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms market">Sellable</span></td>
+          <td class="size">S</td>
+          <td class="mig">—</td>
+        </tr>
+        <tr class="ship" data-s="later" data-m="market" data-stage="12">
+          <td class="num">12.4</td>
+          <td class="what">
+            <div class="t">Privacy: consent, retention, ID handling</div>
+            <ul class="ships"><li>Consent captured at capture time</li><li>Retention policy and purge path</li><li>ID scans in the private bucket only, never the public one</li></ul>
+            
+          </td>
+          <td class="proof">An ID scan is unreachable without an authenticated, permitted session</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms market">Sellable</span></td>
+          <td class="size">M</td>
+          <td class="mig">—</td>
+        </tr>
+        <tr class="ship" data-s="later" data-m="world" data-stage="12">
+          <td class="num">12.5</td>
+          <td class="what">
+            <div class="t">Repeat-guest recognition and loyalty</div>
+            <ul class="ships"><li>Stay count and value on the guest record</li><li>Simple tiers and recognition at check-in</li></ul>
+            
+          </td>
+          <td class="proof">A returning guest is flagged before the desk greets them</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms world">Anywhere</span></td>
+          <td class="size">M</td>
+          <td class="mig">—</td>
+        </tr>
+        <tr class="grow" data-stage="13" id="stage-13">
+          <th colspan="7" scope="colgroup">
+            <span class="gnum">Stage 13</span>
+            <span class="gtitle">From one hotel to a product</span>
+            <span class="gwhy">Everything above proves the software. This stage proves the business.</span>
+            <span class="gtick">0 of 8 shipped</span>
+          </th>
+        </tr>
+        <tr class="ship" data-s="later" data-m="market" data-stage="13">
+          <td class="num">13.1</td>
+          <td class="what">
+            <div class="t">Onboarding wizard</div>
+            <ul class="ships"><li>Create tenant, property, rooms, rates, tax and staff in one guided flow</li><li>Sensible defaults so a small hotel finishes in a day</li></ul>
+            
+          </td>
+          <td class="proof">A new hotel goes from nothing to taking a booking without anyone touching SQL</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms market">Sellable</span></td>
+          <td class="size">L</td>
+          <td class="mig">—</td>
+        </tr>
+        <tr class="ship" data-s="later" data-m="market" data-stage="13">
+          <td class="num">13.2</td>
+          <td class="what">
+            <div class="t">Data migration kit</div>
+            <ul class="ships"><li>Import guests, existing bookings and opening stock from Excel</li><li>Validate then commit, idempotent</li></ul>
+            
+          </td>
+          <td class="proof">A real spreadsheet from a real hotel imports with every rejected row explained</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms market">Sellable</span></td>
+          <td class="size">M</td>
+          <td class="mig">—</td>
+        </tr>
+        <tr class="ship" data-s="later" data-m="market" data-stage="13">
+          <td class="num">13.3</td>
+          <td class="what">
+            <div class="t">Demo and training mode</div>
+            <ul class="ships"><li>Sample data set</li><li>Practice without dirtying real books, clearly marked</li></ul>
+            
+          </td>
+          <td class="proof">Staff can train and reset without touching live data</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms market">Sellable</span></td>
+          <td class="size">M</td>
+          <td class="mig">—</td>
+        </tr>
+        <tr class="ship" data-s="later" data-m="market" data-stage="13">
+          <td class="num">13.4</td>
+          <td class="what">
+            <div class="t">Subscription, plans and billing</div>
+            <ul class="ships"><li>Plans, trials, renewals</li><li>Module gating per plan on top of enabled_modules</li><li>New features default in for existing tenants</li></ul>
+            <div class="snote">Carry the ERP lessons wholesale: no full-replace config saves, gated features default in, prove parity before flipping anything live.</div>
+          </td>
+          <td class="proof">A new gated feature reaches every existing tenant immediately, and a lapsed trial degrades without deleting anything</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms market">Sellable</span></td>
+          <td class="size">L</td>
+          <td class="mig">new migration</td>
+        </tr>
+        <tr class="ship" data-s="later" data-m="market" data-stage="13">
+          <td class="num">13.5</td>
+          <td class="what">
+            <div class="t">Pricing and packaging decision</div>
+            <ul class="ships"><li>Hotel, restaurant, or both</li><li>What each tier includes, derived from the real module config</li></ul>
+            
+          </td>
+          <td class="proof">The pricing page is generated from the same config that enforces access</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms market">Sellable</span></td>
+          <td class="size">S</td>
+          <td class="mig">—</td>
+        </tr>
+        <tr class="ship" data-s="later" data-m="market" data-stage="13">
+          <td class="num">13.6</td>
+          <td class="what">
+            <div class="t">Second pilot customer</div>
+            <ul class="ships"><li>A hotel that is not Heledon, onboarded without code changes</li></ul>
+            <div class="snote">The real test of multi-tenancy is the second tenant.</div>
+          </td>
+          <td class="proof">Onboarded end to end with zero Heledon-shaped assumptions found</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms market">Sellable</span></td>
+          <td class="size">L</td>
+          <td class="mig">—</td>
+        </tr>
+        <tr class="ship" data-s="later" data-m="market" data-stage="13">
+          <td class="num">13.7</td>
+          <td class="what">
+            <div class="t">Performance and scale pass</div>
+            <ul class="ships"><li>Index and query budget per screen</li><li>Behaviour checked at realistic data volume</li></ul>
+            
+          </td>
+          <td class="proof">Every list screen stays fast against a year of data</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms market">Sellable</span></td>
+          <td class="size">M</td>
+          <td class="mig">—</td>
+        </tr>
+        <tr class="ship" data-s="later" data-m="world" data-stage="13">
+          <td class="num">13.8</td>
+          <td class="what">
+            <div class="t">Support playbook and status page</div>
+            <ul class="ships"><li>Escalation path, response expectations</li><li>Public status page</li></ul>
+            
+          </td>
+          <td class="proof">A simulated outage follows the playbook end to end</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms world">Anywhere</span></td>
+          <td class="size">S</td>
+          <td class="mig">—</td>
+        </tr>
+        <tr class="grow" data-stage="14" id="stage-14">
+          <th colspan="7" scope="colgroup">
+            <span class="gnum">Stage 14</span>
+            <span class="gtitle">Anywhere in the world</span>
+            <span class="gwhy">Everything above assumes Nigeria. This stage removes that assumption.</span>
+            <span class="gtick">0 of 5 shipped</span>
+          </th>
+        </tr>
+        <tr class="ship" data-s="later" data-m="world" data-stage="14">
+          <td class="num">14.1</td>
+          <td class="what">
+            <div class="t">Multi-currency</div>
+            <ul class="ships"><li>Property base currency, guest-facing currency, stored rate at posting time</li><li>Reporting in base currency</li></ul>
+            
+          </td>
+          <td class="proof">A guest billed in one currency and paying in another settles to zero with the FX difference visible as its own line</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms world">Anywhere</span></td>
+          <td class="size">L</td>
+          <td class="mig">new migration</td>
+        </tr>
+        <tr class="ship" data-s="later" data-m="world" data-stage="14">
+          <td class="num">14.2</td>
+          <td class="what">
+            <div class="t">Configurable tax templates per country</div>
+            <ul class="ships"><li>Country templates on top of the existing per-property tax list</li><li>Inclusive versus exclusive tax, rounding rules</li></ul>
+            
+          </td>
+          <td class="proof">Switch a property to an inclusive-tax country template and the statement still foots to the cent</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms world">Anywhere</span></td>
+          <td class="size">M</td>
+          <td class="mig">—</td>
+        </tr>
+        <tr class="ship" data-s="later" data-m="world" data-stage="14">
+          <td class="num">14.3</td>
+          <td class="what">
+            <div class="t">Locale and language</div>
+            <ul class="ships"><li>Date, number and address formats per property</li><li>Translation scaffold with English as the source</li></ul>
+            
+          </td>
+          <td class="proof">A property set to another locale renders dates and numbers correctly everywhere, including the exports</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms world">Anywhere</span></td>
+          <td class="size">L</td>
+          <td class="mig">—</td>
+        </tr>
+        <tr class="ship" data-s="later" data-m="world" data-stage="14">
+          <td class="num">14.4</td>
+          <td class="what">
+            <div class="t">Regional payment providers</div>
+            <ul class="ships"><li>One provider interface, several adapters</li><li>Card terminal integration where it matters</li></ul>
+            
+          </td>
+          <td class="proof">Swap the provider for a property without touching folio code</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms world">Anywhere</span></td>
+          <td class="size">M</td>
+          <td class="mig">—</td>
+        </tr>
+        <tr class="ship" data-s="later" data-m="world" data-stage="14">
+          <td class="num">14.5</td>
+          <td class="what">
+            <div class="t">Accessibility pass</div>
+            <ul class="ships"><li>Keyboard paths, contrast, labels across the admin</li><li>WCAG AA on the surfaces staff use all day</li></ul>
+            
+          </td>
+          <td class="proof">Core front-desk tasks complete by keyboard alone at AA contrast</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms world">Anywhere</span></td>
+          <td class="size">M</td>
+          <td class="mig">—</td>
+        </tr>
+        <tr class="grow" data-stage="15" id="stage-15">
+          <th colspan="7" scope="colgroup">
+            <span class="gnum">Stage 15</span>
+            <span class="gtitle">Integrations</span>
+            <span class="gwhy">Worth real money to larger buyers, worth nothing before the core is solid. Deliberately last.</span>
+            <span class="gtick">0 of 4 shipped</span>
+          </th>
+        </tr>
+        <tr class="ship" data-s="later" data-m="world" data-stage="15">
+          <td class="num">15.1</td>
+          <td class="what">
+            <div class="t">Channel manager</div>
+            <ul class="ships"><li>Push rates and availability to Booking.com, Expedia, Hotels.ng</li><li>Pull reservations back into the same tables</li></ul>
+            
+          </td>
+          <td class="proof">A rate change reaches the channel and an OTA booking reaches the worklist, without breaking the overbooking guard</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms world">Anywhere</span></td>
+          <td class="size">L</td>
+          <td class="mig">—</td>
+        </tr>
+        <tr class="ship" data-s="later" data-m="world" data-stage="15">
+          <td class="num">15.2</td>
+          <td class="what">
+            <div class="t">Door locks and key cards</div>
+            <ul class="ships"><li>Issue a key on check-in, expire on checkout</li></ul>
+            
+          </td>
+          <td class="proof">A key stops working at checkout</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms world">Anywhere</span></td>
+          <td class="size">M</td>
+          <td class="mig">—</td>
+        </tr>
+        <tr class="ship" data-s="later" data-m="world" data-stage="15">
+          <td class="num">15.3</td>
+          <td class="what">
+            <div class="t">Accounting export</div>
+            <ul class="ships"><li>Journal export to QuickBooks, Xero or Sage</li></ul>
+            
+          </td>
+          <td class="proof">An exported period imports and balances in the target system</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms world">Anywhere</span></td>
+          <td class="size">M</td>
+          <td class="mig">—</td>
+        </tr>
+        <tr class="ship" data-s="later" data-m="world" data-stage="15">
+          <td class="num">15.4</td>
+          <td class="what">
+            <div class="t">WhatsApp Business API</div>
+            <ul class="ships"><li>Templated confirmations and statements over the official API</li></ul>
+            
+          </td>
+          <td class="proof">A statement reaches a guest without a manual share step</td>
+          <td><span class="chip st later">Not started</span></td>
+          <td><span class="chip ms world">Anywhere</span></td>
+          <td class="size">M</td>
+          <td class="mig">—</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout">
+    <h3>Palstro-ERP learnings carried in, so we don't repeat them</h3>
+    <ul>
+      <li><strong>Lock every RPC down.</strong> New <code>SECURITY DEFINER</code> functions default-grant EXECUTE to PUBLIC, which includes anon, and an internal <code>auth.uid() IS NOT NULL</code> check null-bypasses for anon. Revoke, grant to authenticated, assert in-migration. This bit the ERP twice, which is why it is shipment 1.3 and not an afterthought.</li>
+      <li><strong>Fail open, never closed.</strong> A transient error means "couldn't check", not "closed". A live shop once went dark on a network blip.</li>
+      <li><strong>No full DELETE + INSERT saves.</strong> Delta saves with a server-side empty guard. One blind full replace wiped a plan's pages and walled every tenant on it.</li>
+      <li><strong>Gated features default in.</strong> A key missing from an allow-list is invisible to everyone.</li>
+      <li><strong>Derive display from what enforces.</strong> Hand-typed pricing bullets drifted from the real access config.</li>
+      <li><strong>Don't touch tested code, and visibility is not deletion.</strong> A nav link repoint once read as catastrophic data loss.</li>
+      <li><strong>Keep auth machinery off public surfaces.</strong> A staff-auth poll on the public storefront looped errors until Sentry 429'd. Applies directly to shipment 10.2.</li>
+      <li><strong>Financial cards must foot and label.</strong> Every line visible, no two figures sharing a bare label.</li>
+      <li><strong>Lists must paginate properly.</strong> Server pagination, count, page-of-N, jump, page size, filtered totals, export-all.</li>
+      <li><strong>Stock is movement-sourced, never a stored number.</strong> Same rule as the folio balance.</li>
+      <li><strong>Imports validate then commit,</strong> and stay idempotent on re-upload.</li>
+      <li><strong>Duplicate-name protection.</strong> Exact blocked, fuzzy warned, whitespace collapsed.</li>
+      <li><strong>Browser-made xlsx opens read-only</strong> where Purview labelling is enforced. Lead with CSV, offer xlsx.</li>
+      <li><strong>Moving-average cost</strong> folds by business date, not insertion time.</li>
+      <li><strong>Multi-location from day one.</strong> Every movement carries a <code>location_id</code>.</li>
+      <li><strong>Never hardcode infra values.</strong> A retired Vercel apex IP once took a live shop down.</li>
+      <li><strong>Review the deliverable against the intent.</strong> "Done" is not "matches the spec".</li>
+      <li><strong>Migration trap:</strong> <code>TG_OP</code> and <code>OLD</code> cannot be used in a trigger's <code>WHEN</code> clause.</li>
+      <li><strong>Port the design, not the database.</strong> Never wire two Supabase projects together.</li>
+    </ul>
+  </div>
+</main>
+
+<footer>
+  Generated from <code>build-tracker.json</code> on 2026-11-02. 107 shipments across 16 stages. Edit the JSON and re-run the renderer. Never hand-edit this page.
+</footer>
+
+<script>
+(function(){
+  var rows = Array.prototype.slice.call(document.querySelectorAll('tr.ship'));
+  var groups = Array.prototype.slice.call(document.querySelectorAll('tr.grow'));
+  var state = { s: 'all', m: 'all' };
+  var showing = document.getElementById('showing');
+
+  function apply(){
+    var visible = 0;
+    rows.forEach(function(r){
+      var ok = (state.s === 'all' || r.getAttribute('data-s') === state.s) &&
+               (state.m === 'all' || r.getAttribute('data-m') === state.m);
+      r.style.display = ok ? '' : 'none';
+      if (ok) visible++;
+    });
+    groups.forEach(function(g){
+      var stage = g.getAttribute('data-stage');
+      var n = rows.filter(function(r){
+        return r.getAttribute('data-stage') === stage && r.style.display !== 'none';
+      }).length;
+      g.style.display = n ? '' : 'none';
+    });
+    showing.textContent = visible === rows.length
+      ? ('Showing all ' + rows.length + ' shipments.')
+      : ('Showing ' + visible + ' of ' + rows.length + ' shipments.');
+  }
+
+  Array.prototype.forEach.call(document.querySelectorAll('.f'), function(btn){
+    btn.addEventListener('click', function(){
+      var k = btn.getAttribute('data-k');
+      state[k] = btn.getAttribute('data-v');
+      Array.prototype.forEach.call(document.querySelectorAll('.f[data-k="' + k + '"]'), function(b){
+        b.setAttribute('aria-pressed', String(b === btn));
+      });
+      apply();
+    });
+  });
+
+  apply();
+})();
+</script>
+</body>
+</html>

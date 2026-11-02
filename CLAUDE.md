@@ -848,6 +848,19 @@ first.
     `Typeahead` searched on the SERVER, not a `<select>` and never a client-side
     filter over a loaded page (rule 26). Judge it by what the selector CAN hold,
     not by what today's data does.
+18. **Finishing a shipment?** It ends by updating
+    [`docs/build-tracker.json`](docs/build-tracker.json) and re-running
+    `npm run tracker`, **in the same commit as the work** — exactly as
+    `docs/USER-GUIDE.md` does (rule 25). The tracker is the build plan and the
+    source of truth for what has shipped; a shipment whose status, proof line or
+    note is a commit behind is a source of truth that lies. The renderer refuses
+    to build the page if any shipment is missing its id, status, milestone, size,
+    proof line or what-it-ships list, so a clean `npm run tracker` is also the
+    validation pass. **Never hand-edit `docs/build-tracker.html`** — edit the
+    JSON and re-render.
+    *Why this is a rule and not a habit: the file existed from August and was
+    never in git, so it was rebuilt from a published HTML page twice in one day.
+    A build plan that lives in somebody's workspace is one wipe from gone.*
 
 ---
 
