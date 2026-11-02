@@ -509,6 +509,22 @@ Use it after changing a secret, and after changing either workflow. Waiting unti
 04:17 tomorrow to find out whether an edit was valid is how a backup sits broken
 for a week.
 
+### Every scheduled job gets a run read by a human within a week of being added
+
+**A scheduled job that has never succeeded looks identical to one that has never
+been needed.** Both are quiet.
+
+This is not hypothetical. The `supabase-keepalive` workflow was added on 1 October
+2026 and failed on **every one of its first 34 runs** — `SUPABASE_URL` and
+`SUPABASE_ANON_KEY` had never been added as secrets. It sat in the Actions sidebar
+for a month looking like a working safety net, and the only reason it surfaced was
+somebody opening a run and reading it. The project survived on unrelated dashboard
+activity, not on the job that existed to protect it.
+
+So: **when any scheduled job is added, somebody opens one of its runs and reads it
+within a week.** Not the sidebar, not the green tick — the log. Add it to the same
+commit's checklist as the job itself.
+
 ---
 
 ## 11. The secrets, and which job reads which
