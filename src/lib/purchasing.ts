@@ -113,6 +113,7 @@ export const reconciliationRows = boundary<InventoryGlReconciliation>(
     'pre_wiring_value',
     'non_posting_value',
     'unvaluable_movement_count',
+    'unvaluable_value',
     'valuation_value',
     'valuation_difference',
     'valued_movement_count',

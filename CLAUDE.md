@@ -858,6 +858,13 @@ first.
     proof line or what-it-ships list, so a clean `npm run tracker` is also the
     validation pass. **Never hand-edit `docs/build-tracker.html`** — edit the
     JSON and re-render.
+    **The rendered HTML is gitignored, and must stay that way.** The JSON is the
+    source; the page is derived from it. A committed derived file is a second
+    source of truth that can disagree with the first — the day somebody edits the
+    JSON and forgets to re-render, the repo holds a page saying something untrue,
+    and it reads as authoritative precisely because it is in git. The tracker is
+    read as a published page, so committing the HTML buys nothing and costs that.
+    Do not re-add it.
     *Why this is a rule and not a habit: the file existed from August and was
     never in git, so it was rebuilt from a published HTML page twice in one day.
     A build plan that lives in somebody's workspace is one wipe from gone.*

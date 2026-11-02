@@ -11,3 +11,8 @@ dist-ssr
 *.log
 logs
 palstro-hotels-handover.txt
+
+# Generated from docs/build-tracker.json by `npm run tracker`. Derived, never edited
+# by hand, and deliberately NOT committed: a committed derived file is a second
+# source of truth that can disagree with the first (CLAUDE.md checklist 18).
+docs/build-tracker.html

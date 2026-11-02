@@ -316,9 +316,17 @@ export interface InventoryGlReconciliation {
   pre_wiring_value: number;
   non_posting_value: number;
   unvaluable_movement_count: number;
+  // 048: the valuation effect of the movements that count names — quantity that
+  // moved with no cost to move with it, valued at the position's own average.
+  // 047 claimed these were absent from the valuation as well as the ledger, so
+  // that they cancelled out. They are not: stock_value is quantity times an
+  // average and the movement moved the quantity. Measured at -4,000.00 on a
+  // fixture. Now a reported bucket like the three above, absorbed nowhere.
+  unvaluable_value: number;
   valuation_value: number;
   // Per-movement rounding, plus any position that has passed through negative.
-  // NOT required to be zero, and never absorbed anywhere.
+  // NOT required to be zero, and never absorbed anywhere. As of 048 it no longer
+  // carries the unvaluable movements' quantity, which was never rounding.
   valuation_difference: number;
   // 047: THE DENOMINATOR THE RESIDUE MUST BE READ AGAINST. A kobo across forty
   // movements is arithmetic; the same kobo across four thousand is not.

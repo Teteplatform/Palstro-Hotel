@@ -808,6 +808,7 @@ const WIRE_RECON = (over: Record<string, unknown>): unknown => ({
   pre_wiring_value: '0.00',
   non_posting_value: '0.00',
   unvaluable_movement_count: 0,
+  unvaluable_value: '0.00',
   valuation_value: '278500.00',
   valuation_difference: '0.00',
   valued_movement_count: 40,
@@ -900,6 +901,63 @@ const busyText = card(busy, NO_POSITIONS);
 ok('...and the SAME kobo across 4,000 movements reads differently',
    busyText.includes('across 4,000 movements') && !busyText.includes('across 40 movements'),
    busyText.slice(0, 200));
+
+// --- 048: THE MOVEMENT WITH NO COST BASIS, IN WORDS SOMEBODY CAN ACT ON ---
+// The card used to say these movements were "on neither side", which is the same
+// false claim 047's comment made. They are on one side: absent from the ledger,
+// PRESENT in the valuation, because the valuation is quantity times an average
+// and the movement moved the quantity.
+ok('with nothing unvaluable, the sentence is absent',
+   !agreesText.includes('no cost history'));
+
+const unvaluable = reconciliationRows.rows([
+  WIRE_RECON({
+    unvaluable_movement_count: 1,
+    unvaluable_value: '-4000.00',
+    valuation_value: '274500.00',
+    valuation_difference: '0.00',
+  }),
+])[0];
+ok('the boundary parses the new bucket as a number',
+   unvaluable.unvaluable_value === -4000 &&
+   typeof unvaluable.unvaluable_value === 'number');
+
+const unvaluableText = card(unvaluable, NO_POSITIONS);
+// RULE 27, and the defect each one turns red for:
+// Dropping unvaluable_value from the sentence, or formatting the raw signed
+// number, turns this red while every other assertion on the card stays green.
+ok('...the card NAMES what the unvalued quantity is worth',
+   unvaluableText.includes(money(4000)), unvaluableText.slice(0, 400));
+// Reverting the sentence to 047's claim turns this red. It is asserted as an
+// ABSENCE because the wrong version is a specific wrong sentence.
+ok('...and no longer claims it is "on neither side"',
+   !unvaluableText.includes('neither side'));
+// A figure with no instruction is a figure an owner cannot act on (rule 16/25):
+// the effect is on screen, the general rule is behind the information icon.
+ok('...says which side it IS on',
+   unvaluableText.includes('in the stock valuation and not on the books'),
+   unvaluableText.slice(0, 400));
+ok('...and says what to do about it',
+   unvaluableText.includes('write-off'), unvaluableText.slice(0, 400));
+// The whole point of 048: with the bucket reported, the headline figure is zero
+// again, so the card must NOT read as a failure for a cause it has explained.
+ok('...while the reconciliation still reads as agreeing',
+   unvaluableText.includes('Agrees') && !unvaluableText.includes('needs looking at'));
+
+// TWO unvaluable movements must read differently from one, or the count is
+// decoration — the same test the residue denominator gets above.
+const unvaluableTwo = reconciliationRows.rows([
+  WIRE_RECON({
+    unvaluable_movement_count: 2,
+    unvaluable_value: '-4000.00',
+    valuation_value: '274500.00',
+  }),
+])[0];
+const unvaluableTwoText = card(unvaluableTwo, NO_POSITIONS);
+ok('...and two of them read as a plural, not "1 movement"',
+   unvaluableTwoText.includes('2 movements') &&
+   unvaluableTwoText.includes('quantities they'),
+   unvaluableTwoText.slice(0, 300));
 
 // --- THE NAMED EXCEPTION --------------------------------------------------
 const negative = reconciliationRows.rows([

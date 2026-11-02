@@ -278,13 +278,25 @@ export function InventoryReconciliationCard({
           )} of stock movement was recorded before this property began posting to the ledger, so it is in the valuation and deliberately not on the books.`}
         </p>
       ) : null}
+      {/* 048: THIS SENTENCE USED TO BE WRONG, in the same way 047's comment was.
+          It said these movements were "on neither side". They are on one: absent
+          from the ledger, PRESENT in the valuation, because the valuation is
+          quantity times an average and the movement moved the quantity. It now
+          names the amount, says which way the hole runs, and says what to do —
+          an owner can act on "write it off properly or correct the count", and
+          cannot act on "they are on neither side". */}
       {row.unvaluable_movement_count > 0 ? (
         <p className="text-sm text-charcoal-muted">
           {`${row.unvaluable_movement_count} movement${
             row.unvaluable_movement_count === 1 ? '' : 's'
-          } could not be valued — stock left a position that had no cost history — so ${
-            row.unvaluable_movement_count === 1 ? 'it is' : 'they are'
-          } on neither side.`}
+          } left a position that had no cost history, so no cost went with the stock. The ${
+            row.unvaluable_movement_count === 1 ? 'quantity it' : 'quantities they'
+          } moved ${
+            row.unvaluable_movement_count === 1 ? 'is' : 'are'
+          } worth ${formatMoney(
+            Math.abs(row.unvaluable_value),
+            currency,
+          )} at the current average, which is in the stock valuation and not on the books. To clear it, put the cost right where the stock came in, then record the loss as a write-off.`}
         </p>
       ) : null}
     </div>
