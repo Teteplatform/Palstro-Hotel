@@ -89,6 +89,14 @@ export interface DataTableProps<T> {
   // purchasing, text-xs on the provenance report).
   textClass?: string;
   tableClassName?: string;
+  // EACH TABLE KEEPS ITS OWN LOOK. The provenance report is text-xs with a
+  // divided tbody and a heavier header; purchasing is text-sm with bordered
+  // rows. Restyling one to match the other would be a visual change nobody
+  // asked for, so the primitive owns the STRUCTURE and these two carry the
+  // look across. Above the breakpoint every converted table renders byte-for-
+  // byte what it rendered before.
+  headerRowClassName?: string;
+  bodyClassName?: string;
   // Classes for a whole row, by row — used for the zebra and border rules each
   // table already had.
   rowClassName?: (row: T, index: number) => string;
@@ -104,6 +112,8 @@ export function DataTable<T>({
   minWidthClass,
   textClass = 'text-sm',
   tableClassName = '',
+  headerRowClassName = 'border-b border-sand-border text-left text-xs font-medium text-charcoal-muted',
+  bodyClassName = '',
   rowClassName,
   cardListLabel,
 }: DataTableProps<T>) {
@@ -128,7 +138,7 @@ export function DataTable<T>({
     <div className="overflow-x-auto">
       <table className={`w-full ${minWidthClass} ${textClass} ${tableClassName}`}>
         <thead>
-          <tr className="border-b border-sand-border text-left text-xs font-medium text-charcoal-muted">
+          <tr className={headerRowClassName}>
             {columns.map((column) => (
               <th
                 key={column.key}
@@ -146,7 +156,7 @@ export function DataTable<T>({
             ))}
           </tr>
         </thead>
-        <tbody>
+        <tbody className={bodyClassName}>
           {rows.map((row, index) => (
             <tr
               key={rowKey(row)}

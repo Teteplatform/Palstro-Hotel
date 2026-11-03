@@ -301,5 +301,107 @@ act(() => {
 });
 phone.host.remove();
 
+// ===========================================================================
+// PART 3 — A READ-ONLY TABLE FROM A DIFFERENT MODULE
+// ===========================================================================
+// THE PROVENANCE TABLES WERE THE ODD ONES OUT and are now through the same
+// primitive. This part exists because "the odd one out is the one nobody tests"
+// applies to the proof as much as to the code: a primitive proven only against
+// the receive form would be proven only for editable tables with a tick box, and
+// the three provenance tables have neither.
+//
+// It also guards the thing that conversion could plausibly have broken and the
+// type checker could not see: these tables keep their OWN look (text-xs, a
+// divided tbody, a heavier header) rather than inheriting purchasing's, so a
+// primitive that hard-coded one module's classes would quietly restyle a screen
+// nobody asked to change.
+console.log('\n=== 3. A read-only table from another module, same primitive ===');
+
+const WIRE_OVER: unknown[] = [
+  {
+    id: 'ovr-1',
+    tenant_id: 't-1',
+    property_id: 'p-1',
+    purchase_receipt_id: 'gr-9',
+    purchase_order_id: 'po-9',
+    purchase_order_line_id: 'pol-9',
+    receipt_number: 'GRN-000002',
+    order_number: 'PO-000001',
+    business_date: '2026-11-03',
+    created_at: '2026-11-03T09:00:00Z',
+    delivery_note: null,
+    invoice_number: null,
+    authorised_by: 'u-manager-7f3a1c9e',
+    created_by: 'u-store',
+    supplier_id: 's-9',
+    supplier_name: 'Bonny Fresh Foods',
+    supplier_code: 'BFF',
+    line_number: 1,
+    inventory_item_id: 'i-oil',
+    item_name: 'Vegetable oil',
+    item_code: 'FD-022',
+    base_unit: 'litre',
+    location_name: 'Main Store',
+    ordered_quantity: '20.0000',
+    received_to_date: '25.0000',
+    quantity: '25.0000',
+    over_quantity: '5.0000',
+    over_value: '17500.00',
+    unit_cost: '3500.00',
+    reason: 'supplier sent five litres extra',
+    note: null,
+    stock_movement_id: 'sm-9',
+  },
+];
+
+const { OverReceiptsTable } = await import(
+  '../src/components/admin/inventory/ProvenanceTab'
+);
+const { overReceiptRows } = await import('../src/lib/stockProvenance');
+const overRows = overReceiptRows.rows(WIRE_OVER);
+
+const overTable = () =>
+  React.createElement(OverReceiptsTable, {
+    rows: overRows,
+    currency: 'NGN',
+    userId: null,
+  });
+
+narrow = false;
+const overWide = mount(overTable());
+const overWideTable = overWide.host.querySelector('table');
+ok('above the breakpoint it is still a table', overWideTable !== null);
+ok('...keeping its own text size rather than inheriting purchasing\'s',
+   overWideTable?.className.includes('text-xs') === true,
+   overWideTable?.className ?? '(none)');
+ok('...and its own divided body',
+   overWide.host.querySelector('tbody')?.className.includes('divide-y') === true);
+act(() => {
+  overWide.root.unmount();
+});
+overWide.host.remove();
+
+narrow = true;
+const overPhone = mount(overTable());
+const overCards = Array.from(
+  overPhone.host.querySelectorAll(
+    'ul[aria-label="Deliveries accepted above what was ordered"] > li',
+  ),
+);
+ok('at phone width it is a card', overCards.length === 1, `${overCards.length} cards`);
+// The question an owner opens this report to ask is "what did we accept that
+// nobody ordered, and who said yes" — so the excess and the authoriser must be
+// in the card, not off the side of a table.
+const overText = overCards[0]?.textContent ?? '';
+ok('...carrying the excess, its cost and who approved it',
+   overText.includes('+5') &&
+   overText.includes('17,500') &&
+   overText.includes('staff u-manage'),
+   overText.slice(0, 120));
+act(() => {
+  overPhone.root.unmount();
+});
+overPhone.host.remove();
+
 console.log(`\n================  ${pass} PASSED, ${fail} FAILED  ================`);
 process.exit(fail ? 1 : 0);

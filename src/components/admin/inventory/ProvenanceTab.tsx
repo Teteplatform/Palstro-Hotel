@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Pagination } from '../../ui/Pagination';
+import { DataTable, type DataColumn } from '../../ui/DataTable';
 import { ScreenHeader } from '../../ui/ScreenHeader';
 import { DateField } from '../../ui/form';
 import { formatDisplayDate, formatDisplayDateTimeInZone } from '../../../lib/date';
@@ -243,43 +244,18 @@ function DirectReceipts({
       error={error}
       empty="No deliveries have gone anywhere other than a store."
     >
-      <table className="w-full min-w-[52rem] border-collapse text-xs">
-        <thead>
-          <tr className="border-b border-sand-border text-left">
-            <Th>Date</Th>
-            <Th>Item</Th>
-            <Th>Went to</Th>
-            <Th right>Quantity</Th>
-            <Th right>Value</Th>
-            <Th>Supplier</Th>
-            <Th>Why</Th>
-            <Th>Authorised by</Th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-sand-border/50">
-          {rows.map((row) => (
-            <tr key={row.id}>
-              <Td>{formatDisplayDate(row.business_date)}</Td>
-              <Td strong>
-                {row.item_name}
-                {row.item_code ? (
-                  <span className="block text-charcoal-muted">{row.item_code}</span>
-                ) : null}
-              </Td>
-              <Td>{row.location_name}</Td>
-              <Td right>
-                {formatQuantity(row.quantity)} {row.base_unit}
-              </Td>
-              <Td right>{formatMoney(row.receipt_value, currency)}</Td>
-              <Td>{row.supplier ?? MISSING_VALUE}</Td>
-              {/* THE ANSWER, beside the question. Without this column the screen
-                  would generate a conversation per row. */}
-              <Td>{row.reason ?? MISSING_VALUE}</Td>
-              <Td>{staffLabel(row.authorised_by, userId)}</Td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <DataTable
+        columns={directReceiptColumns(currency, userId)}
+        rows={rows}
+        rowKey={(row) => row.id}
+        minWidthClass="min-w-[52rem]"
+        textClass="text-xs"
+        tableClassName="border-collapse"
+        headerRowClassName="border-b border-sand-border text-left"
+        bodyClassName="divide-y divide-sand-border/50"
+        rowClassName={() => ''}
+        cardListLabel="Deliveries that did not go to a store"
+      />
       <p className="mt-2 text-[11px] text-charcoal-muted">
         Recorded {rows.length > 0
           ? formatDisplayDateTimeInZone(rows[0].created_at, timezone)
@@ -399,63 +375,18 @@ export function OverReceiptsTable({
   userId: string | null;
 }) {
   return (
-    <table className="w-full min-w-[56rem] border-collapse text-xs">
-      <thead>
-        <tr className="border-b border-sand-border text-left">
-          <Th>Date</Th>
-          <Th>Item</Th>
-          <Th>Delivery</Th>
-          <Th>Supplier</Th>
-          <Th right>Ordered</Th>
-          <Th right>Arrived</Th>
-          <Th right>Over by</Th>
-          <Th right>Cost of the extra</Th>
-          <Th>Why</Th>
-          <Th>Authorised by</Th>
-        </tr>
-      </thead>
-      <tbody className="divide-y divide-sand-border/50">
-        {rows.map((row) => (
-          <tr key={row.id}>
-            <Td>{formatDisplayDate(row.business_date)}</Td>
-            <Td strong>
-              {row.item_name ?? MISSING_VALUE}
-              {row.item_code ? (
-                <span className="block text-charcoal-muted">{row.item_code}</span>
-              ) : null}
-            </Td>
-            <Td>
-              {row.receipt_number}
-              <span className="block text-charcoal-muted">
-                {row.order_number}
-              </span>
-            </Td>
-            <Td>{row.supplier_name}</Td>
-            {/* ORDERED is the whole line's figure and ARRIVED is THIS
-                delivery's, which is the pair somebody needs to see the shape
-                of: 20 ordered, 25 came. OVER BY is the part of this delivery
-                above the line, so two deliveries past it do not both claim the
-                whole excess. */}
-            <Td right>
-              {formatQuantity(row.ordered_quantity)} {row.base_unit ?? ''}
-            </Td>
-            <Td right>
-              {formatQuantity(row.quantity)} {row.base_unit ?? ''}
-            </Td>
-            <Td right>
-              <span className="font-semibold text-amber-800">
-                +{formatQuantity(row.over_quantity)} {row.base_unit ?? ''}
-              </span>
-            </Td>
-            <Td right>{formatMoney(row.over_value, currency)}</Td>
-            <Td>{row.reason ?? MISSING_VALUE}</Td>
-            {/* THE PROMISE THE PIN DIALOG MAKES, kept where somebody can read
-                it. */}
-            <Td>{staffLabel(row.authorised_by, userId)}</Td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
+      <DataTable
+        columns={overReceiptColumns(currency, userId)}
+        rows={rows}
+        rowKey={(row) => row.id}
+        minWidthClass="min-w-[56rem]"
+        textClass="text-xs"
+        tableClassName="border-collapse"
+        headerRowClassName="border-b border-sand-border text-left"
+        bodyClassName="divide-y divide-sand-border/50"
+        rowClassName={() => ''}
+        cardListLabel="Deliveries accepted above what was ordered"
+      />
   );
 }
 
@@ -525,46 +456,18 @@ function LateOpenings({
       error={error}
       empty="Every opening balance was entered before its location started being used."
     >
-      <table className="w-full min-w-[48rem] border-collapse text-xs">
-        <thead>
-          <tr className="border-b border-sand-border text-left">
-            <Th>Dated</Th>
-            <Th>Item</Th>
-            <Th>Location</Th>
-            <Th right>Quantity</Th>
-            <Th right>Value</Th>
-            <Th>Already in use since</Th>
-            <Th>Note</Th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-sand-border/50">
-          {rows.map((row) => (
-            <tr key={row.id}>
-              <Td>{formatDisplayDate(row.business_date)}</Td>
-              <Td strong>
-                {row.item_name}
-                {row.item_code ? (
-                  <span className="block text-charcoal-muted">{row.item_code}</span>
-                ) : null}
-              </Td>
-              <Td>{row.location_name}</Td>
-              <Td right>
-                {formatQuantity(row.quantity)} {row.base_unit}
-              </Td>
-              <Td right>{formatMoney(row.opening_value, currency)}</Td>
-              {/* WHAT WAS ALREADY HAPPENING THERE — the fact that turns a flag
-                  into a question somebody can answer. */}
-              <Td>
-                {formatDisplayDate(row.first_movement_date)}
-                <span className="block text-charcoal-muted">
-                  a {movementTypeLabel(row.first_movement_type as never).toLowerCase()}
-                </span>
-              </Td>
-              <Td>{row.note ?? MISSING_VALUE}</Td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <DataTable
+        columns={lateOpeningColumns(currency)}
+        rows={rows}
+        rowKey={(row) => row.id}
+        minWidthClass="min-w-[48rem]"
+        textClass="text-xs"
+        tableClassName="border-collapse"
+        headerRowClassName="border-b border-sand-border text-left"
+        bodyClassName="divide-y divide-sand-border/50"
+        rowClassName={() => ''}
+        cardListLabel="Opening balances in a location already in use"
+      />
       <Pagination
         page={page}
         pageSize={pageSize}
@@ -630,35 +533,278 @@ function Section({
   );
 }
 
-function Th({ children, right = false }: { children: React.ReactNode; right?: boolean }) {
+
+// ---------------------------------------------------------------------------
+// The column specs (1.1a2's follow-up)
+// ---------------------------------------------------------------------------
+// THESE THREE TABLES ARE THE SAME SHAPE AS PURCHASING'S SEVEN and were left out
+// of 1.1a2 only because they are not purchasing screens — including the
+// over-receipt table 049 added, which would have been a poor one to leave as the
+// odd one out given it is the newest. They are read-only, so the consequence on
+// a phone is annoyance rather than danger, but the argument for converting them
+// is the one that applied to the seven: the reason tables share a defect is that
+// they were written separately, and the odd one out is the one nobody tests.
+//
+// The look is carried across verbatim — text-xs, a divided tbody, the heavier
+// header — so above the breakpoint nothing about these screens changed.
+const TH_CLASS = 'py-1.5 pr-3 font-semibold whitespace-nowrap text-charcoal-muted';
+const TD_CLASS = 'py-2 pr-3 align-top text-charcoal-muted';
+const TD_RIGHT_CLASS = 'py-2 pr-3 align-top text-right tabular-nums text-charcoal-muted';
+const TD_STRONG_CLASS = 'py-2 pr-3 align-top font-medium text-charcoal';
+
+function itemCell(name: string | null, code: string | null) {
   return (
-    <th
-      scope="col"
-      className={`py-1.5 pr-3 font-semibold whitespace-nowrap text-charcoal-muted ${
-        right ? 'text-right' : ''
-      }`}
-    >
-      {children}
-    </th>
+    <>
+      {name ?? MISSING_VALUE}
+      {code ? <span className="block text-charcoal-muted">{code}</span> : null}
+    </>
   );
 }
 
-function Td({
-  children,
-  right = false,
-  strong = false,
-}: {
-  children: React.ReactNode;
-  right?: boolean;
-  strong?: boolean;
-}) {
-  return (
-    <td
-      className={`py-2 pr-3 align-top ${right ? 'text-right tabular-nums' : ''} ${
-        strong ? 'font-medium text-charcoal' : 'text-charcoal-muted'
-      }`}
-    >
-      {children}
-    </td>
-  );
+function directReceiptColumns(
+  currency: string,
+  userId: string | null,
+): DataColumn<DirectReceiptRow>[] {
+  return [
+    {
+      key: 'date',
+      header: 'Date',
+      headerClassName: TH_CLASS,
+      cellClassName: TD_CLASS,
+      cell: (row) => formatDisplayDate(row.business_date),
+    },
+    {
+      key: 'item',
+      role: 'heading',
+      header: 'Item',
+      headerClassName: TH_CLASS,
+      cellClassName: TD_STRONG_CLASS,
+      cell: (row) => itemCell(row.item_name, row.item_code),
+    },
+    {
+      key: 'wentTo',
+      header: 'Went to',
+      headerClassName: TH_CLASS,
+      cellClassName: TD_CLASS,
+      cell: (row) => row.location_name,
+    },
+    {
+      key: 'quantity',
+      header: 'Quantity',
+      align: 'right',
+      headerClassName: TH_CLASS,
+      cellClassName: TD_RIGHT_CLASS,
+      cell: (row) => (
+        <>
+          {formatQuantity(row.quantity)} {row.base_unit}
+        </>
+      ),
+    },
+    {
+      key: 'value',
+      header: 'Value',
+      align: 'right',
+      headerClassName: TH_CLASS,
+      cellClassName: TD_RIGHT_CLASS,
+      cell: (row) => formatMoney(row.receipt_value, currency),
+    },
+    {
+      key: 'supplier',
+      header: 'Supplier',
+      headerClassName: TH_CLASS,
+      cellClassName: TD_CLASS,
+      cell: (row) => row.supplier ?? MISSING_VALUE,
+    },
+    {
+      // THE ANSWER, beside the question. Without this column the screen would
+      // generate a conversation per row.
+      key: 'why',
+      header: 'Why',
+      headerClassName: TH_CLASS,
+      cellClassName: TD_CLASS,
+      cell: (row) => row.reason ?? MISSING_VALUE,
+    },
+    {
+      key: 'authorised',
+      header: 'Authorised by',
+      headerClassName: TH_CLASS,
+      cellClassName: TD_CLASS,
+      cell: (row) => staffLabel(row.authorised_by, userId),
+    },
+  ];
+}
+
+function overReceiptColumns(
+  currency: string,
+  userId: string | null,
+): DataColumn<OverReceiptRow>[] {
+  return [
+    {
+      key: 'date',
+      header: 'Date',
+      headerClassName: TH_CLASS,
+      cellClassName: TD_CLASS,
+      cell: (row) => formatDisplayDate(row.business_date),
+    },
+    {
+      key: 'item',
+      role: 'heading',
+      header: 'Item',
+      headerClassName: TH_CLASS,
+      cellClassName: TD_STRONG_CLASS,
+      cell: (row) => itemCell(row.item_name, row.item_code),
+    },
+    {
+      key: 'delivery',
+      header: 'Delivery',
+      headerClassName: TH_CLASS,
+      cellClassName: TD_CLASS,
+      cell: (row) => (
+        <>
+          {row.receipt_number}
+          <span className="block text-charcoal-muted">{row.order_number}</span>
+        </>
+      ),
+    },
+    {
+      key: 'supplier',
+      header: 'Supplier',
+      headerClassName: TH_CLASS,
+      cellClassName: TD_CLASS,
+      cell: (row) => row.supplier_name,
+    },
+    {
+      // ORDERED is the whole line's figure and ARRIVED is THIS delivery's,
+      // which is the pair somebody needs to see the shape of: 20 ordered, 25
+      // came. OVER BY is the part of this delivery above the line, so two
+      // deliveries past it do not both claim the whole excess.
+      key: 'ordered',
+      header: 'Ordered',
+      align: 'right',
+      headerClassName: TH_CLASS,
+      cellClassName: TD_RIGHT_CLASS,
+      cell: (row) => (
+        <>
+          {formatQuantity(row.ordered_quantity)} {row.base_unit ?? ''}
+        </>
+      ),
+    },
+    {
+      key: 'arrived',
+      header: 'Arrived',
+      align: 'right',
+      headerClassName: TH_CLASS,
+      cellClassName: TD_RIGHT_CLASS,
+      cell: (row) => (
+        <>
+          {formatQuantity(row.quantity)} {row.base_unit ?? ''}
+        </>
+      ),
+    },
+    {
+      key: 'overBy',
+      header: 'Over by',
+      align: 'right',
+      headerClassName: TH_CLASS,
+      cellClassName: TD_RIGHT_CLASS,
+      cell: (row) => (
+        <span className="font-semibold text-amber-800">
+          +{formatQuantity(row.over_quantity)} {row.base_unit ?? ''}
+        </span>
+      ),
+    },
+    {
+      key: 'overValue',
+      header: 'Cost of the extra',
+      align: 'right',
+      headerClassName: TH_CLASS,
+      cellClassName: TD_RIGHT_CLASS,
+      cell: (row) => formatMoney(row.over_value, currency),
+    },
+    {
+      key: 'why',
+      header: 'Why',
+      headerClassName: TH_CLASS,
+      cellClassName: TD_CLASS,
+      cell: (row) => row.reason ?? MISSING_VALUE,
+    },
+    {
+      // THE PROMISE THE PIN DIALOG MAKES, kept where somebody can read it.
+      key: 'authorised',
+      header: 'Authorised by',
+      headerClassName: TH_CLASS,
+      cellClassName: TD_CLASS,
+      cell: (row) => staffLabel(row.authorised_by, userId),
+    },
+  ];
+}
+
+function lateOpeningColumns(currency: string): DataColumn<LateOpeningRow>[] {
+  return [
+    {
+      key: 'dated',
+      header: 'Dated',
+      headerClassName: TH_CLASS,
+      cellClassName: TD_CLASS,
+      cell: (row) => formatDisplayDate(row.business_date),
+    },
+    {
+      key: 'item',
+      role: 'heading',
+      header: 'Item',
+      headerClassName: TH_CLASS,
+      cellClassName: TD_STRONG_CLASS,
+      cell: (row) => itemCell(row.item_name, row.item_code),
+    },
+    {
+      key: 'location',
+      header: 'Location',
+      headerClassName: TH_CLASS,
+      cellClassName: TD_CLASS,
+      cell: (row) => row.location_name,
+    },
+    {
+      key: 'quantity',
+      header: 'Quantity',
+      align: 'right',
+      headerClassName: TH_CLASS,
+      cellClassName: TD_RIGHT_CLASS,
+      cell: (row) => (
+        <>
+          {formatQuantity(row.quantity)} {row.base_unit}
+        </>
+      ),
+    },
+    {
+      key: 'value',
+      header: 'Value',
+      align: 'right',
+      headerClassName: TH_CLASS,
+      cellClassName: TD_RIGHT_CLASS,
+      cell: (row) => formatMoney(row.opening_value, currency),
+    },
+    {
+      // WHAT WAS ALREADY HAPPENING THERE — the fact that turns a flag into a
+      // question somebody can answer.
+      key: 'inUseSince',
+      header: 'Already in use since',
+      headerClassName: TH_CLASS,
+      cellClassName: TD_CLASS,
+      cell: (row) => (
+        <>
+          {formatDisplayDate(row.first_movement_date)}
+          <span className="block text-charcoal-muted">
+            a {movementTypeLabel(row.first_movement_type as never).toLowerCase()}
+          </span>
+        </>
+      ),
+    },
+    {
+      key: 'note',
+      header: 'Note',
+      headerClassName: TH_CLASS,
+      cellClassName: TD_CLASS,
+      cell: (row) => row.note ?? MISSING_VALUE,
+    },
+  ];
 }

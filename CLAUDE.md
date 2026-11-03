@@ -835,6 +835,30 @@ first.
     fail before trusting it (rule 22). A passing SQL proof says nothing about
     what the browser does with the JSON.
 
+    **JUDGE A CONSOLE ON A FRESH TAB, NEVER ON A RELOADED ONE.** On this setup
+    the console buffer survives `location.reload()`, so errors Vite logged while
+    a file was half-edited are still sitting there afterwards reading as live
+    defects — complete with stack traces, pointing at real components, in a
+    screen that is now working perfectly.
+
+    *This happened on 3 November and cost a regression report that was about to
+    be written for a bug that did not exist.* Mid-conversion the console held
+    `ReferenceError: DataTable is not defined` and `Failed to reload … 500`; the
+    page rendered correctly, `tsc -b` was clean, a reload did not clear a line of
+    it. Opening a new tab gave `No console logs.` The giveaway, in hindsight, was
+    the `?t=1793699754444` cache-buster in the stack frames: those URLs were from
+    an earlier edit, not from the load being looked at.
+
+    So: open a new tab, load the page there, and read that console. And when a
+    console does show something, check the timestamps in the stack frames before
+    believing it is about the code as it stands.
+
+    *Why this is a rule and not a note: it is the same family as a dry run that
+    is more permissive than production. A harness that lies in the reassuring
+    direction wastes a bug; a harness that lies in the alarming direction wastes
+    a day chasing one that was never there. Both are lies, and the second one
+    feels like diligence while it is happening.*
+
     **THE TYPE CHECK IS `tsc -b`. `npx tsc --noEmit` CHECKS NOTHING IN THIS
     REPO, AND NEVER HAS.** The root `tsconfig.json` is a solution file —
     `"files": []` with `references` to `tsconfig.app.json` and
