@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Pagination } from '../../ui/Pagination';
 import { ScreenHeader } from '../../ui/ScreenHeader';
 import { ActionMenu } from '../../ui/ActionMenu';
+import { DataTable, type DataColumn } from '../../ui/DataTable';
 import { PlusIcon } from '../../ui/icons';
 import { Select, TextField } from '../../ui/form';
 import { useToast } from '../../ui/Toast';
@@ -309,89 +310,110 @@ export function SupplierTable({
   onEdit: (s: Supplier) => void;
   onRetire: (s: Supplier) => void;
 }) {
+  const columns: DataColumn<Supplier>[] = [
+    {
+      key: 'supplier',
+      role: 'heading',
+      header: 'Supplier',
+      cellClassName: 'pr-3',
+      cell: (row) => (
+        <>
+          <button
+            type="button"
+            onClick={() => onView(row)}
+            className="text-left font-medium text-charcoal underline-offset-2 hover:underline focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
+          >
+            {row.name}
+          </button>
+          {row.code ? (
+            <span className="ml-2 text-xs text-charcoal-muted">{row.code}</span>
+          ) : null}
+        </>
+      ),
+    },
+    {
+      key: 'contact',
+      header: 'Contact',
+      cellClassName: 'pr-3 text-charcoal-muted',
+      cell: (row) => row.contact_name ?? MISSING_VALUE,
+    },
+    {
+      key: 'phone',
+      header: 'Phone',
+      cellClassName: 'pr-3 text-charcoal-muted',
+      cell: (row) => row.phone ?? MISSING_VALUE,
+    },
+    {
+      key: 'tin',
+      header: 'TIN',
+      cellClassName: 'pr-3 text-charcoal-muted',
+      cell: (row) => row.tax_id ?? MISSING_VALUE,
+    },
+    {
+      key: 'bank',
+      header: 'Bank',
+      cellClassName: 'pr-3 text-charcoal-muted',
+      cell: (row) => row.bank_name ?? MISSING_VALUE,
+    },
+    {
+      key: 'inUse',
+      header: 'In use',
+      cellClassName: 'pr-3',
+      cell: (row) =>
+        row.is_active ? (
+          <span className="text-charcoal">Yes</span>
+        ) : (
+          <span className="text-charcoal-muted">Off</span>
+        ),
+    },
+    {
+      // THE ACTIONS SIT WITH THE NAME ON A PHONE, which is the one place the
+      // card shape changes where a control lives rather than just how it is
+      // stacked: a kebab at the bottom of a card is a kebab for nothing in
+      // particular. 'select' puts it beside the card's title.
+      key: 'actions',
+      role: 'select',
+      header: '',
+      headerClassName: 'w-10',
+      cellClassName: '',
+      cell: (row) => (
+        /* PORTALLED (rule 23), so the last row's menu is reachable at
+           1366x768 and at 360px rather than being cut in half by this
+           table's overflow-x wrapper. */
+        <ActionMenu
+          label={`Actions for ${row.name}`}
+          items={[
+            {
+              key: 'activity',
+              label: 'Orders and deliveries',
+              hint: 'What this hotel has ordered from them.',
+              onSelect: () => onView(row),
+            },
+            {
+              key: 'edit',
+              label: 'Edit',
+              onSelect: () => onEdit(row),
+            },
+            {
+              key: 'retire',
+              label: 'Remove',
+              hint: 'Their orders stay on the record.',
+              tone: 'danger',
+              onSelect: () => onRetire(row),
+            },
+          ]}
+        />
+      ),
+    },
+  ];
+
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[44rem] text-sm">
-        <thead>
-          <tr className="border-b border-sand-border text-left text-xs font-medium text-charcoal-muted">
-            <th className="py-2 pr-3">Supplier</th>
-            <th className="py-2 pr-3">Contact</th>
-            <th className="py-2 pr-3">Phone</th>
-            <th className="py-2 pr-3">TIN</th>
-            <th className="py-2 pr-3">Bank</th>
-            <th className="py-2 pr-3">In use</th>
-            <th className="w-10 py-2" />
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr
-              key={row.id}
-              className="border-b border-sand-border/60 last:border-0"
-            >
-              <td className="py-2 pr-3">
-                <button
-                  type="button"
-                  onClick={() => onView(row)}
-                  className="text-left font-medium text-charcoal underline-offset-2 hover:underline focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
-                >
-                  {row.name}
-                </button>
-                {row.code ? (
-                  <span className="ml-2 text-xs text-charcoal-muted">{row.code}</span>
-                ) : null}
-              </td>
-              <td className="py-2 pr-3 text-charcoal-muted">
-                {row.contact_name ?? MISSING_VALUE}
-              </td>
-              <td className="py-2 pr-3 text-charcoal-muted">
-                {row.phone ?? MISSING_VALUE}
-              </td>
-              <td className="py-2 pr-3 text-charcoal-muted">
-                {row.tax_id ?? MISSING_VALUE}
-              </td>
-              <td className="py-2 pr-3 text-charcoal-muted">
-                {row.bank_name ?? MISSING_VALUE}
-              </td>
-              <td className="py-2 pr-3">
-                {row.is_active ? (
-                  <span className="text-charcoal">Yes</span>
-                ) : (
-                  <span className="text-charcoal-muted">Off</span>
-                )}
-              </td>
-              <td className="py-2">
-                {/* PORTALLED (rule 23), so the last row's menu is reachable at
-                    1366x768 and at 360px rather than being cut in half by this
-                    table's overflow-x wrapper. */}
-                <ActionMenu
-                  label={`Actions for ${row.name}`}
-                  items={[
-                    {
-                      key: 'activity',
-                      label: 'Orders and deliveries',
-                      hint: 'What this hotel has ordered from them.',
-                      onSelect: () => onView(row),
-                    },
-                    {
-                      key: 'edit',
-                      label: 'Edit',
-                      onSelect: () => onEdit(row),
-                    },
-                    {
-                      key: 'retire',
-                      label: 'Remove',
-                      hint: 'Their orders stay on the record.',
-                      tone: 'danger',
-                      onSelect: () => onRetire(row),
-                    },
-                  ]}
-                />
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <DataTable
+      columns={columns}
+      rows={rows}
+      rowKey={(row) => row.id}
+      minWidthClass="min-w-[44rem]"
+      cardListLabel="Suppliers"
+    />
   );
 }

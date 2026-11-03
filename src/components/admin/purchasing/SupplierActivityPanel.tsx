@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ScreenHeader } from '../../ui/ScreenHeader';
+import { DataTable, type DataColumn } from '../../ui/DataTable';
 import { describeError } from '../../../lib/errors';
 import { formatDisplayDate } from '../../../lib/date';
-import { formatMoney } from '../../../lib/format';
+import { formatMoney, MISSING_VALUE } from '../../../lib/format';
 import { fetchSupplierActivity } from '../../../lib/suppliers';
 import {
   NO_ACTIVITY_YET,
@@ -155,87 +156,95 @@ export function SupplierActivityTable({
   rows: SupplierActivityRow[];
   currency: string;
 }) {
+  // THREE BASES, NAMED IN THE HEADERS. The walk showed one row reading
+  // "Ordered 190,000 · Arrived 200,000 · Outstanding 12,000" — every figure
+  // correct, and together unreadable, because the reader has no way to know that
+  // the first is at the agreed price, the second at the invoiced one, and the
+  // third is what has not been invoiced at all. The arithmetic was never the
+  // problem; the labels were lying by omission. The ⓘ carries the rest,
+  // including the sentence this row is actually saying.
+  //
+  // headerNote is a FIELD rather than markup inside `header` (1.1a2) so the card
+  // shape can render it as a qualifier beside the label instead of a second line
+  // nobody reads on a phone.
+  const columns: DataColumn<SupplierActivityRow>[] = [
+    {
+      key: 'order',
+      role: 'heading',
+      header: 'Order',
+      cellClassName: 'pr-3 font-medium text-charcoal',
+      cell: (row) => row.order_number,
+    },
+    {
+      key: 'raised',
+      header: 'Raised',
+      cellClassName: 'pr-3 text-charcoal-muted',
+      cell: (row) => formatDisplayDate(row.order_date),
+    },
+    {
+      key: 'expected',
+      header: 'Expected',
+      cellClassName: 'pr-3 text-charcoal-muted',
+      cell: (row) => (
+        <>
+          {row.expected_date ? formatDisplayDate(row.expected_date) : MISSING_VALUE}
+          {/* A LIVE CONSEQUENCE, not teaching (rule 25): it appears only when
+              the promised date has passed with something still outstanding,
+              and it is the row's whole point. */}
+          {row.is_late ? (
+            <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-900">
+              Late
+            </span>
+          ) : null}
+        </>
+      ),
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      cellClassName: 'pr-3',
+      cell: (row) => (
+        <span
+          className={`rounded-full px-2 py-0.5 text-xs font-semibold ${purchaseStatusTone(row.status)}`}
+        >
+          {purchaseStatusLabel(row.status)}
+        </span>
+      ),
+    },
+    {
+      key: 'ordered',
+      header: 'Ordered',
+      headerNote: 'at the agreed price',
+      align: 'right',
+      cellClassName: 'pr-3 tabular-nums text-charcoal',
+      cell: (row) => formatMoney(row.ordered_value, currency),
+    },
+    {
+      key: 'arrived',
+      header: 'Arrived',
+      headerNote: 'at the invoiced price',
+      align: 'right',
+      cellClassName: 'pr-3 tabular-nums text-charcoal',
+      cell: (row) => formatMoney(row.received_value, currency),
+    },
+    {
+      key: 'outstanding',
+      header: 'Still to come',
+      headerNote: 'at the agreed price',
+      align: 'right',
+      cellClassName: 'tabular-nums text-charcoal',
+      cell: (row) => formatMoney(row.outstanding_value, currency),
+    },
+  ];
+
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[46rem] text-sm">
-        <thead>
-          <tr className="border-b border-sand-border text-left text-xs font-medium text-charcoal-muted">
-            <th className="py-2 pr-3">Order</th>
-            <th className="py-2 pr-3">Raised</th>
-            <th className="py-2 pr-3">Expected</th>
-            <th className="py-2 pr-3">Status</th>
-            {/* THREE BASES, NAMED IN THE HEADERS. The walk showed one row
-                reading "Ordered 190,000 · Arrived 200,000 · Outstanding
-                12,000" — every figure correct, and together unreadable,
-                because the reader has no way to know that the first is at the
-                agreed price, the second at the invoiced one, and the third is
-                what has not been invoiced at all. The arithmetic was never the
-                problem; the labels were lying by omission. The ⓘ carries the
-                rest, including the sentence this row is actually saying. */}
-            <th className="py-2 pr-3 text-right">
-              Ordered
-              <span className="block text-[0.65rem] font-normal normal-case">
-                at the agreed price
-              </span>
-            </th>
-            <th className="py-2 pr-3 text-right">
-              Arrived
-              <span className="block text-[0.65rem] font-normal normal-case">
-                at the invoiced price
-              </span>
-            </th>
-            <th className="py-2 text-right">
-              Still to come
-              <span className="block text-[0.65rem] font-normal normal-case">
-                at the agreed price
-              </span>
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr
-              key={row.purchase_order_id}
-              className="border-b border-sand-border/60 last:border-0"
-            >
-              <td className="py-2 pr-3 font-medium text-charcoal">
-                {row.order_number}
-              </td>
-              <td className="py-2 pr-3 text-charcoal-muted">
-                {formatDisplayDate(row.order_date)}
-              </td>
-              <td className="py-2 pr-3 text-charcoal-muted">
-                {row.expected_date ? formatDisplayDate(row.expected_date) : '—'}
-                {/* A LIVE CONSEQUENCE, not teaching (rule 25): it appears
-                    only when the promised date has passed with something
-                    still outstanding, and it is the row's whole point. */}
-                {row.is_late ? (
-                  <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-900">
-                    Late
-                  </span>
-                ) : null}
-              </td>
-              <td className="py-2 pr-3">
-                <span
-                  className={`rounded-full px-2 py-0.5 text-xs font-semibold ${purchaseStatusTone(row.status)}`}
-                >
-                  {purchaseStatusLabel(row.status)}
-                </span>
-              </td>
-              <td className="py-2 pr-3 text-right tabular-nums text-charcoal">
-                {formatMoney(row.ordered_value, currency)}
-              </td>
-              <td className="py-2 pr-3 text-right tabular-nums text-charcoal">
-                {formatMoney(row.received_value, currency)}
-              </td>
-              <td className="py-2 text-right tabular-nums text-charcoal">
-                {formatMoney(row.outstanding_value, currency)}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <DataTable
+      columns={columns}
+      rows={rows}
+      rowKey={(row) => row.purchase_order_id}
+      minWidthClass="min-w-[46rem]"
+      cardListLabel="Orders from this supplier"
+    />
   );
 }
 

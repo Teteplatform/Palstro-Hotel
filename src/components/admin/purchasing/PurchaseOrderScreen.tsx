@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ScreenHeader } from '../../ui/ScreenHeader';
 import { ActionMenu } from '../../ui/ActionMenu';
+import { DataTable, type DataColumn } from '../../ui/DataTable';
 import { TextField } from '../../ui/form';
 import { useToast } from '../../ui/Toast';
 import { useAuth } from '../../../hooks/useAuth';
@@ -394,60 +395,82 @@ export function OrderLinesTable({
       </p>
     );
   }
+
+  const columns: DataColumn<PurchaseOrderLineStatus>[] = [
+    {
+      key: 'item',
+      role: 'heading',
+      header: 'Item',
+      cellClassName: 'pr-3',
+      cell: (line) => (
+        <>
+          <span className="font-medium text-charcoal">
+            {line.item_name ?? line.description}
+          </span>
+          {line.item_code ? (
+            <span className="ml-2 text-xs text-charcoal-muted">
+              {line.item_code}
+            </span>
+          ) : null}
+        </>
+      ),
+    },
+    {
+      key: 'ordered',
+      header: 'Ordered',
+      align: 'right',
+      cellClassName: 'pr-3 tabular-nums text-charcoal',
+      cell: (line) => (
+        <>
+          {formatQuantity(line.ordered_quantity)} {line.base_unit}
+        </>
+      ),
+    },
+    {
+      key: 'cost',
+      header: 'Cost',
+      align: 'right',
+      cellClassName: 'pr-3 tabular-nums text-charcoal-muted',
+      cell: (line) => formatMoney(line.ordered_unit_cost, currency),
+    },
+    {
+      key: 'arrived',
+      header: 'Arrived',
+      align: 'right',
+      cellClassName: 'pr-3 tabular-nums text-charcoal',
+      cell: (line) => formatQuantity(line.received_quantity),
+    },
+    {
+      key: 'outstanding',
+      header: 'Outstanding',
+      align: 'right',
+      cellClassName: 'pr-3 tabular-nums text-charcoal',
+      cell: (line) => formatQuantity(line.outstanding_quantity),
+    },
+    {
+      key: 'state',
+      header: 'State',
+      cellClassName: 'text-xs',
+      cell: (line) =>
+        line.closed_short ? (
+          <span className="text-charcoal-muted">Closed short</span>
+        ) : line.is_settled ? (
+          <span className="text-charcoal-muted">Complete</span>
+        ) : (
+          <span className="font-semibold text-amber-800">Waiting</span>
+        ),
+    },
+  ];
+
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[44rem] text-sm">
-        <thead>
-          <tr className="border-b border-sand-border text-left text-xs font-medium text-charcoal-muted">
-            <th className="py-2 pr-3">Item</th>
-            <th className="py-2 pr-3 text-right">Ordered</th>
-            <th className="py-2 pr-3 text-right">Cost</th>
-            <th className="py-2 pr-3 text-right">Arrived</th>
-            <th className="py-2 pr-3 text-right">Outstanding</th>
-            <th className="py-2">State</th>
-          </tr>
-        </thead>
-        <tbody>
-          {lines.map((line) => (
-            <tr
-              key={line.purchase_order_line_id}
-              className="border-b border-sand-border/60 last:border-0"
-            >
-              <td className="py-2 pr-3">
-                <span className="font-medium text-charcoal">
-                  {line.item_name ?? line.description}
-                </span>
-                {line.item_code ? (
-                  <span className="ml-2 text-xs text-charcoal-muted">
-                    {line.item_code}
-                  </span>
-                ) : null}
-              </td>
-              <td className="py-2 pr-3 text-right tabular-nums text-charcoal">
-                {formatQuantity(line.ordered_quantity)} {line.base_unit}
-              </td>
-              <td className="py-2 pr-3 text-right tabular-nums text-charcoal-muted">
-                {formatMoney(line.ordered_unit_cost, currency)}
-              </td>
-              <td className="py-2 pr-3 text-right tabular-nums text-charcoal">
-                {formatQuantity(line.received_quantity)}
-              </td>
-              <td className="py-2 pr-3 text-right tabular-nums text-charcoal">
-                {formatQuantity(line.outstanding_quantity)}
-              </td>
-              <td className="py-2 text-xs">
-                {line.closed_short ? (
-                  <span className="text-charcoal-muted">Closed short</span>
-                ) : line.is_settled ? (
-                  <span className="text-charcoal-muted">Complete</span>
-                ) : (
-                  <span className="font-semibold text-amber-800">Waiting</span>
-                )}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div>
+      <DataTable
+        columns={columns}
+        rows={lines}
+        rowKey={(line) => line.purchase_order_line_id}
+        minWidthClass="min-w-[44rem]"
+        cardListLabel="Lines on this order"
+      />
       {lines.every((l) => l.is_settled) ? (
         <p className="pt-3 text-sm text-charcoal-muted">{NOTHING_OUTSTANDING}</p>
       ) : null}
@@ -485,87 +508,106 @@ export function ReceiptLinesTable({
   // as the dash that means "nobody had to".
   const anyAuthorised = rows.some((row) => row.authorised_by !== null);
 
+  const columns: DataColumn<PurchaseReceiptLineDetail>[] = [
+    {
+      key: 'delivery',
+      role: 'heading',
+      header: 'Delivery',
+      cellClassName: 'pr-3 font-medium text-charcoal',
+      cell: (row) => row.receipt_number,
+    },
+    {
+      key: 'date',
+      header: 'Date',
+      cellClassName: 'pr-3 text-charcoal-muted',
+      cell: (row) => formatDisplayDate(row.business_date),
+    },
+    {
+      key: 'item',
+      header: 'Item',
+      cellClassName: 'pr-3 text-charcoal',
+      cell: (row) => row.item_name ?? MISSING_VALUE,
+    },
+    {
+      key: 'arrived',
+      header: 'Arrived',
+      align: 'right',
+      cellClassName: 'pr-3 tabular-nums text-charcoal',
+      cell: (row) => (
+        <>
+          {formatQuantity(row.quantity)} {row.base_unit}
+          {row.closed_short ? (
+            <span className="ml-2 rounded-full bg-sand px-2 py-0.5 text-xs text-charcoal-muted">
+              Closed short
+            </span>
+          ) : null}
+        </>
+      ),
+    },
+    {
+      key: 'invoiced',
+      header: 'Invoiced',
+      align: 'right',
+      cellClassName: 'pr-3 tabular-nums text-charcoal-muted',
+      cell: (row) => formatMoney(row.unit_cost, currency),
+    },
+    {
+      // THE FIGURE THIS MODULE EXISTS TO SURFACE, and a cell that used to be
+      // EMPTY when the cost had not changed. The reasoning was "a column of
+      // dashes trains people to stop reading it", which is true about dashes and
+      // wrong about blanks: on the walk, one delivery showed "+NGN 50.00" and
+      // the one under it showed nothing, and nothing is indistinguishable from a
+      // cell that failed to render. CLAUDE.md section 6 settles it — a figure
+      // that is not there reads as the em-dash.
+      key: 'costChange',
+      header: 'Cost change',
+      align: 'right',
+      cellClassName: 'pr-3 tabular-nums',
+      cell: (row) =>
+        row.unit_cost_difference !== 0 ? (
+          <span className="font-semibold text-amber-800">
+            {row.unit_cost_difference > 0 ? '+' : ''}
+            {formatMoney(row.unit_cost_difference, currency)}
+          </span>
+        ) : (
+          <span className="text-charcoal-muted">{MISSING_VALUE}</span>
+        ),
+    },
+    {
+      key: 'value',
+      header: 'Value',
+      align: 'right',
+      cellClassName: 'pr-3 tabular-nums text-charcoal',
+      cell: (row) => formatMoney(row.line_value, currency),
+    },
+    ...(anyAuthorised
+      ? ([
+          {
+            key: 'authorised',
+            header: 'Authorised by',
+            cellClassName: 'pr-3 text-charcoal-muted',
+            cell: (row) =>
+              row.authorised_by
+                ? staffLabel(row.authorised_by, currentUserId)
+                : MISSING_VALUE,
+          },
+        ] as DataColumn<PurchaseReceiptLineDetail>[])
+      : []),
+    {
+      key: 'reason',
+      header: 'Reason',
+      cellClassName: 'text-charcoal-muted',
+      cell: (row) => row.reason ?? MISSING_VALUE,
+    },
+  ];
+
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[52rem] text-sm">
-        <thead>
-          <tr className="border-b border-sand-border text-left text-xs font-medium text-charcoal-muted">
-            <th className="py-2 pr-3">Delivery</th>
-            <th className="py-2 pr-3">Date</th>
-            <th className="py-2 pr-3">Item</th>
-            <th className="py-2 pr-3 text-right">Arrived</th>
-            <th className="py-2 pr-3 text-right">Invoiced</th>
-            <th className="py-2 pr-3 text-right">Cost change</th>
-            <th className="py-2 pr-3 text-right">Value</th>
-            {anyAuthorised ? (
-              <th className="py-2 pr-3">Authorised by</th>
-            ) : null}
-            <th className="py-2">Reason</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr
-              key={row.id}
-              className="border-b border-sand-border/60 last:border-0"
-            >
-              <td className="py-2 pr-3 font-medium text-charcoal">
-                {row.receipt_number}
-              </td>
-              <td className="py-2 pr-3 text-charcoal-muted">
-                {formatDisplayDate(row.business_date)}
-              </td>
-              <td className="py-2 pr-3 text-charcoal">
-                {row.item_name ?? MISSING_VALUE}
-              </td>
-              <td className="py-2 pr-3 text-right tabular-nums text-charcoal">
-                {formatQuantity(row.quantity)} {row.base_unit}
-                {row.closed_short ? (
-                  <span className="ml-2 rounded-full bg-sand px-2 py-0.5 text-xs text-charcoal-muted">
-                    Closed short
-                  </span>
-                ) : null}
-              </td>
-              <td className="py-2 pr-3 text-right tabular-nums text-charcoal-muted">
-                {formatMoney(row.unit_cost, currency)}
-              </td>
-              {/* THE FIGURE THIS MODULE EXISTS TO SURFACE, and a cell that used
-                  to be EMPTY when the cost had not changed. The reasoning was
-                  "a column of dashes trains people to stop reading it", which is
-                  true about dashes and wrong about blanks: on the walk, one
-                  delivery showed "+NGN 50.00" and the one under it showed
-                  nothing, and nothing is indistinguishable from a cell that
-                  failed to render. CLAUDE.md section 6 settles it — a figure
-                  that is not there reads as the em-dash, the way an accounting
-                  report prints it, so "no change" and "did not load" cannot look
-                  the same. */}
-              <td className="py-2 pr-3 text-right tabular-nums">
-                {row.unit_cost_difference !== 0 ? (
-                  <span className="font-semibold text-amber-800">
-                    {row.unit_cost_difference > 0 ? '+' : ''}
-                    {formatMoney(row.unit_cost_difference, currency)}
-                  </span>
-                ) : (
-                  <span className="text-charcoal-muted">{MISSING_VALUE}</span>
-                )}
-              </td>
-              <td className="py-2 pr-3 text-right tabular-nums text-charcoal">
-                {formatMoney(row.line_value, currency)}
-              </td>
-              {anyAuthorised ? (
-                <td className="py-2 pr-3 text-charcoal-muted">
-                  {row.authorised_by
-                    ? staffLabel(row.authorised_by, currentUserId)
-                    : MISSING_VALUE}
-                </td>
-              ) : null}
-              <td className="py-2 text-charcoal-muted">
-                {row.reason ?? MISSING_VALUE}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <DataTable
+      columns={columns}
+      rows={rows}
+      rowKey={(row) => row.id}
+      minWidthClass="min-w-[52rem]"
+      cardListLabel="Deliveries against this order"
+    />
   );
 }

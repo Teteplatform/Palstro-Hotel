@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { CurrencyField, DateField, NumberField, TextArea, TextField } from '../../ui/form';
 import { ManagerPinField } from '../ManagerPinField';
+import { DataTable, type DataColumn } from '../../ui/DataTable';
 import { ScreenHeader } from '../../ui/ScreenHeader';
 import { useToast } from '../../ui/Toast';
 import { humanizeError } from '../../../lib/errors';
@@ -228,41 +229,13 @@ export function ReceiveForm({
         />
       </div>
 
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[62rem] text-sm">
-          <thead>
-            <tr className="border-b border-sand-border text-left text-xs font-medium text-charcoal-muted">
-              <th className="w-10 py-2 pr-2" />
-              <th className="py-2 pr-3">Item</th>
-              <th className="py-2 pr-3 text-right">Outstanding</th>
-              <th className="w-32 py-2 pr-3">Arrived</th>
-              <th className="w-28 py-2 pr-3 text-right">Difference</th>
-              <th className="w-40 py-2 pr-3">Invoiced cost</th>
-              <th className="w-32 py-2 pr-3 text-right">Cost change</th>
-              <th className="py-2 pr-3">Reason</th>
-            </tr>
-          </thead>
-          <tbody>
-            {open.map((line) => {
-              const draft = drafts.get(line.purchase_order_line_id);
-              const on = Boolean(draft);
-              const diff = draft ? lineDifference(line, draft) : null;
-              return (
-                <ReceiveRow
-                  key={line.purchase_order_line_id}
-                  line={line}
-                  draft={draft}
-                  on={on}
-                  diff={diff}
-                  currency={currency}
-                  onToggle={() => toggle(line)}
-                  onPatch={(patch) => setDraft(line.purchase_order_line_id, patch)}
-                />
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+      <ReceiveLinesTable
+        lines={open}
+        drafts={drafts}
+        currency={currency}
+        onToggle={toggle}
+        onPatch={setDraft}
+      />
 
       {/* THE REFUSAL SITS AGAINST THE TABLE IT IS ABOUT.
           It used to render at the very bottom, below the Note box and the
@@ -377,64 +350,131 @@ export function ReceiveForm({
   );
 }
 
-// EXPORTED so the render proof drives the REAL row (rule 22) rather than a copy
-// of its markup — which would prove the copy.
-export function ReceiveRow({
-  line,
-  draft,
-  on,
-  diff,
+
+// THE COLUMN SPEC, DECLARED ONCE, RENDERED AS A TABLE OR AS CARDS (1.1a2).
+//
+// This replaced a hand-written `<table>` plus a `ReceiveRow` that emitted eight
+// `<td>`s. The two shapes now come from this one list, which is the point: a
+// ninth column cannot arrive in the table and be forgotten on the phone,
+// because there is nowhere to add it that only one shape reads.
+//
+// THE ROLES ARE WHERE THE LAYOUT DECISION LIVES, and the three that matter here:
+//
+//   * `Item` is the HEADING. On a phone it is the card's title, with no "Item:"
+//     caption in front of it — the name of a thing does not need a label saying
+//     that it is a name.
+//   * `Arrived`, `Invoiced cost` and `Reason` are CONTROLS, so on a phone they
+//     get their label above and the full width of the card. An input in the
+//     value half of a label/value pair at 360px is a 120px box, which is how a
+//     quantity gets mistyped.
+//   * `Reason` IS IN THE SAME CARD AS THE ITEM AND THE QUANTITY, and that is the
+//     whole ruling. On the live walk Item sat at x=40 and Reason at x=922 inside
+//     a 295px window, so they could not be seen together at any scroll position
+//     — and Reason is the field the server REQUIRES the moment a delivery
+//     differs. It is not behind a disclosure either: a tap to reveal the
+//     mandatory field recreates the same bug one layer deeper.
+//
+// EXPORTED so the render proof drives the REAL table (rule 22) rather than a
+// copy of its markup, which would prove the copy.
+export function ReceiveLinesTable({
+  lines,
+  drafts,
   currency,
   onToggle,
   onPatch,
 }: {
-  line: PurchaseOrderLineStatus;
-  draft: ReceiptLineDraft | undefined;
-  on: boolean;
-  diff: ReturnType<typeof lineDifference> | null;
+  lines: PurchaseOrderLineStatus[];
+  drafts: Map<string, ReceiptLineDraft>;
   currency: string;
-  onToggle: () => void;
-  onPatch: (patch: Partial<ReceiptLineDraft>) => void;
+  onToggle: (line: PurchaseOrderLineStatus) => void;
+  onPatch: (id: string, patch: Partial<ReceiptLineDraft>) => void;
 }) {
-  return (
-    <tr className="border-b border-sand-border/60 align-top last:border-0">
-      <td className="py-2 pr-2 pt-4">
+  const draftOf = (line: PurchaseOrderLineStatus) =>
+    drafts.get(line.purchase_order_line_id);
+  const diffOf = (line: PurchaseOrderLineStatus) => {
+    const draft = draftOf(line);
+    return draft ? lineDifference(line, draft) : null;
+  };
+  const label = (line: PurchaseOrderLineStatus) =>
+    line.item_name ?? line.description ?? 'this line';
+
+  const columns: DataColumn<PurchaseOrderLineStatus>[] = [
+    {
+      key: 'include',
+      role: 'select',
+      header: '',
+      headerClassName: 'w-10 pr-2',
+      cellClassName: 'pr-2 pt-4',
+      cell: (line) => (
         <input
           type="checkbox"
-          checked={on}
-          onChange={onToggle}
-          aria-label={`Include ${line.item_name ?? line.description ?? 'this line'} in this delivery`}
+          checked={Boolean(draftOf(line))}
+          onChange={() => onToggle(line)}
+          aria-label={`Include ${label(line)} in this delivery`}
           className="h-4 w-4 rounded border-sand-border text-primary focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
         />
-      </td>
-      {/* THE SUBJECT: what you are acting on, with its real figures. */}
-      <td className="py-2 pr-3 pt-3">
-        <p className="font-medium text-charcoal">
-          {line.item_name ?? line.description}
-        </p>
-        <p className="text-xs text-charcoal-muted">
-          {formatQuantity(line.ordered_quantity)} {line.base_unit} ordered at{' '}
-          {formatMoney(line.ordered_unit_cost, currency)}
-        </p>
-      </td>
-      <td className="py-2 pr-3 pt-3 text-right tabular-nums text-charcoal">
-        {formatQuantity(line.outstanding_quantity)} {line.base_unit}
-      </td>
-      <td className="py-2 pr-3">
-        {on && draft ? (
+      ),
+    },
+    {
+      key: 'item',
+      role: 'heading',
+      header: 'Item',
+      cellClassName: 'pr-3 pt-3',
+      // THE SUBJECT: what you are acting on, with its real figures (rule 25).
+      cell: (line) => (
+        <>
+          <p className="font-medium text-charcoal">{label(line)}</p>
+          <p className="text-xs text-charcoal-muted">
+            {formatQuantity(line.ordered_quantity)} {line.base_unit} ordered at{' '}
+            {formatMoney(line.ordered_unit_cost, currency)}
+          </p>
+        </>
+      ),
+    },
+    {
+      key: 'outstanding',
+      header: 'Outstanding',
+      align: 'right',
+      cellClassName: 'pr-3 pt-3 tabular-nums text-charcoal',
+      cell: (line) => (
+        <>
+          {formatQuantity(line.outstanding_quantity)} {line.base_unit}
+        </>
+      ),
+    },
+    {
+      key: 'arrived',
+      role: 'control',
+      header: 'Arrived',
+      headerClassName: 'w-32 pr-3',
+      cellClassName: 'pr-3',
+      cell: (line) => {
+        const draft = draftOf(line);
+        if (!draft) return null;
+        return (
           <NumberField
             label=""
             value={draft.quantity}
-            onChange={(v) => onPatch({ quantity: v })}
+            onChange={(v) => onPatch(line.purchase_order_line_id, { quantity: v })}
             min={0}
             step="any"
             placeholder={line.base_unit ?? ''}
           />
-        ) : null}
-      </td>
-      {/* THE EFFECT, per line, live. */}
-      <td className="py-2 pr-3 pt-4 text-right tabular-nums">
-        {diff && diff.quantityDifference !== 0 ? (
+        );
+      },
+    },
+    {
+      key: 'difference',
+      header: 'Difference',
+      align: 'right',
+      headerClassName: 'w-28 pr-3',
+      cellClassName: 'pr-3 pt-4 tabular-nums',
+      // THE EFFECT, per line, live. Renders nothing until a quantity has been
+      // typed — "nothing entered" is not "none arrived" (see lineDifference).
+      cell: (line) => {
+        const diff = diffOf(line);
+        if (!diff || diff.quantityDifference === 0) return null;
+        return (
           <span
             className={
               diff.quantityDifference > 0
@@ -445,28 +485,55 @@ export function ReceiveRow({
             {diff.quantityDifference > 0 ? '+' : ''}
             {formatQuantity(diff.quantityDifference)}
           </span>
-        ) : null}
-      </td>
-      <td className="py-2 pr-3">
-        {on && draft ? (
+        );
+      },
+    },
+    {
+      key: 'invoiced',
+      role: 'control',
+      header: 'Invoiced cost',
+      headerClassName: 'w-40 pr-3',
+      cellClassName: 'pr-3',
+      cell: (line) => {
+        const draft = draftOf(line);
+        if (!draft) return null;
+        return (
           <CurrencyField
             label=""
             value={draft.unitCost}
-            onChange={(v) => onPatch({ unitCost: v })}
+            onChange={(v) => onPatch(line.purchase_order_line_id, { unitCost: v })}
             currency={currency}
           />
-        ) : null}
-      </td>
-      <td className="py-2 pr-3 pt-4 text-right tabular-nums">
-        {diff && diff.unitCostDifference !== 0 ? (
+        );
+      },
+    },
+    {
+      key: 'costChange',
+      header: 'Cost change',
+      align: 'right',
+      headerClassName: 'w-32 pr-3',
+      cellClassName: 'pr-3 pt-4 tabular-nums',
+      cell: (line) => {
+        const diff = diffOf(line);
+        if (!diff || diff.unitCostDifference === 0) return null;
+        return (
           <span className="font-semibold text-amber-800">
             {diff.unitCostDifference > 0 ? '+' : ''}
             {formatMoney(diff.unitCostDifference, currency)}
           </span>
-        ) : null}
-      </td>
-      <td className="py-2 pr-3">
-        {on && draft ? (
+        );
+      },
+    },
+    {
+      key: 'reason',
+      role: 'control',
+      header: 'Reason',
+      cellClassName: 'pr-3',
+      cell: (line) => {
+        const draft = draftOf(line);
+        if (!draft) return null;
+        const diff = diffOf(line);
+        return (
           <div className="space-y-2">
             {/* SHOWN ONLY WHEN THE SERVER WILL WANT IT. The field appearing is
                 the prompt; the refusal, if it is left blank, is the database's. */}
@@ -474,7 +541,7 @@ export function ReceiveRow({
               <TextField
                 label=""
                 value={draft.reason}
-                onChange={(v) => onPatch({ reason: v })}
+                onChange={(v) => onPatch(line.purchase_order_line_id, { reason: v })}
                 placeholder="Why the difference"
                 required
               />
@@ -483,7 +550,11 @@ export function ReceiveRow({
               <input
                 type="checkbox"
                 checked={draft.closedShort}
-                onChange={(e) => onPatch({ closedShort: e.target.checked })}
+                onChange={(e) =>
+                  onPatch(line.purchase_order_line_id, {
+                    closedShort: e.target.checked,
+                  })
+                }
                 className="h-3.5 w-3.5 rounded border-sand-border text-primary focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
               />
               Nothing more coming
@@ -493,18 +564,33 @@ export function ReceiveRow({
                 <TextField
                   label="Batch"
                   value={draft.batchCode}
-                  onChange={(v) => onPatch({ batchCode: v })}
+                  onChange={(v) =>
+                    onPatch(line.purchase_order_line_id, { batchCode: v })
+                  }
                 />
                 <DateField
                   label="Expiry"
                   value={draft.expiryDate}
-                  onChange={(v) => onPatch({ expiryDate: v })}
+                  onChange={(v) =>
+                    onPatch(line.purchase_order_line_id, { expiryDate: v })
+                  }
                 />
               </div>
             ) : null}
           </div>
-        ) : null}
-      </td>
-    </tr>
+        );
+      },
+    },
+  ];
+
+  return (
+    <DataTable
+      columns={columns}
+      rows={lines}
+      rowKey={(line) => line.purchase_order_line_id}
+      minWidthClass="min-w-[62rem]"
+      rowClassName={() => 'border-b border-sand-border/60 align-top last:border-0'}
+      cardListLabel="Lines on this delivery"
+    />
   );
 }

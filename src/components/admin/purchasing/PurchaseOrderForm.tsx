@@ -20,6 +20,7 @@ import type {
   PurchaseOrderLineStatus,
   PurchaseOrderSummary,
 } from '../../../types/purchasing';
+import { DataTable, type DataColumn } from '../../ui/DataTable';
 import { ItemPicker } from '../inventory/ItemPicker';
 import { LocationPicker } from '../inventory/LocationPicker';
 import { SupplierPicker } from './SupplierPicker';
@@ -215,102 +216,18 @@ export function PurchaseOrderForm({
       </div>
 
       <div className="space-y-3 rounded-2xl border border-sand-border bg-white/60 p-4">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[48rem] text-sm">
-            <thead>
-              <tr className="border-b border-sand-border text-left text-xs font-medium text-charcoal-muted">
-                <th className="py-2 pr-3">Item</th>
-                <th className="w-32 py-2 pr-3">Quantity</th>
-                <th className="w-40 py-2 pr-3">Cost per unit</th>
-                <th className="w-32 py-2 pr-3 text-right">Line total</th>
-                <th className="py-2 pr-3">Note</th>
-                <th className="w-10 py-2" />
-              </tr>
-            </thead>
-            <tbody>
-              {lines.map((line) => {
-                const item = itemsById.get(line.inventoryItemId) ?? null;
-                const total =
-                  Math.round((line.quantity ?? 0) * (line.unitCost ?? 0) * 100) / 100;
-                return (
-                  <tr
-                    key={line.key}
-                    className="border-b border-sand-border/60 align-top last:border-0"
-                  >
-                    <td className="py-2 pr-3">
-                      <ItemPicker
-                        tenantId={tenantId}
-                        label=""
-                        value={line.inventoryItemId}
-                        selectedItem={item}
-                        onChange={(id) => setLine(line.key, { inventoryItemId: id })}
-                        activeOnly
-                        unavailable={(candidate) =>
-                          // SHOWN AND EXPLAINED rather than filtered out (rule
-                          // 26): an item already on another line of this order
-                          // exists and is simply not choosable twice, and a row
-                          // that vanished would read as "we do not stock it".
-                          lines.some(
-                            (l) =>
-                              l.key !== line.key &&
-                              l.inventoryItemId === candidate.id,
-                          )
-                            ? 'Already on this order'
-                            : null
-                        }
-                      />
-                    </td>
-                    <td className="py-2 pr-3">
-                      <NumberField
-                        label=""
-                        value={line.quantity}
-                        onChange={(v) => setLine(line.key, { quantity: v })}
-                        min={0}
-                        step="any"
-                        placeholder={item?.base_unit ?? ''}
-                      />
-                    </td>
-                    <td className="py-2 pr-3">
-                      <CurrencyField
-                        label=""
-                        value={line.unitCost}
-                        onChange={(v) => setLine(line.key, { unitCost: v })}
-                        currency={currency}
-                      />
-                    </td>
-                    <td className="py-2 pr-3 pt-4 text-right tabular-nums text-charcoal">
-                      {formatMoney(total, currency)}
-                    </td>
-                    <td className="py-2 pr-3">
-                      <TextField
-                        label=""
-                        value={line.note}
-                        onChange={(v) => setLine(line.key, { note: v })}
-                        placeholder="Optional"
-                      />
-                    </td>
-                    <td className="py-2 pt-4">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setLines((prev) =>
-                            prev.length === 1
-                              ? [newRow()]
-                              : prev.filter((l) => l.key !== line.key),
-                          )
-                        }
-                        aria-label="Remove this line"
-                        className="rounded-lg p-1.5 text-charcoal-muted transition-colors hover:bg-sand hover:text-charcoal focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
-                      >
-                        <CloseIcon className="h-4 w-4" />
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        <OrderDraftLinesTable
+          lines={lines}
+          itemsById={itemsById}
+          tenantId={tenantId}
+          currency={currency}
+          setLine={setLine}
+          onRemove={(key) =>
+            setLines((prev) =>
+              prev.length === 1 ? [newRow()] : prev.filter((l) => l.key !== key),
+            )
+          }
+        />
 
         <div className="flex flex-wrap items-center justify-between gap-3">
           <button
@@ -373,5 +290,149 @@ export function PurchaseOrderForm({
         arrives, and the difference is kept.
       </p>
     </div>
+  );
+}
+
+// THE DRAFT'S LINES, AS A TABLE OR AS CARDS (1.1a2).
+//
+// The ordering form has the same shape of problem as the receiving one and a
+// milder version of the consequence: 768px of table in a 295px window, with the
+// item picker at the left and the cost and note fields off to the right. Nobody
+// raises an order at the store door, so this is the annoying case rather than
+// the dangerous one — but it goes through the same primitive, because the reason
+// seven tables shared one defect is that they were written seven times.
+//
+// EXPORTED so the render proof drives the real table (rule 22).
+export function OrderDraftLinesTable({
+  lines,
+  itemsById,
+  tenantId,
+  currency,
+  setLine,
+  onRemove,
+}: {
+  lines: PurchaseOrderLineDraft[];
+  itemsById: Map<string, InventoryItem>;
+  tenantId: string;
+  currency: string;
+  setLine: (key: string, patch: Partial<PurchaseOrderLineDraft>) => void;
+  onRemove: (key: string) => void;
+}) {
+  const columns: DataColumn<PurchaseOrderLineDraft>[] = [
+    {
+      key: 'item',
+      role: 'control',
+      header: 'Item',
+      cellClassName: 'pr-3',
+      cell: (line) => (
+        <ItemPicker
+          tenantId={tenantId}
+          label=""
+          value={line.inventoryItemId}
+          selectedItem={itemsById.get(line.inventoryItemId) ?? null}
+          onChange={(id) => setLine(line.key, { inventoryItemId: id })}
+          activeOnly
+          unavailable={(candidate) =>
+            // SHOWN AND EXPLAINED rather than filtered out (rule 26): an item
+            // already on another line of this order exists and is simply not
+            // choosable twice, and a row that vanished would read as "we do not
+            // stock it".
+            lines.some(
+              (l) => l.key !== line.key && l.inventoryItemId === candidate.id,
+            )
+              ? 'Already on this order'
+              : null
+          }
+        />
+      ),
+    },
+    {
+      key: 'quantity',
+      role: 'control',
+      header: 'Quantity',
+      headerClassName: 'w-32 pr-3',
+      cellClassName: 'pr-3',
+      cell: (line) => (
+        <NumberField
+          label=""
+          value={line.quantity}
+          onChange={(v) => setLine(line.key, { quantity: v })}
+          min={0}
+          step="any"
+          placeholder={itemsById.get(line.inventoryItemId)?.base_unit ?? ''}
+        />
+      ),
+    },
+    {
+      key: 'cost',
+      role: 'control',
+      header: 'Cost per unit',
+      headerClassName: 'w-40 pr-3',
+      cellClassName: 'pr-3',
+      cell: (line) => (
+        <CurrencyField
+          label=""
+          value={line.unitCost}
+          onChange={(v) => setLine(line.key, { unitCost: v })}
+          currency={currency}
+        />
+      ),
+    },
+    {
+      key: 'total',
+      header: 'Line total',
+      align: 'right',
+      headerClassName: 'w-32 pr-3',
+      cellClassName: 'pr-3 pt-4 tabular-nums text-charcoal',
+      cell: (line) =>
+        formatMoney(
+          Math.round((line.quantity ?? 0) * (line.unitCost ?? 0) * 100) / 100,
+          currency,
+        ),
+    },
+    {
+      key: 'note',
+      role: 'control',
+      header: 'Note',
+      cellClassName: 'pr-3',
+      cell: (line) => (
+        <TextField
+          label=""
+          value={line.note}
+          onChange={(v) => setLine(line.key, { note: v })}
+          placeholder="Optional"
+        />
+      ),
+    },
+    {
+      // Removing a line belongs beside the line's subject, not at the end of a
+      // card where it reads as "remove this card's last field".
+      key: 'remove',
+      role: 'select',
+      header: '',
+      headerClassName: 'w-10',
+      cellClassName: 'pt-4',
+      cell: (line) => (
+        <button
+          type="button"
+          onClick={() => onRemove(line.key)}
+          aria-label="Remove this line"
+          className="rounded-lg p-1.5 text-charcoal-muted transition-colors hover:bg-sand hover:text-charcoal focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
+        >
+          <CloseIcon className="h-4 w-4" />
+        </button>
+      ),
+    },
+  ];
+
+  return (
+    <DataTable
+      columns={columns}
+      rows={lines}
+      rowKey={(line) => line.key}
+      minWidthClass="min-w-[48rem]"
+      rowClassName={() => 'border-b border-sand-border/60 align-top last:border-0'}
+      cardListLabel="Lines on this order"
+    />
   );
 }

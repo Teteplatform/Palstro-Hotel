@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Pagination } from '../../ui/Pagination';
+import { DataTable, type DataColumn } from '../../ui/DataTable';
 import { ScreenHeader } from '../../ui/ScreenHeader';
 import { CalculationNote } from '../../ui/CalculationNote';
 import { PlusIcon } from '../../ui/icons';
@@ -398,81 +399,102 @@ export function PurchaseOrderTable({
   // the clock here so the proof can render a deterministic screen.
   today: string;
 }) {
+  // THE COLUMN SPEC (1.1a2) — one list, a table above md and cards below it.
+  const columns: DataColumn<PurchaseOrderSummary>[] = [
+    {
+      key: 'order',
+      role: 'heading',
+      header: 'Order',
+      cellClassName: 'pr-3',
+      cell: (row) => (
+        <Link
+          to={`/admin/${propertySlug}/purchases/${row.id}`}
+          className="font-medium text-charcoal underline-offset-2 hover:underline focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
+        >
+          {row.order_number}
+        </Link>
+      ),
+    },
+    {
+      key: 'raised',
+      header: 'Raised',
+      cellClassName: 'pr-3 text-charcoal-muted',
+      cell: (row) => formatDisplayDate(row.order_date),
+    },
+    {
+      key: 'expected',
+      header: 'Expected',
+      cellClassName: 'pr-3 text-charcoal-muted',
+      cell: (row) => (
+        <>
+          {row.expected_date ? formatDisplayDate(row.expected_date) : MISSING_VALUE}
+          {/* A LIVE CONSEQUENCE, not teaching (rule 25): shown only when the
+              promised date has passed with something still outstanding. */}
+          {row.is_open && row.expected_date !== null && row.expected_date < today ? (
+            <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-900">
+              Late
+            </span>
+          ) : null}
+        </>
+      ),
+    },
+    {
+      key: 'supplier',
+      header: 'Supplier',
+      cellClassName: 'pr-3 text-charcoal',
+      cell: (row) => row.supplier_name,
+    },
+    {
+      key: 'destination',
+      header: 'Going to',
+      cellClassName: 'pr-3 text-charcoal-muted',
+      cell: (row) => row.destination_name,
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      cellClassName: 'pr-3',
+      cell: (row) => (
+        <span
+          className={`rounded-full px-2 py-0.5 text-xs font-semibold ${purchaseStatusTone(row.status)}`}
+        >
+          {purchaseStatusLabel(row.status)}
+        </span>
+      ),
+    },
+    {
+      key: 'ordered',
+      header: 'Ordered',
+      headerNote: 'at the agreed price',
+      align: 'right',
+      cellClassName: 'pr-3 tabular-nums text-charcoal',
+      cell: (row) => formatMoney(row.ordered_value, currency),
+    },
+    {
+      key: 'arrived',
+      header: 'Arrived',
+      headerNote: 'at the invoiced price',
+      align: 'right',
+      cellClassName: 'pr-3 tabular-nums text-charcoal',
+      cell: (row) => formatMoney(row.received_value, currency),
+    },
+    {
+      key: 'outstanding',
+      header: 'Still to come',
+      headerNote: 'at the agreed price',
+      align: 'right',
+      cellClassName: 'tabular-nums text-charcoal',
+      cell: (row) => formatMoney(row.outstanding_value, currency),
+    },
+  ];
+
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[54rem] text-sm">
-        <thead>
-          <tr className="border-b border-sand-border text-left text-xs font-medium text-charcoal-muted">
-            <th className="py-2 pr-3">Order</th>
-            <th className="py-2 pr-3">Raised</th>
-            <th className="py-2 pr-3">Expected</th>
-            <th className="py-2 pr-3">Supplier</th>
-            <th className="py-2 pr-3">Going to</th>
-            <th className="py-2 pr-3">Status</th>
-            <th className="py-2 pr-3 text-right">Ordered</th>
-            <th className="py-2 pr-3 text-right">Arrived</th>
-            <th className="py-2 text-right">Outstanding</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => {
-            // A LIVE CONSEQUENCE, not teaching (rule 25): shown only when the
-            // promised date has passed with something still outstanding.
-            const late =
-              row.is_open &&
-              row.expected_date !== null &&
-              row.expected_date < today;
-            return (
-              <tr
-                key={row.id}
-                className="border-b border-sand-border/60 last:border-0"
-              >
-                <td className="py-2 pr-3">
-                  <Link
-                    to={`/admin/${propertySlug}/purchases/${row.id}`}
-                    className="font-medium text-charcoal underline-offset-2 hover:underline focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
-                  >
-                    {row.order_number}
-                  </Link>
-                </td>
-                <td className="py-2 pr-3 text-charcoal-muted">
-                  {formatDisplayDate(row.order_date)}
-                </td>
-                <td className="py-2 pr-3 text-charcoal-muted">
-                  {row.expected_date
-                    ? formatDisplayDate(row.expected_date)
-                    : MISSING_VALUE}
-                  {late ? (
-                    <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-900">
-                      Late
-                    </span>
-                  ) : null}
-                </td>
-                <td className="py-2 pr-3 text-charcoal">{row.supplier_name}</td>
-                <td className="py-2 pr-3 text-charcoal-muted">
-                  {row.destination_name}
-                </td>
-                <td className="py-2 pr-3">
-                  <span
-                    className={`rounded-full px-2 py-0.5 text-xs font-semibold ${purchaseStatusTone(row.status)}`}
-                  >
-                    {purchaseStatusLabel(row.status)}
-                  </span>
-                </td>
-                <td className="py-2 pr-3 text-right tabular-nums text-charcoal">
-                  {formatMoney(row.ordered_value, currency)}
-                </td>
-                <td className="py-2 pr-3 text-right tabular-nums text-charcoal">
-                  {formatMoney(row.received_value, currency)}
-                </td>
-                <td className="py-2 text-right tabular-nums text-charcoal">
-                  {formatMoney(row.outstanding_value, currency)}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
+    <DataTable
+      columns={columns}
+      rows={rows}
+      rowKey={(row) => row.id}
+      minWidthClass="min-w-[54rem]"
+      cardListLabel="Purchase orders"
+    />
   );
 }
