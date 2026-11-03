@@ -1324,5 +1324,373 @@ ok('...and is in the panel, where somebody can choose to read it',
    SUPPLIER_ACTIVITY_ABOUT.join(' ').includes(
      'not meant to add up'));
 
+// ===========================================================================
+// PART 7 — THE THREE KINDS OF PURCHASE LINE (1.1h3)
+// ===========================================================================
+// 052 to 055 made an order able to carry an asset or an expense. Four of the
+// failure modes render perfectly, and none of them throws:
+//
+//   1. THE PAYLOAD. A draft row holds all four subject fields at once so a type
+//      switch does not lose typing. If the mapper sends the ones that do not
+//      apply, the server refuses by name -- or worse, an empty string reaches a
+//      uuid cast and the person gets a type error instead of a sentence.
+//
+//   2. WHETHER SAVE IS PRESSABLE. Too strict blocks an order the server would
+//      take; too loose sends one to be refused after all the typing is done.
+//
+//   3. THE MANAGER GATE. 053 narrowed the server's destination rule to
+//      deliveries that actually MOVE STOCK. If the form keeps the old rule it
+//      asks for a PIN the server then refuses as unnecessary: somebody fetches
+//      a manager, the manager types their PIN, and the answer is that none was
+//      wanted. THIS IS THE ONE THAT NEEDED A FIXTURE BUILT FOR IT -- see 7.3.
+//
+//   4. THE NAME OF A NON-STOCK LINE. item_name is null on one, so a delivered
+//      freezer rendered as a quantity, a cost and an em-dash: the placeholder
+//      doing its job over a row that had a name nothing read.
+// ---------------------------------------------------------------------------
+// PART 7 WAS MADE TO FAIL TEN WAYS (rules 22, 27)
+// ---------------------------------------------------------------------------
+// Each mutation is in the code the SCREENS run, and each turned the assertion
+// named beside it red:
+//
+//   A  the payload sends the item on every type   -> an asset sends NO item
+//   B  ...and the description on a stock line     -> a stock line sends none
+//   C  an unchosen id travels as '' not null      -> travels as null
+//   D  completeness stops wanting a category      -> an expense WITHOUT one
+//   E  ...and wants one on every non-stock line   -> an asset needs none
+//   F  the gate back to destination alone         -> asset alone asks for no
+//                                                    manager (2 red)
+//   G  movesStock ignores the line type           -> 3 red
+//   H  movesStock counts a close-short of zero    -> moves no stock
+//   I  the history falls back to the em-dash      -> names the freezer
+//   J  the order line hides the category          -> says which account
+//
+// AND ONE ASSERTION WAS DELETED BECAUSE OF THIS RUN. It claimed neither line
+// fell back to the placeholder, and its || ended in a condition asserted true
+// two lines earlier, so it was true whatever the table did. Ten mutations and
+// it never moved. See 7.4 for what it said and why nothing replaces it.
+//
+// F IS THE ONE THE FIXTURE HAD TO BE BUILT FOR, and it is rule 27's fourth
+// shape: a delivery holding both rice and a freezer asks for a PIN under the
+// true rule and the broken one alike, because the rice triggers the gate
+// either way. The two rules disagree on exactly one case -- a non-store
+// destination where nothing is stock -- so that is the fixture.
+console.log('\n--- PART 7: the three kinds of purchase line ---');
+
+const { purchaseLinePayload } = await import('../src/lib/purchasing');
+const { lineComplete } = await import(
+  '../src/components/admin/purchasing/PurchaseOrderForm'
+);
+type PurchaseOrderLineDraft =
+  import('../src/types/purchasing').PurchaseOrderLineDraft;
+
+// A row with EVERY subject field filled, which is what the form holds after
+// somebody picks a kind, types a description, then switches kind and picks an
+// item. The mapper's whole job is deciding which of these travel.
+const FILLED: PurchaseOrderLineDraft = {
+  key: 'r1',
+  lineType: 'inventory',
+  inventoryItemId: '11111111-1111-1111-1111-111111111111',
+  description: 'left over from a previous choice',
+  expenseCategoryId: '22222222-2222-2222-2222-222222222222',
+  quantity: 2,
+  unitCost: 100,
+  note: '  ',
+};
+
+// --- 7.1 the payload sends only what the type owns -------------------------
+// THE FUNCTION THE SCREEN RUNS, not a copy of its branches. An assertion that
+// rebuilt these objects from its own constants would pass with the mapper
+// broken -- rule 27's first shape, and what 1.1g's receipt preview did at 35/35.
+const stockPayload = purchaseLinePayload(FILLED);
+ok('a stock line sends its item',
+   stockPayload.inventory_item_id === FILLED.inventoryItemId);
+ok('...and sends NO description, though the row still holds one',
+   stockPayload.description === null);
+ok('...and no expense category',
+   stockPayload.expense_category_id === null);
+
+const assetPayload = purchaseLinePayload({ ...FILLED, lineType: 'asset' });
+ok('an asset line sends its description',
+   assetPayload.description === 'left over from a previous choice');
+ok('...and NO item, though the row still holds one',
+   assetPayload.inventory_item_id === null);
+ok('...and no category, because only an expense has one',
+   assetPayload.expense_category_id === null);
+
+const expensePayload = purchaseLinePayload({ ...FILLED, lineType: 'expense' });
+ok('an expense line sends its category',
+   expensePayload.expense_category_id === FILLED.expenseCategoryId);
+ok('...and its description', expensePayload.description !== null);
+
+// NULL, NOT ''. An empty string reaches save_purchase_order's uuid cast and
+// comes back as a Postgres type error instead of the sentence the function
+// wrote for a missing choice (rule 21). The defect that turns this red is
+// `l.inventoryItemId` without the `|| null`, which looks identical in a diff.
+const EMPTY: PurchaseOrderLineDraft = {
+  ...FILLED, inventoryItemId: '', description: '  ', expenseCategoryId: '',
+};
+ok('an unchosen item travels as null, never as an empty string',
+   purchaseLinePayload(EMPTY).inventory_item_id === null);
+ok('...and an unchosen category likewise',
+   purchaseLinePayload({ ...EMPTY, lineType: 'expense' })
+     .expense_category_id === null);
+ok('...and a description of only spaces likewise',
+   purchaseLinePayload({ ...EMPTY, lineType: 'asset' }).description === null);
+
+// --- 7.2 what makes a line complete, per type ------------------------------
+// ASSERTED ON BOTH SIDES OF EACH BOUNDARY, because one side alone cannot tell
+// the rule from a broken one. A proof that only checked "a full expense line is
+// complete" stays green if the category test is dropped altogether.
+ok('a stock line with an item is complete',
+   lineComplete({ ...FILLED, description: '', expenseCategoryId: '' }));
+ok('...and without one is not',
+   !lineComplete({ ...FILLED, inventoryItemId: '' }));
+ok('an asset line with words is complete',
+   lineComplete({ ...FILLED, lineType: 'asset', inventoryItemId: '' }));
+ok('...and with none is not',
+   !lineComplete({ ...FILLED, lineType: 'asset', description: '   ' }));
+ok('an expense line with a category is complete',
+   lineComplete({ ...FILLED, lineType: 'expense', inventoryItemId: '' }));
+// THE SIDE WHERE THE TRUE RULE AND THE BROKEN ONE DISAGREE. Drop the category
+// test and this is the only assertion in 7.2 that changes.
+ok('...and WITHOUT one is not, which is the half a dropped check would pass',
+   !lineComplete({ ...FILLED, lineType: 'expense', expenseCategoryId: '' }));
+// An asset line must NOT be made to want a category it has nowhere to put.
+ok('an asset line does not need a category',
+   lineComplete({
+     ...FILLED, lineType: 'asset', inventoryItemId: '', expenseCategoryId: '',
+   }));
+
+// --- 7.3 the manager gate, mirrored --------------------------------------
+// THE FIXTURE IS A FREEZER ALONE, GOING TO THE BAR, and it has to be, which is
+// rule 27's fourth shape. A delivery holding BOTH rice and a freezer asks for a
+// PIN under the TRUE rule and the BROKEN one alike, because the rice triggers
+// the gate either way -- so it cannot test this at all. The two rules disagree
+// on exactly one case: a non-store destination where nothing is stock.
+//
+// THE DEFECT: `needsPin = needsManager || notAStore`, which is what this line
+// said before 053 narrowed the server's gate to match. Under it, the form shows
+// the PIN field and the required "why it went straight there" box, the person
+// finds a manager, the manager types their PIN -- and
+// receive_purchase_order answers "No manager PIN is needed for this delivery."
+const FREEZER_ORDER: PurchaseOrderSummary = {
+  ...orders[0],
+  destination_name: 'Pool bar',
+  destination_kind: 'bar',
+};
+const FREEZER_LINE = purchaseOrderLineRows.rows([
+  {
+    purchase_order_line_id: 'pol-asset',
+    tenant_id: 't-1',
+    property_id: 'p-1',
+    purchase_order_id: 'po-1',
+    order_number: 'PO-000012',
+    order_status: 'ordered',
+    line_number: 1,
+    line_type: 'asset',
+    inventory_item_id: null,
+    item_name: null,
+    item_code: null,
+    base_unit: null,
+    tracks_expiry: null,
+    description: 'Chest freezer',
+    ordered_quantity: '1.0000',
+    ordered_unit_cost: '250000.00',
+    note: null,
+    received_quantity: '0.0000',
+    received_value: '0.00',
+    closed_short: false,
+    outstanding_quantity: '1.0000',
+    is_settled: false,
+    last_unit_cost: null,
+    expense_category_id: null,
+    expense_category_code: null,
+    expense_category_name: null,
+  },
+]);
+
+const freezerHost = doc.createElement('div');
+doc.body.appendChild(freezerHost);
+const freezerRoot = createRoot(freezerHost);
+await act(async () => {
+  freezerRoot.render(
+    React.createElement(
+      ToastProvider,
+      null,
+      React.createElement(ReceiveForm, {
+        order: FREEZER_ORDER,
+        lines: FREEZER_LINE,
+        propertySlug: 'finima',
+        currency: 'NGN',
+        today: '2026-08-24',
+        onReceived: () => {},
+        onCancel: () => {},
+      }),
+    ),
+  );
+});
+const freezerText = () => norm(freezerHost.textContent ?? '');
+
+// The line is named by its DESCRIPTION, because an asset has no item.
+ok('an asset line is named on the receive screen',
+   freezerText().includes('Chest freezer'));
+
+// Tick it and receive exactly what was ordered -- no over-receipt, so the only
+// thing that could ask for a manager is the destination.
+// The SAME native-setter dance PART 2 documents: `.checked = true` updates the
+// tracker React keeps on the node, so React sees nothing and the row never
+// opens -- a failure that reads exactly like a broken component.
+const freezerInputs = () =>
+  Array.from(freezerHost.querySelectorAll('input')) as HTMLInputElement[];
+const freezerTick = freezerInputs().find((i) => i.type === 'checkbox');
+await act(async () => {
+  setNative(freezerTick!, 'checked', true);
+  freezerTick!.dispatchEvent(new win.Event('click', { bubbles: true }) as unknown as Event);
+  freezerTick!.dispatchEvent(new win.Event('change', { bubbles: true }) as unknown as Event);
+});
+ok('ticking the asset line opens it for entry',
+   Boolean(freezerInputs().find((i) => i.type === 'number')));
+const freezerQty = freezerInputs().find((i) => i.type === 'number');
+await act(async () => {
+  type(freezerQty!, '1');
+});
+
+ok('a delivery of ONLY an asset, into a bar, asks for no manager',
+   !freezerText().includes('A manager must authorise this delivery'));
+ok('...and asks for no written reason either',
+   !freezerText().includes('Why it went straight there'));
+
+// AND THE OTHER SIDE OF THE SAME BOUNDARY, so this is not merely "the panel
+// never appears". The same destination, with STOCK on it, still asks.
+ok('...while the same destination WITH stock still asks for one',
+   deliveryTotals(orderLines, new Map([['pol-1', {
+     purchaseOrderLineId: 'pol-1', quantity: 50, unitCost: 1200,
+     closedShort: false, reason: '', batchCode: '', expiryDate: '', note: '',
+   }]])).movesStock);
+ok('...and a delivery of only an asset reports moving no stock',
+   !deliveryTotals(FREEZER_LINE, new Map([['pol-asset', {
+     purchaseOrderLineId: 'pol-asset', quantity: 1, unitCost: 250000,
+     closedShort: false, reason: '', batchCode: '', expiryDate: '', note: '',
+   }]])).movesStock);
+// A CLOSE-SHORT OF NOTHING IS NOT A STOCK MOVEMENT EITHER, which is the
+// boundary `d.entered > 0` draws rather than "is there a stock line".
+ok('...and a stock line closed short at zero moves no stock',
+   !deliveryTotals(orderLines, new Map([['pol-1', {
+     purchaseOrderLineId: 'pol-1', quantity: 0, unitCost: 1200,
+     closedShort: true, reason: 'nothing came', batchCode: '', expiryDate: '', note: '',
+   }]])).movesStock);
+
+// --- 7.4 a non-stock line has a name, and an expense says where it posts ---
+// THE DEFECT: `row.item_name ?? MISSING_VALUE`, which is what the delivery
+// history said before 055. item_name is NULL on an asset or expense line, so a
+// delivered freezer rendered as a quantity, a cost and an em-dash -- section 6's
+// placeholder behaving exactly as intended, over a row that had a name in
+// `description` that nothing was reading. Nothing throws, nothing looks broken,
+// and the delivery history of the hotel's fixed assets is a column of dashes.
+const MIXED_LINES = purchaseOrderLineRows.rows([
+  {
+    purchase_order_line_id: 'pol-m1',
+    tenant_id: 't-1', property_id: 'p-1', purchase_order_id: 'po-9',
+    order_number: 'PO-000019', order_status: 'received',
+    line_number: 1, line_type: 'asset',
+    inventory_item_id: null, item_name: null, item_code: null,
+    base_unit: null, tracks_expiry: null,
+    description: 'Chest freezer',
+    ordered_quantity: '1.0000', ordered_unit_cost: '250000.00', note: null,
+    received_quantity: '1.0000', received_value: '250000.00',
+    closed_short: false, outstanding_quantity: '0.0000', is_settled: true,
+    last_unit_cost: '250000.00',
+    expense_category_id: null, expense_category_code: null,
+    expense_category_name: null,
+  },
+  {
+    purchase_order_line_id: 'pol-m2',
+    tenant_id: 't-1', property_id: 'p-1', purchase_order_id: 'po-9',
+    order_number: 'PO-000019', order_status: 'received',
+    line_number: 2, line_type: 'expense',
+    inventory_item_id: null, item_name: null, item_code: null,
+    base_unit: null, tracks_expiry: null,
+    description: 'Plumber call-out',
+    ordered_quantity: '1.0000', ordered_unit_cost: '25000.00', note: null,
+    received_quantity: '1.0000', received_value: '25000.00',
+    closed_short: false, outstanding_quantity: '0.0000', is_settled: true,
+    last_unit_cost: '25000.00',
+    expense_category_id: 'cat-repairs',
+    expense_category_code: 'repairs',
+    expense_category_name: 'Repairs and maintenance',
+  },
+]);
+
+const mixedHtml = renderToString(
+  React.createElement(OrderLinesTable, {
+    lines: MIXED_LINES, currency: 'NGN',
+  } as never),
+);
+const mixedText = strip(mixedHtml);
+
+ok('an asset line on the order is named by its description',
+   mixedText.includes('Chest freezer'));
+ok('...and an expense line likewise',
+   mixedText.includes('Plumber call-out'));
+// THE ASSERTION THAT MATTERS, and it is about the category rather than the
+// name: an expense line with no category showing reads as a cost posting
+// nowhere, which is the one question the category exists to answer.
+ok('...and the expense line says WHICH account the cost lands in',
+   mixedText.includes('Repairs and maintenance'));
+// AND THE OTHER SIDE: an asset line must not sprout a category it has none of.
+ok('...while the asset line shows no category, having none',
+   !mixedText.includes('Repairs and maintenance Chest freezer'));
+// AN ASSERTION WAS DELETED HERE, and that is worth more than the assertion was.
+// It read:
+//
+//   ok('...and neither line falls back to the placeholder for its name',
+//      !mixedText.includes(`${MISSING_VALUE} 1`) || mixedText.includes('Chest freezer'));
+//
+// The right-hand side of that `||` is asserted true two lines above, so the
+// whole expression was true no matter what the table did. It could not go red
+// for any defect, and the breakage run confirmed it: ten mutations, and this
+// one never moved. Rule 27 -- an assertion that cannot distinguish working from
+// absent is not an assertion, and a green one buys confidence it did not earn.
+//
+// There is nothing to replace it with: the order table renders the em-dash
+// legitimately in its price-difference column, so "contains a placeholder" is
+// true under the defect and the fix alike. The two assertions above already
+// name both lines, which is the actual claim.
+
+// THE DELIVERY HISTORY, which is where the dash actually appeared.
+const MIXED_RECEIPT = receiptLineRows.rows([
+  {
+    id: 'prl-1', tenant_id: 't-1', property_id: 'p-1',
+    purchase_receipt_id: 'pr-1', receipt_number: 'GRN-000007',
+    business_date: '2026-08-24', delivery_note: null, invoice_number: 'INV-77',
+    authorised_by: null, purchase_order_id: 'po-9', order_number: 'PO-000019',
+    purchase_order_line_id: 'pol-m1', line_number: 1,
+    quantity: '1.0000', unit_cost: '250000.00', closed_short: false,
+    reason: null, batch_code: null, expiry_date: null, note: null,
+    stock_movement_id: null, created_at: '2026-08-24T10:00:00Z',
+    created_by: null,
+    ordered_quantity: '1.0000', ordered_unit_cost: '250000.00',
+    inventory_item_id: null, item_name: null, item_code: null, base_unit: null,
+    line_value: '250000.00', unit_cost_difference: '0.00',
+    cost_difference_value: '0.00',
+    line_type: 'asset', description: 'Chest freezer',
+    expense_category_id: null, expense_category_name: null,
+  },
+]);
+const historyText = strip(
+  renderToString(
+    React.createElement(ReceiptLinesTable, {
+      rows: MIXED_RECEIPT, currency: 'NGN',
+    } as never),
+  ),
+);
+ok('the delivery history names the freezer that arrived',
+   historyText.includes('Chest freezer'));
+// THE DEFECT'S OWN SIGNATURE, asserted directly: under
+// `item_name ?? MISSING_VALUE` this row's name cell held the em-dash.
+ok('...rather than the em-dash it showed before 055',
+   !historyText.includes(`GRN-000007 ${MISSING_VALUE}`));
+
 console.log(`\n${fail === 0 ? 'GREEN' : 'RED'}  ${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);

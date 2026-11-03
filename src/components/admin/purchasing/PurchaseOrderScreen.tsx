@@ -412,6 +412,16 @@ export function OrderLinesTable({
               {line.item_code}
             </span>
           ) : null}
+          {/* THE SAME SLOT item_code USES, because it answers the same question
+              about the line: which thing is this, exactly. On an expense line
+              the category is the answer that matters — it is where the money
+              lands — and it comes off 054's view, unfiltered on deleted_at, so
+              a line raised against a since-retired category still names it. */}
+          {line.expense_category_name ? (
+            <span className="ml-2 text-xs text-charcoal-muted">
+              {line.expense_category_name}
+            </span>
+          ) : null}
         </>
       ),
     },
@@ -422,7 +432,8 @@ export function OrderLinesTable({
       cellClassName: 'pr-3 tabular-nums text-charcoal',
       cell: (line) => (
         <>
-          {formatQuantity(line.ordered_quantity)} {line.base_unit}
+          {formatQuantity(line.ordered_quantity)}
+          {line.base_unit ? ` ${line.base_unit}` : ''}
         </>
       ),
     },
@@ -526,7 +537,11 @@ export function ReceiptLinesTable({
       key: 'item',
       header: 'Item',
       cellClassName: 'pr-3 text-charcoal',
-      cell: (row) => row.item_name ?? MISSING_VALUE,
+      // ITEM NAME, THEN DESCRIPTION, THEN the dash. Before 055 this read
+      // `row.item_name ?? MISSING_VALUE` and a delivered freezer showed as a
+      // quantity, a cost and an em-dash — the placeholder behaving exactly as
+      // section 6 intends, over a row that had a name nothing was reading.
+      cell: (row) => row.item_name ?? row.description ?? MISSING_VALUE,
     },
     {
       key: 'arrived',
@@ -535,7 +550,8 @@ export function ReceiptLinesTable({
       cellClassName: 'pr-3 tabular-nums text-charcoal',
       cell: (row) => (
         <>
-          {formatQuantity(row.quantity)} {row.base_unit}
+          {formatQuantity(row.quantity)}
+          {row.base_unit ? ` ${row.base_unit}` : ''}
           {row.closed_short ? (
             <span className="ml-2 rounded-full bg-sand px-2 py-0.5 text-xs text-charcoal-muted">
               Closed short

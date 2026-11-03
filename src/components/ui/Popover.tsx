@@ -176,6 +176,40 @@ export function Popover({
   // Measure AFTER the panel is in the DOM but BEFORE the browser paints, so the
   // panel is never seen at the wrong position. It renders invisible until
   // `placement` exists, which is what stops a one-frame flash at 0,0.
+  //
+  // AND IT RE-PLACES WHENEVER THE CONTENT CHANGES, which is not a refinement but
+  // the thing that makes the flip work for a panel whose rows arrive later.
+  //
+  // THE DEFECT, measured at 375x812 on the last line of a draft order: the
+  // dependency list was [open, anchor, align, width, forcedWidth], and none of
+  // those changes when the CHILDREN do. A typeahead's results arrive from a
+  // query, so the panel was placed while it still said "Searching...", flipped
+  // above on that 42px height -- correctly, for a 42px panel -- and then grew
+  // DOWNWARD as the rows landed: panel top 725, bottom 983, with 171px of it
+  // below the window and five options of which two could not be reached. Rule
+  // 23's own words: a menu whose items cannot be reached is the same defect as a
+  // button that does nothing.
+  //
+  // A ResizeObserver ON THE PANEL WAS THE FIRST FIX AND IT DID NOT WORK. The
+  // panel node does not survive a content change here -- it is unmounted and
+  // remounted -- so the observer was left watching a detached element and never
+  // fired once. An observer attached by hand from the console did not fire
+  // either, which is what settled it. `children` is the signal that actually
+  // changes, so it is the dependency.
+  //
+  // WHICH MEANS THE EFFECT RUNS WHENEVER THE PARENT RE-RENDERS, because React
+  // builds a fresh children element each time. The guard on setPlacement is
+  // what stops each of those turning into a second Popover render for a
+  // placement that did not change.
+  //
+  // IT IS NOT PROTECTION AGAINST A LOOP, and the first version of this comment
+  // claimed it was. Removing the guard and running the proof stayed GREEN at
+  // 43/43 -- which is how the claim was found to be wrong. There is no loop to
+  // protect against: a re-render driven by setPlacement reuses the SAME
+  // children element, so the effect does not re-run, and the chain stops after
+  // one extra pass with or without the guard. What the guard buys is one fewer
+  // render per keystroke, which is worth keeping and is not worth a sentence
+  // that overstates it.
   useLayoutEffect(() => {
     if (!open || !anchor || !panelRef.current) {
       setPlacement(null);
@@ -183,15 +217,21 @@ export function Popover({
     }
     const a = anchor.getBoundingClientRect();
     const p = panelRef.current.getBoundingClientRect();
-    setPlacement(
-      placePopover(
-        { top: a.top, left: a.left, bottom: a.bottom, right: a.right, width: a.width, height: a.height },
-        { width: p.width, height: p.height },
-        { width: window.innerWidth, height: window.innerHeight },
-        align,
-      ),
+    const next = placePopover(
+      { top: a.top, left: a.left, bottom: a.bottom, right: a.right, width: a.width, height: a.height },
+      { width: p.width, height: p.height },
+      { width: window.innerWidth, height: window.innerHeight },
+      align,
     );
-  }, [open, anchor, align, width, forcedWidth]);
+    setPlacement((current) =>
+      current &&
+      current.top === next.top &&
+      current.left === next.left &&
+      current.side === next.side
+        ? current
+        : next,
+    );
+  }, [open, anchor, align, width, forcedWidth, children]);
 
   const close = useCallback(() => {
     // RETURN FOCUS TO THE TRIGGER — but only when focus is still inside the

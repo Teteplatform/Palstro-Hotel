@@ -2047,12 +2047,56 @@ and the page count under the list always tells you how many there are.
 - **Supplier** — from your suppliers list. Start typing; it searches every
   supplier you have, not just the ones on screen.
 - **Going to** — where the goods will be delivered. Usually your main store.
-  Anywhere else is allowed, and the *delivery* will then need a manager's PIN.
+  Anywhere else is allowed, and the *delivery* will then need a manager's PIN —
+  though only if there is **stock** on it. See *Three kinds of line* below.
 - **Order date** — the day you raised it. **Expected** is when they said it would
   arrive, and is optional: a made-up date is worse than none, because the late
   flag is built on it.
-- **Lines** — the item, how much, and what you expect to pay for **one unit**. The
-  order total updates as you type.
+- **Lines** — what kind of line it is, what you are buying, how much, and what
+  you expect to pay for **one unit**. The order total updates as you type.
+
+#### Three kinds of line
+
+One order can hold all three at once. Rice, a chest freezer and a plumber's
+call-out go on one purchase order, are received in one delivery, and land as one
+entry in the books.
+
+- **Stock** — something that enters your store and gets counted. You pick it from
+  your item list, and receiving it moves stock and changes that item's average
+  cost.
+- **Asset** — something the hotel keeps and uses: a freezer, a generator, a bed.
+  There is no item to pick, so you **describe** it. Receiving it adds it to the
+  asset register with the supplier and the order on it.
+- **Expense** — something used up or paid for: a repair, a call-out, fuel,
+  professional fees. You describe it and choose **what kind of expense** it is.
+
+**Why an expense line asks for a category.** It decides which account the cost
+lands in, so your profit and loss can be read by category instead of as one
+lump. You choose it when you **raise** the order, not when the delivery arrives,
+because the person raising it knows a plumber's call-out is a repair and the
+person at the door with a delivery note does not.
+
+The six categories you start with are repairs and maintenance, utilities,
+cleaning and consumables, transport and fuel, professional fees, and other
+operating. They are yours to change.
+
+**An asset or expense line never touches stock.** No batch code, no expiry date,
+no effect on any item's average cost, and nothing appears on a stock report.
+That is also why a delivery of **only** assets and expenses needs no manager's
+PIN even when it is going somewhere other than a store: the rule about goods
+reaching a kitchen or a bar is about stock arriving outside the store, and a
+freezer is not stock.
+
+**A quantity of more than one on an asset line makes one register entry, not
+several.** Ten dining chairs bought together read as "10 x dining chair" at the
+total cost. If you need each one tracked separately — a serial number each —
+raise them as separate lines.
+
+**Correcting an asset or an expense.** There is no edit and no delete. Something
+recorded by a delivery is corrected by **undoing the delivery**, which also
+removes what it created. Standalone entry — recording an expense that never had
+a purchase order — is not built yet, and when it is it will arrive with its own
+way to void.
 
 **Save as draft** keeps it to yourself. **Save and send** marks it sent, and from
 that moment it cannot be changed.

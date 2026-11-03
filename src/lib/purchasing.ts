@@ -1,9 +1,10 @@
 import { supabase } from './supabase';
 import { boundary, scalarNumber } from './rowParse';
 import { fetchAllPagedRows } from './fetchAllPaged';
-import { safeSearchTerm } from './inventory';
+import { PICKER_SEARCH_LIMIT, safeSearchTerm, type PickerSearchResult } from './inventory';
 import { newIdempotencyKey } from './stock';
 import type {
+  ExpenseCategory,
   InventoryGlReconciliation,
   InventoryReconciliationPosition,
   PurchaseOrder,
@@ -389,6 +390,62 @@ export interface SavePurchaseOrderInput {
   idempotencyKey: string;
 }
 
+// Expense categories are CONFIGURED, so there is no view to read them from --
+// the table is the list.
+//
+// `sort_order` IS A NUMERIC KEY AND HAS TO BE DECLARED. The first draft of this
+// read used passthrough<ExpenseCategory>(), and `tsc -b` refused it by name:
+// `sort_order` is an integer, which PostgREST returns as a JSON number while
+// the quantities elsewhere in this app arrive as strings. That is rule 24 part
+// 3 doing exactly what it is for, and it is worth noting that the bare
+// `tsc --noEmit` the repo used to run by hand would have let it through.
+export const expenseCategoryRows = boundary<ExpenseCategory>(
+  'expense_categories',
+)(['sort_order'] as const, [] as const);
+
+// CHOOSE AN EXPENSE CATEGORY — the picker's query (rule 26).
+//
+// SIX TODAY, AND STILL A TYPEAHEAD. The rule is about what a selector CAN hold:
+// categories are tenant-configurable, and a hotel that wants one per cost centre
+// reaches twenty without anybody revisiting the decision. Searching on the
+// server also means the picker's answer and the settings list's answer can never
+// disagree, which a client-side filter over one loaded page cannot promise.
+//
+// MATCHED ON NAME AND CODE, because the configured code ('cleaning') is what
+// somebody who uses this daily will type.
+//
+// RETIRED CATEGORIES ARE EXCLUDED SERVER-SIDE, not filtered after: a retired
+// category cannot be chosen on a NEW order at all, so dropping it here is
+// correct rather than a hidden row. A line raised before it was retired still
+// names it, which 054's unfiltered join is what delivers.
+export async function searchExpenseCategories(
+  tenantId: string,
+  term: string,
+  options: { limit?: number } = {},
+): Promise<PickerSearchResult<ExpenseCategory>> {
+  const limit = options.limit ?? PICKER_SEARCH_LIMIT;
+
+  let q = supabase
+    .from('expense_categories')
+    .select('*')
+    .eq('tenant_id', tenantId) // rule 19
+    .is('deleted_at', null) // rule 5
+    .eq('is_active', true);
+
+  const safe = safeSearchTerm(term);
+  if (safe.length > 0) q = q.or(`name.ilike.%${safe}%,code.ilike.%${safe}%`);
+
+  const { data, error } = await q
+    .order('sort_order', { ascending: true })
+    .order('name', { ascending: true })
+    .order('id', { ascending: true }) // unique -> a stable window
+    .range(0, limit);
+
+  if (error) throw error;
+  const rows = expenseCategoryRows.rows(data);
+  return { rows: rows.slice(0, limit), capped: rows.length > limit };
+}
+
 export async function savePurchaseOrder(
   input: SavePurchaseOrderInput,
 ): Promise<PurchaseOrder> {
@@ -400,18 +457,36 @@ export async function savePurchaseOrder(
     p_expected_date: input.expectedDate,
     p_destination_location_id: input.destinationLocationId,
     p_note: input.note,
-    p_lines: input.lines.map((l) => ({
-      line_type: 'inventory',
-      inventory_item_id: l.inventoryItemId,
-      quantity: l.quantity,
-      unit_cost: l.unitCost,
-      note: l.note.trim() || null,
-    })),
+    p_lines: input.lines.map(purchaseLinePayload),
     p_idempotency_key: input.idempotencyKey,
   });
 
   if (error) throw error;
   return purchaseOrderRows.row(data);
+}
+
+// WHAT ONE DRAFT LINE SENDS, by its type. EXPORTED so the render proof drives
+// this rather than restating it: an assertion that rebuilt this object from its
+// own constants would pass with the function broken, which is exactly what
+// 1.1g's receipt preview did at 35 of 35.
+export function purchaseLinePayload(l: PurchaseOrderLineDraft) {
+  return {
+    line_type: l.lineType,
+    // ONLY THE FIELDS THAT TYPE OWNS, and `null` rather than '' for the rest:
+    // save_purchase_order casts these to uuid, and an empty string reaches that
+    // cast as a type error instead of as the sentence the function wrote for a
+    // missing choice (rule 21). The form keeps all four fields in the row so a
+    // type switch does not lose what was typed; this is where the ones that do
+    // not apply to the chosen type are dropped.
+    inventory_item_id:
+      l.lineType === 'inventory' ? l.inventoryItemId || null : null,
+    description: l.lineType === 'inventory' ? null : l.description.trim() || null,
+    expense_category_id:
+      l.lineType === 'expense' ? l.expenseCategoryId || null : null,
+    quantity: l.quantity,
+    unit_cost: l.unitCost,
+    note: l.note.trim() || null,
+  };
 }
 
 export async function placePurchaseOrder(
@@ -610,6 +685,11 @@ export interface DeliveryTotals {
   // and called back.
   needsManager: boolean;
   linesNeedingReason: number;
+  // TRUE when at least one TICKED line is stock arriving in a quantity above
+  // zero. The destination half of the manager gate turns on this and not on the
+  // destination alone (053): a freezer delivered to the bar moves no stock, so
+  // section 9's rule about stock arriving outside the store does not reach it.
+  movesStock: boolean;
 }
 
 export function deliveryTotals(
@@ -622,6 +702,7 @@ export function deliveryTotals(
   let lineCount = 0;
   let needsManager = false;
   let linesNeedingReason = 0;
+  let movesStock = false;
 
   for (const line of lines) {
     const draft = drafts.get(line.purchase_order_line_id);
@@ -633,6 +714,14 @@ export function deliveryTotals(
     costDifferenceValue += d.costDifferenceValue;
     if (d.isOverReceipt) needsManager = true;
     if (d.needsReason && draft.reason.trim().length === 0) linesNeedingReason += 1;
+    // DOES THIS DELIVERY ACTUALLY MOVE STOCK? 053 narrowed the server's
+    // destination gate to exactly this question, because section 9's rule is
+    // about stock arriving outside the store and a freezer is not stock. The
+    // form has to ask the same question or it will demand a PIN that
+    // receive_purchase_order then refuses as unnecessary — which is the worst
+    // shape of all: the person finds a manager, types the PIN and is told no
+    // PIN was needed.
+    if (line.line_type === 'inventory' && d.entered > 0) movesStock = true;
   }
 
   return {
@@ -642,6 +731,7 @@ export function deliveryTotals(
     costDifferenceValue: round2(costDifferenceValue),
     needsManager,
     linesNeedingReason,
+    movesStock,
   };
 }
 

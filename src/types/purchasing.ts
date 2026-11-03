@@ -75,10 +75,25 @@ export type PurchaseOrderStatus =
   | 'received'
   | 'cancelled';
 
-// The three kinds of purchase line. Only 'inventory' can be written today —
-// save_purchase_order refuses the other two BY NAME, naming 1.1h3 — and the type
-// is declared in full so that shipment adds a branch rather than a type.
+// The three kinds of purchase line. All three are writable since 053 — an
+// inventory line enters the store as stock, an asset line enters the register,
+// an expense line posts to its category's account. 046 declared the type in
+// full while refusing two of them, so 1.1h3 added a branch rather than a type.
 export type PurchaseLineType = 'inventory' | 'asset' | 'expense';
+
+// One configured expense category (052). `role_key` is resolved to an account
+// through account_mappings, never stored as an account id (rule 4), so a hotel
+// that repoints the key moves every past and future expense with it.
+export interface ExpenseCategory {
+  id: string;
+  tenant_id: string;
+  code: string;
+  name: string;
+  role_key: string;
+  is_active: boolean;
+  sort_order: number;
+  deleted_at: string | null;
+}
 
 export interface PurchaseOrder {
   id: string;
@@ -174,6 +189,13 @@ export interface PurchaseOrderLineStatus {
   // What the supplier charged last time on this line, so the receiving form can
   // show it beside what was ordered. NULL until something has arrived.
   last_unit_cost: number | null;
+  // 054. NULL on an inventory or asset line, which post to accounts decided by
+  // their type rather than chosen. The code and name come through a join that
+  // deliberately does NOT filter `deleted_at`, so a line raised against a
+  // category since retired still names it.
+  expense_category_id: string | null;
+  expense_category_code: string | null;
+  expense_category_name: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -236,6 +258,12 @@ export interface PurchaseReceiptLineDetail {
   // POSITIVE when the invoice was higher than the order.
   unit_cost_difference: number;
   cost_difference_value: number;
+  // 055. What the line IS, so the delivery history can name an asset or an
+  // expense instead of rendering MISSING_VALUE where item_name is null.
+  line_type: PurchaseLineType;
+  description: string | null;
+  expense_category_id: string | null;
+  expense_category_name: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -246,7 +274,16 @@ export interface PurchaseReceiptLineDetail {
 // replaces a draft's lines whole (046 §6.1) and never reads it.
 export interface PurchaseOrderLineDraft {
   key: string;
+  // WHICH FIELDS BELOW MATTER DEPENDS ON THIS, and the server's shape check is
+  // what enforces it: an inventory line carries an item and no description, an
+  // asset or expense line the exact opposite, and only an expense line carries
+  // a category. The form keeps all four in the row rather than a union, so
+  // switching a line's type does not lose what was typed before the switch —
+  // and sends only the ones that type owns.
+  lineType: PurchaseLineType;
   inventoryItemId: string;
+  description: string;
+  expenseCategoryId: string;
   quantity: number | null;
   unitCost: number | null;
   note: string;

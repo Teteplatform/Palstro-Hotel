@@ -325,5 +325,141 @@ ok('and hands focus back to the ⓘ, not to the document',
 about.root.unmount();
 about.host.remove();
 
+// ---------------------------------------------------------------------------
+// PART 7 — THE PLACEMENT IS RECOMPUTED WHEN THE CONTENT ARRIVES
+// ---------------------------------------------------------------------------
+// placePopover is correct and PART 1 proves it. This is about WHEN it is
+// called, which is a different thing and was wrong.
+//
+// THE DEFECT, found at 375x812 on the last line of a draft purchase order. The
+// placement effect's dependencies were [open, anchor, align, width,
+// forcedWidth], and none of them changes when the panel's CHILDREN do. A
+// typeahead's rows arrive from a query, so the panel was measured while it
+// still said "Searching...", flipped above on that 42px height -- correctly,
+// for a 42px panel -- and then grew DOWNWARD as the rows landed:
+//
+//     trigger 775..812 (flush with the bottom of the window)
+//     panel   725..983   <- 171px below the window, two of five options
+//                           unreachable
+//
+// After the fix the same case measures 513..771: flipped, entirely on screen,
+// every option reachable. Nothing threw, nothing logged, and the panel looked
+// perfectly normal while two of its rows were off the glass.
+//
+// A ResizeObserver on the panel was the first attempt and it never fired once:
+// the panel node does not survive a content change, so the observer was left
+// watching a detached element. One attached by hand from the browser console
+// did not fire either, which is what settled it.
+//
+// WHY THIS ASSERTION CAN FAIL. jsdom has no layout, so every rect is zeros and
+// a geometric assertion would read the same before and after. The panel's
+// height is therefore STUBBED from its own text length -- short content, short
+// panel; long content, tall one -- which is the only part of a browser this
+// needs. Put the old dependency list back and the top stays at its first
+// value, because nothing re-places. That is what this goes red for.
+console.log('\n=== 7. The panel is re-placed when its content grows ===');
+
+const { Popover } = await import('../src/components/ui/Popover');
+
+const TRIGGER_TOP = 775; // flush with the bottom of an 812px window
+const realRect = win.Element.prototype.getBoundingClientRect;
+win.Element.prototype.getBoundingClientRect = function (this: HTMLElement) {
+  if (this.dataset?.proofRole === 'trigger') {
+    return {
+      top: TRIGGER_TOP, left: 40, bottom: TRIGGER_TOP + 37, right: 324,
+      width: 284, height: 37, x: 40, y: TRIGGER_TOP, toJSON: () => ({}),
+    } as DOMRect;
+  }
+  if (this.getAttribute?.('role') === 'listbox') {
+    const h = (this.textContent ?? '').length > 40 ? 257 : 42;
+    return {
+      top: 0, left: 40, bottom: h, right: 324, width: 284, height: h,
+      x: 40, y: 0, toJSON: () => ({}),
+    } as DOMRect;
+  }
+  return realRect.call(this) as DOMRect;
+} as typeof realRect;
+Object.defineProperty(win, 'innerHeight', { value: 812, configurable: true });
+Object.defineProperty(win, 'innerWidth', { value: 375, configurable: true });
+
+const phost = doc.createElement('div');
+doc.body.appendChild(phost);
+const trig = doc.createElement('button');
+trig.dataset.proofRole = 'trigger';
+doc.body.appendChild(trig);
+const proot = createRoot(phost);
+
+const panelTop = () => {
+  const el = doc.querySelector('[role="listbox"]') as HTMLElement | null;
+  return el && el.style.top ? Math.round(parseFloat(el.style.top)) : null;
+};
+
+const ROWS =
+  'Repairs and maintenance Utilities Cleaning and consumables ' +
+  'Transport and fuel Professional fees Other operating';
+
+const renderPanel = (children: React.ReactNode) =>
+  flushSync(() =>
+    proot.render(
+      React.createElement(
+        Popover,
+        {
+          open: true,
+          onClose: () => {},
+          anchor: trig,
+          role: 'listbox' as const,
+          ariaLabel: 'Categories',
+          children,
+        },
+      ),
+    ),
+  );
+
+// 1. While the query is still running: one short line.
+renderPanel(React.createElement('p', null, 'Searching'));
+const whilePending = panelTop();
+ok('a short panel flips above a bottom-row trigger',
+  whilePending !== null && whilePending + 42 <= TRIGGER_TOP,
+  `top ${whilePending}, bottom ${(whilePending ?? 0) + 42}`);
+
+// 2. The rows arrive, six times taller.
+renderPanel(React.createElement('div', null, ROWS));
+const whenLoaded = panelTop();
+
+// THE ASSERTION. Under the old dependency list this is the SAME number.
+ok('the placement is recomputed when the rows arrive',
+  whenLoaded !== whilePending,
+  `pending ${whilePending}, loaded ${whenLoaded}`);
+// AND THE CONSEQUENCE, which is what the person actually meets.
+ok('...so the grown panel is still entirely on screen',
+  whenLoaded !== null && whenLoaded >= 8 && whenLoaded + 257 <= 812,
+  `top ${whenLoaded}, bottom ${(whenLoaded ?? 0) + 257}`);
+ok('...and still clears the trigger instead of covering it',
+  whenLoaded !== null && whenLoaded + 257 <= TRIGGER_TOP + 2,
+  `panel bottom ${(whenLoaded ?? 0) + 257} vs trigger top ${TRIGGER_TOP}`);
+
+// AN ASSERTION WAS DELETED HERE, and the reason is worth more than it was.
+// It read:
+//
+//   ok('re-rendering the same content does not move it (the guard holds)',
+//      panelTop() === beforeSame, ...);
+//
+// and it was meant to prove that the equality guard on setPlacement stops a
+// place -> setState -> render -> place loop. Removing that guard left the proof
+// GREEN at 43 of 43, which showed the assertion could not fail AND that the
+// claim behind it was wrong: a re-render driven by setPlacement reuses the same
+// children element, so the effect does not re-run and there is no loop to
+// guard. The guard saves a redundant render per keystroke, nothing more.
+//
+// Nothing replaces it, because "one fewer render" is not observable from here
+// without counting renders, and a proof that counted them would be asserting an
+// implementation detail rather than anything a person meets.
+
+proot.unmount();
+phost.remove();
+trig.remove();
+win.Element.prototype.getBoundingClientRect = realRect;
+
+
 console.log(`\n================  ${pass} PASSED, ${fail} FAILED  ================`);
 process.exit(fail ? 1 : 0);

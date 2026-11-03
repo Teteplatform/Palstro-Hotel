@@ -1,5 +1,12 @@
 import { useState } from 'react';
-import { CurrencyField, DateField, NumberField, TextArea, TextField } from '../../ui/form';
+import {
+  CurrencyField,
+  DateField,
+  NumberField,
+  Select,
+  TextArea,
+  TextField,
+} from '../../ui/form';
 import { ScreenHeader } from '../../ui/ScreenHeader';
 import { CloseIcon, PlusIcon } from '../../ui/icons';
 import { useToast } from '../../ui/Toast';
@@ -16,11 +23,13 @@ import {
 } from '../../../lib/purchasingLabels';
 import type { InventoryItem } from '../../../types/inventory';
 import type {
+  PurchaseLineType,
   PurchaseOrderLineDraft,
   PurchaseOrderLineStatus,
   PurchaseOrderSummary,
 } from '../../../types/purchasing';
 import { DataTable, type DataColumn } from '../../ui/DataTable';
+import { ExpenseCategoryPicker } from './ExpenseCategoryPicker';
 import { ItemPicker } from '../inventory/ItemPicker';
 import { LocationPicker } from '../inventory/LocationPicker';
 import { SupplierPicker } from './SupplierPicker';
@@ -71,13 +80,36 @@ interface PurchaseOrderFormProps {
 }
 
 let rowSeq = 0;
+// A NEW LINE IS STOCK UNTIL SOMEBODY SAYS OTHERWISE, because almost every line
+// on almost every order is. The default is not a guess about this order; it is
+// where the fewest people have to touch the selector at all.
 const newRow = (): PurchaseOrderLineDraft => ({
   key: `row-${(rowSeq += 1)}`,
+  lineType: 'inventory',
   inventoryItemId: '',
+  description: '',
+  expenseCategoryId: '',
   quantity: null,
   unitCost: null,
   note: '',
 });
+
+// WHAT MAKES A LINE COMPLETE DEPENDS ON ITS TYPE, and this mirrors
+// save_purchase_order's per-type validation rather than restating a rule of its
+// own (rule 21): a stock line needs its item, the other two need words, and
+// only an expense line needs a category. Quantity and cost are the same for all
+// three.
+//
+// EXPORTED, because it decides whether Save is pressable. Too strict and the
+// form blocks an order the server would take; too loose and it sends one to be
+// refused after the person has finished typing. The render proof drives this
+// function rather than restating its branches.
+export function lineComplete(l: PurchaseOrderLineDraft): boolean {
+  if ((l.quantity ?? 0) <= 0 || l.unitCost === null) return false;
+  if (l.lineType === 'inventory') return l.inventoryItemId !== '';
+  if (l.description.trim() === '') return false;
+  return l.lineType !== 'expense' || l.expenseCategoryId !== '';
+}
 
 export function PurchaseOrderForm({
   tenantId,
@@ -105,7 +137,10 @@ export function PurchaseOrderForm({
     existingLines.length > 0
       ? existingLines.map((l) => ({
           key: `existing-${l.purchase_order_line_id}`,
+          lineType: l.line_type,
           inventoryItemId: l.inventory_item_id ?? '',
+          description: l.description ?? '',
+          expenseCategoryId: l.expense_category_id ?? '',
           quantity: l.ordered_quantity,
           unitCost: l.ordered_unit_cost,
           note: l.note ?? '',
@@ -118,14 +153,23 @@ export function PurchaseOrderForm({
   const setLine = (key: string, patch: Partial<PurchaseOrderLineDraft>) =>
     setLines((prev) => prev.map((l) => (l.key === key ? { ...l, ...patch } : l)));
 
+  // THE LABELS FOR CATEGORIES CHOSEN IN A PREVIOUS SESSION, read off the rows
+  // the page already fetched. 054 put expense_category_name on the view for
+  // exactly this, so editing a draft needs no second query to render what it
+  // already says — and a line raised against a category since retired still
+  // shows its name, because that join is deliberately unfiltered.
+  const existingCategoryNames = new Map<string, string>(
+    existingLines
+      .filter((l) => l.expense_category_id && l.expense_category_name)
+      .map((l) => [l.expense_category_id as string, l.expense_category_name as string]),
+  );
+
   const orderTotal = lines.reduce(
     (t, l) => t + Math.round((l.quantity ?? 0) * (l.unitCost ?? 0) * 100) / 100,
     0,
   );
 
-  const complete = lines.filter(
-    (l) => l.inventoryItemId && (l.quantity ?? 0) > 0 && l.unitCost !== null,
-  );
+  const complete = lines.filter(lineComplete);
   const canSubmit =
     supplierId !== '' && destinationId !== '' && complete.length === lines.length &&
     lines.length > 0;
@@ -199,7 +243,14 @@ export function PurchaseOrderForm({
           onChange={setDestinationId}
           activeOnly
           required
-          helpText="Anywhere other than a store needs a manager to sign the delivery in."
+          // 053 NARROWED THE RULE THIS SENTENCE DESCRIBES, so the sentence
+          // narrowed with it. Before, it was true of any delivery to a non-store;
+          // now only STOCK arriving outside the store needs the manager, so an
+          // order of a freezer for the pool bar no longer does. Leaving the old
+          // wording would promise a step that never comes — and a field hint
+          // that overstates a rule is the second source of truth rule 21 exists
+          // to prevent, just in a calmer voice.
+          helpText="Stock arriving anywhere other than a store needs a manager to sign the delivery in."
         />
         <DateField
           label="Order date"
@@ -219,6 +270,7 @@ export function PurchaseOrderForm({
         <OrderDraftLinesTable
           lines={lines}
           itemsById={itemsById}
+          existingCategoryNames={existingCategoryNames}
           tenantId={tenantId}
           currency={currency}
           setLine={setLine}
@@ -306,6 +358,7 @@ export function PurchaseOrderForm({
 export function OrderDraftLinesTable({
   lines,
   itemsById,
+  existingCategoryNames,
   tenantId,
   currency,
   setLine,
@@ -313,6 +366,12 @@ export function OrderDraftLinesTable({
 }: {
   lines: PurchaseOrderLineDraft[];
   itemsById: Map<string, InventoryItem>;
+  // The label for a category chosen in a PREVIOUS session — the same job
+  // itemsById does for an item. 054 put the name on the line's view row, so the
+  // page builds this from the lines it already fetched and no extra read is
+  // needed. After a pick the picker knows the label itself, so this map is only
+  // ever about lines that were already on the order.
+  existingCategoryNames: Map<string, string>;
   tenantId: string;
   currency: string;
   setLine: (key: string, patch: Partial<PurchaseOrderLineDraft>) => void;
@@ -320,31 +379,93 @@ export function OrderDraftLinesTable({
 }) {
   const columns: DataColumn<PurchaseOrderLineDraft>[] = [
     {
-      key: 'item',
+      // A <select>, NOT A TYPEAHEAD, and rule 26 is why rather than despite:
+      // the rule is about what a selector CAN hold, and this one can hold
+      // exactly three values for as long as purchase_order_lines carries its
+      // type check. There is no growth path to twenty.
+      key: 'kind',
       role: 'control',
-      header: 'Item',
+      header: 'Kind',
+      headerClassName: 'w-36 pr-3',
       cellClassName: 'pr-3',
       cell: (line) => (
-        <ItemPicker
-          tenantId={tenantId}
+        <Select
           label=""
-          value={line.inventoryItemId}
-          selectedItem={itemsById.get(line.inventoryItemId) ?? null}
-          onChange={(id) => setLine(line.key, { inventoryItemId: id })}
-          activeOnly
-          unavailable={(candidate) =>
-            // SHOWN AND EXPLAINED rather than filtered out (rule 26): an item
-            // already on another line of this order exists and is simply not
-            // choosable twice, and a row that vanished would read as "we do not
-            // stock it".
-            lines.some(
-              (l) => l.key !== line.key && l.inventoryItemId === candidate.id,
-            )
-              ? 'Already on this order'
-              : null
+          value={line.lineType}
+          onChange={(v) =>
+            // THE OTHER FIELDS ARE KEPT, NOT CLEARED. Somebody who picks the
+            // wrong kind, types a description and then fixes the kind should
+            // not lose the words; the data layer sends only the fields the
+            // chosen type owns, so what is kept here never reaches the server
+            // on a line it does not belong to.
+            setLine(line.key, { lineType: v as PurchaseLineType })
           }
+          options={[
+            { value: 'inventory', label: 'Stock' },
+            { value: 'asset', label: 'Asset' },
+            { value: 'expense', label: 'Expense' },
+          ]}
         />
       ),
+    },
+    {
+      // ONE COLUMN, THREE SUBJECTS. A stock line is named by its item; an asset
+      // or expense line has no item, so it is named by words. Three separate
+      // columns would leave two of them blank on every row and widen a table
+      // that already has to work at 360px.
+      key: 'subject',
+      role: 'control',
+      header: 'What',
+      cellClassName: 'pr-3',
+      cell: (line) =>
+        line.lineType === 'inventory' ? (
+          <ItemPicker
+            tenantId={tenantId}
+            label=""
+            value={line.inventoryItemId}
+            selectedItem={itemsById.get(line.inventoryItemId) ?? null}
+            onChange={(id) => setLine(line.key, { inventoryItemId: id })}
+            activeOnly
+            unavailable={(candidate) =>
+              // SHOWN AND EXPLAINED rather than filtered out (rule 26): an item
+              // already on another line of this order exists and is simply not
+              // choosable twice, and a row that vanished would read as "we do
+              // not stock it".
+              lines.some(
+                (l) =>
+                  l.key !== line.key &&
+                  l.lineType === 'inventory' &&
+                  l.inventoryItemId === candidate.id,
+              )
+                ? 'Already on this order'
+                : null
+            }
+          />
+        ) : (
+          <div className="space-y-2">
+            <TextField
+              label=""
+              value={line.description}
+              onChange={(v) => setLine(line.key, { description: v })}
+              placeholder={
+                line.lineType === 'asset'
+                  ? 'What the hotel is keeping'
+                  : 'What the money is for'
+              }
+            />
+            {line.lineType === 'expense' ? (
+              <ExpenseCategoryPicker
+                tenantId={tenantId}
+                label=""
+                value={line.expenseCategoryId}
+                selectedLabel={
+                  existingCategoryNames.get(line.expenseCategoryId) ?? null
+                }
+                onChange={(id) => setLine(line.key, { expenseCategoryId: id })}
+              />
+            ) : null}
+          </div>
+        ),
     },
     {
       key: 'quantity',
@@ -359,7 +480,11 @@ export function OrderDraftLinesTable({
           onChange={(v) => setLine(line.key, { quantity: v })}
           min={0}
           step="any"
-          placeholder={itemsById.get(line.inventoryItemId)?.base_unit ?? ''}
+          placeholder={
+            line.lineType === 'inventory'
+              ? (itemsById.get(line.inventoryItemId)?.base_unit ?? '')
+              : ''
+          }
         />
       ),
     },

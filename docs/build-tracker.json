@@ -562,7 +562,7 @@
     {
      "id": "1.1h3",
      "t": "Where else a purchase can go: assets and expenses",
-     "s": "next",
+     "s": "done",
      "m": "golive",
      "size": "M",
      "r": "047",
@@ -570,10 +570,16 @@
       "One expenses table from the start, with a nullable link to the purchase line, so a purchase expense and a standalone expense are never two places to look",
       "Fixed asset records carrying the supplier and the order that bought them",
       "Category lists modelled on charge_categories: a stable machine code apart from the display name",
-      "The receive RPC accepts all three destinations"
+      "The receive RPC accepts all three destinations",
+      "Six seeded expense accounts 5300-5350 with their mappings, so a category resolves through account_mappings and never a hardcoded code",
+      "line_type denormalised onto the receipt line with a composite FK, so a receipt line whose type differs from its order line's cannot exist",
+      "expense_category_id on the order line, chosen when the order is RAISED rather than at the door, because the person raising it knows a call-out is a repair",
+      "The manager gate narrowed to deliveries that actually move stock: a freezer going to the bar no longer demands a PIN the server then refuses as unnecessary",
+      "A Kind selector on every order line, with a description field and a server-searched category typeahead behind it",
+      "The delivery history names an asset or an expense instead of the em-dash it showed where item_name is null"
      ],
-     "proof": "Rice, a fridge and a delivery charge on one order. Receive it once: stock moves by the rice, the asset register gains the fridge with the supplier on it, the charge lands in cost, and one supplier view shows all three.",
-     "note": "Split out of 1.1h because neither an expenses nor a fixed assets table exists in the schema today, so the destination rule means building two record tables. Records, not modules: no depreciation and no approval flow, those are 8.5 and 7.1. The ERP keeps assets and expenses outside purchasing entirely, which is why a vendor view there has to union three places."
+     "proof": "Migrations 052-055: 17 + 9 + 4 + 3 assertions, 9 + 8 + 4 + 4 breakages all red. Render proof PART 7 (purchasing) made to fail ten ways, and popover PART 7 three. Live: rice, a freezer and a plumber's call-out on one order, received once -- stock moved, the register gained the freezer with its supplier, the call-out debited repairs, and one entry credited the supplier with the sum of three debits.",
+     "note": "Split out of 1.1h because neither an expenses nor a fixed assets table exists in the schema today, so the destination rule means building two record tables. Records, not modules: no depreciation and no approval flow, those are 8.5 and 7.1. The ERP keeps assets and expenses outside purchasing entirely, which is why a vendor view there has to union three places. SHIPPED WITH TWO COLUMNS DELIBERATELY ABSENT: expenses carried is_voided and fixed_assets carried deleted_at, and neither could ever have been set -- no update policy by design and no definer function to void either -- so the comment beside them promised a way back that did not exist. Both dropped, and assertion 7 now refuses a soft-delete column that has no policy or RPC able to write it. The correction path today is to undo the delivery (1.1h2d); standalone entry ships with its own void path and the column returns then. 052's first draft also had NO RLS on three new tables and nothing failed, because nothing asked; assertion 6 reads relrowsecurity now. Two defects found outside the brief and fixed: the popover primitive placed its panel once and never again, so a typeahead whose rows arrive later grew 171px past the bottom of a phone screen with two options unreachable -- it affected every picker since 1.1e -- and the manager gate was wider than the rule it enforced."
     },
     {
      "id": "1.1h4",

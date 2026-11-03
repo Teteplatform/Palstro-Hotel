@@ -118,7 +118,20 @@ export function ReceiveForm({
 
   const totals = deliveryTotals(open, drafts);
   const notAStore = order.destination_kind !== 'store';
-  const needsPin = totals.needsManager || notAStore;
+  // MIRRORS 053's GATE, which is narrower than the destination. Before 053 the
+  // server demanded a PIN whenever the destination was not a store, and this
+  // line said the same; now both also require that the delivery actually move
+  // stock. Leaving this as `|| notAStore` would show the PIN field for a
+  // freezer going to the bar and then have the server refuse it with "No
+  // manager PIN is needed for this delivery" — somebody fetches a manager, the
+  // manager types their PIN, and the answer is that none was wanted.
+  //
+  // NAMED ONCE AND USED EVERYWHERE, because the three places below that ask
+  // "is the destination a problem" must agree. Using `notAStore` in one of them
+  // and this in another is how a form comes to demand a written reason for a
+  // delivery the server is happy to take without one.
+  const destinationNeedsAuthorisation = notAStore && totals.movesStock;
+  const needsPin = totals.needsManager || destinationNeedsAuthorisation;
 
   // A REFUSAL IS ABOUT THE FORM AS IT WAS WHEN IT WAS SUBMITTED, and the walk
   // found it outliving that form: the delivery was refused for the over-receipt,
@@ -301,21 +314,21 @@ export function ReceiveForm({
             // "always": an ordinary delivery into the store needs none, which is
             // the whole reason this panel is conditional.
             lead={
-              totals.needsManager && notAStore
-                ? 'More arrived than was ordered, and it is not going to a store'
+              totals.needsManager && destinationNeedsAuthorisation
+                ? 'More arrived than was ordered, and the stock is not going to a store'
                 : totals.needsManager
                   ? 'More arrived than was ordered'
-                  : 'This delivery is not going to a store'
+                  : 'This delivery puts stock somewhere that is not a store'
             }
             // AND THE `reason` IS WHAT ACCEPTING IT COMMITS THE HOTEL TO — this
             // delivery's own consequence, not a general statement.
             reason={
               totals.needsManager
                 ? `accepting ${formatMoney(totals.invoiceValue, currency)} of goods commits the hotel to paying for more than it ordered.`
-                : `goods reach ${order.destination_name} by being issued from the store, so a delivery straight there is an exception and is listed on the stock provenance report.`
+                : `stock reaches ${order.destination_name} by being issued from the store, so a delivery straight there is an exception and is listed on the stock provenance report.`
             }
           />
-          {notAStore ? (
+          {destinationNeedsAuthorisation ? (
             <TextField
               label="Why it went straight there"
               value={reason}
@@ -425,7 +438,8 @@ export function ReceiveLinesTable({
         <>
           <p className="font-medium text-charcoal">{label(line)}</p>
           <p className="text-xs text-charcoal-muted">
-            {formatQuantity(line.ordered_quantity)} {line.base_unit} ordered at{' '}
+            {formatQuantity(line.ordered_quantity)}
+            {line.base_unit ? ` ${line.base_unit}` : ''} ordered at{' '}
             {formatMoney(line.ordered_unit_cost, currency)}
           </p>
         </>
@@ -438,7 +452,8 @@ export function ReceiveLinesTable({
       cellClassName: 'pr-3 pt-3 tabular-nums text-charcoal',
       cell: (line) => (
         <>
-          {formatQuantity(line.outstanding_quantity)} {line.base_unit}
+          {formatQuantity(line.outstanding_quantity)}
+          {line.base_unit ? ` ${line.base_unit}` : ''}
         </>
       ),
     },
