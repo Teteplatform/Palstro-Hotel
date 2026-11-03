@@ -165,7 +165,13 @@ run('pg_dump', [
 // Enumerate the buckets, refuse to continue if any is private, fetch every object
 // from the public endpoint, verify each download against the size the database
 // recorded, checksum it, and tar the lot.
-const storageJson = run('psql', [...conn, '-X', '-q', '-At', '-v', 'ON_ERROR_STOP=1', '-c', `
+// ONE WAY IN. Every query this script runs goes through here, so "SQL reaches
+// psql on stdin" is a property of the script rather than a habit at four call
+// sites -- which is what the guard it replaced could not be.
+const runSql = q =>
+  run('psql', [...conn, '-X', '-q', '-At', '-v', 'ON_ERROR_STOP=1', '-f', '-'], { input: q })
+
+const storageJson = runSql(`
 SELECT json_build_object(
   'buckets', (SELECT coalesce(json_agg(json_build_object(
                 'id', b.id, 'public', b.public,
@@ -177,7 +183,7 @@ SELECT json_build_object(
                 'bytes', (o.metadata->>'size')::bigint,
                 'mime', o.metadata->>'mimetype'
               ) ORDER BY o.bucket_id, o.name), '[]'::json) FROM storage.objects o)
-)::text`]).trim()
+)::text`).trim()
 let store
 try { store = JSON.parse(storageJson) } catch { die('the storage query did not return valid JSON') }
 
@@ -296,6 +302,8 @@ SELECT json_build_object(
   'server_version',   current_setting('server_version'),
   'schemas',          json_build_array('public', 'auth'),
 
+  -- Money and timestamps are cast to text throughout — a numeric read back as a
+  -- float would compare unequal to itself (CLAUDE.md §6).
   -- the highest applied migration and how many there are: a restored copy whose
   -- schema history is short is a restored copy of an older database
   'migrations', (
@@ -388,18 +396,29 @@ SELECT json_build_object(
       ) tb
   )
 )::text`
-// EVERY SQL STRING WE SEND STAYS ASCII, and this is checked rather than assumed.
-// A non-ASCII character in the SQL -- an em dash or a section sign in a comment --
-// is handed to psql through the Windows process boundary in the console codepage,
-// and psql rejects it as `invalid byte sequence for encoding "UTF8"`. That message
-// points at the DATA and sends the next person looking for a corrupt row, when the
-// cause is a typographic character in a comment nobody reads. Cost me a run.
-const nonAscii = [...manifestSql].filter(c => c.charCodeAt(0) > 127)
-if (nonAscii.length) {
-  die(`the manifest SQL contains ${nonAscii.length} non-ASCII character(s) (${JSON.stringify([...new Set(nonAscii)].join(''))}). `
-    + 'Keep SQL sent to psql ASCII-only and put the prose in a JS comment instead.')
-}
-const manifestJson = run('psql', [...conn, '-X', '-q', '-At', '-v', 'ON_ERROR_STOP=1', '-c', manifestSql]).trim()
+// SQL REACHES psql ON STDIN, NEVER ON THE COMMAND LINE, and that is an encoding
+// decision rather than a style one.
+//
+// MEASURED on this machine, same spawnSync path, the same string four ways:
+//
+//   -c on argv, no PGCLIENTENCODING    FAILS  invalid byte sequence ... 0x97
+//   -c on argv, PGCLIENTENCODING=UTF8  FAILS  invalid byte sequence ... 0x97
+//   stdin -f -, either way             round-trips exactly
+//   -f file,    either way             round-trips exactly
+//
+// 0x97 is cp1252's byte for an em dash. Node converts an argv string to the
+// system ANSI codepage before handing it to the Windows process, so the UTF-8 is
+// already destroyed by the time psql sees it -- which is why PGCLIENTENCODING
+// does NOT rescue it: that setting tells psql how to READ bytes, and the bytes
+// are wrong before it is consulted. stdin and a file are byte streams and go
+// through no such conversion.
+//
+// THE GUARD THIS REPLACED WAS TREATING THE SYMPTOM. It banned non-ASCII from
+// every SQL string, which is fine for a comment and wrong the moment a string
+// literal is something a person reads -- and it duly rewrote em dashes inside
+// storekeeper-facing sentences in 050, four of them copied from 046 where they
+// had been live and correct for weeks. Fix the boundary, and prose stays prose.
+const manifestJson = runSql(manifestSql).trim()
 let parsed
 try { parsed = JSON.parse(manifestJson) } catch { die('the manifest query did not return valid JSON') }
 

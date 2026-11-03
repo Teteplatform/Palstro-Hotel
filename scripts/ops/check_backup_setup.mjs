@@ -107,7 +107,7 @@ else {
     delete penv.BACKUP_AGE_KEY
     const conn = ['-h', u.hostname, '-p', u.port || '5432', '-U', user, '-d', 'postgres', '-X', '-At', '-v', 'ON_ERROR_STOP=1']
     const q = sql => {
-      const t = runTool('psql', [...conn, '-c', sql], { env: penv, timeout: 60000 })
+      const t = runTool('psql', [...conn, '-f', '-'], { env: penv, input: sql, timeout: 60000 })
       return { status: t.ok ? 0 : 1, stdout: t.stdout, stderr: t.stderr || t.cause }
     }
 

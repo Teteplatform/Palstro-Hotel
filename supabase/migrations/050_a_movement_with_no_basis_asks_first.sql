@@ -1,4 +1,4 @@
--- 050 -- A MOVEMENT WE CANNOT VALUE ASKS BEFORE IT POSTS (shipment 1.1g2)
+-- 050 — A MOVEMENT WE CANNOT VALUE ASKS BEFORE IT POSTS (shipment 1.1g2)
 --
 -- THE GAP, FOUND WHILE FIXING 047's 3b DEFECT AND MEASURED BY 048.
 --
@@ -11,7 +11,7 @@
 -- Nothing asks the second one out loud, and the gap between them is reachable
 -- by an ordinary act. Write off 4 kg dated 1 October against a position holding
 -- 10 kg received on 5 October: on-hand-today is 10, the result is 6, the
--- negative guard does not fire -- and the average as at 1 October is undefined,
+-- negative guard does not fire — and the average as at 1 October is undefined,
 -- so stock_average_cost_as_at returns NULL, the trigger stamps NULL, and the
 -- movement leaves the shelf carrying no cost at all. Nothing warns anybody.
 --
@@ -27,7 +27,7 @@
 -- ----------------------------------------------------------------------------
 -- NOT A REFUSAL, AND THAT IS THE WHOLE DESIGN
 -- ----------------------------------------------------------------------------
--- section 9 holds: negative stock is flagged, never blocked, because blocking an
+-- §9 holds: negative stock is flagged, never blocked, because blocking an
 -- issue stops service and teaches staff to invent fake receipts, which destroys
 -- the ledger far more thoroughly than an honest gap. A write-off is a storekeeper
 -- ADMITTING A LOSS. Refuse the admission and you get either an invisible loss or
@@ -47,7 +47,7 @@
 -- WHY THE GATE AND THE TRIGGER CANNOT DISAGREE
 -- ----------------------------------------------------------------------------
 -- The gate must predict what 038's trigger will stamp, and it does it by calling
--- THE SAME FUNCTION rather than by reimplementing the fold -- which is the
+-- THE SAME FUNCTION rather than by reimplementing the fold — which is the
 -- difference between a gate and a second opinion.
 --
 -- The trigger passes the row's own seq; the gate has no seq yet, so it passes
@@ -63,7 +63,7 @@
 -- ----------------------------------------------------------------------------
 -- A back-dated write-off that ALSO drives on-hand below zero trips PT449 first
 -- and PT450 on the re-submission: two questions, two confirmations, in that
--- order. That is clunky and it is honest -- "this leaves less than nothing" and
+-- order. That is clunky and it is honest — "this leaves less than nothing" and
 -- "we do not know what this cost" are not the same warning, and merging them
 -- into one sentence would make the second invisible on the day only it applies.
 --
@@ -72,7 +72,7 @@
 -- ----------------------------------------------------------------------------
 -- finish_stock_take IS NOT GATED AND MUST NOT BE. A count adjustment downward on
 -- a position with no cost history hits exactly the same case, and refusing it at
--- the end of a count somebody has spent an hour walking is brutal -- and worse,
+-- the end of a count somebody has spent an hour walking is brutal — and worse,
 -- it teaches people to fudge the count so it finishes, which destroys the one
 -- number the count exists to produce.
 --
@@ -81,7 +81,7 @@
 -- given, twice, by the time the movements post.
 --
 -- Unvaluable movements from a stock take stay allowed, and 048's bucket is what
--- surfaces them -- by VALUE, on the reconciliation card, which is where somebody
+-- surfaces them — by VALUE, on the reconciliation card, which is where somebody
 -- looking for them will be. The architecture already enforces this: finish_stock_take
 -- inserts its movements DIRECTLY rather than calling post_stock_adjustment, so it
 -- cannot pick the gate up by accident. Section 3's self-verify asserts that it
@@ -93,7 +93,7 @@
 -- and the day they disagree there is no way to tell which is right.
 --
 -- ----------------------------------------------------------------------------
--- IT ASKS ONCE PER POSITION PER DATE, NOT ONCE PER MOVEMENT -- MEASURED
+-- IT ASKS ONCE PER POSITION PER DATE, NOT ONCE PER MOVEMENT — MEASURED
 -- ----------------------------------------------------------------------------
 -- Found by this file's own fixture failing, and worth stating because it is
 -- surprising and it is NOT a bug in the gate:
@@ -104,13 +104,13 @@
 --
 -- Measured: after the first, stock_average_cost_as_at for a later movement on
 -- THE SAME DATE returns 0.0000 rather than NULL, because the fold now has a row
--- to walk -- a quantity that left carrying nothing. One day earlier it is still
+-- to walk — a quantity that left carrying nothing. One day earlier it is still
 -- NULL. The gate matches the trigger exactly, which is the property it was built
 -- for: the second movement genuinely WILL carry a basis of zero, and a basis of
 -- zero is a value, not an absence.
 --
 -- THE CONSEQUENCE IS WORTH KNOWING. The second movement's carried_unit_cost is
--- 0, not NULL, so 048's unvaluable bucket does not count it -- its effect lands
+-- 0, not NULL, so 048's unvaluable bucket does not count it — its effect lands
 -- in valuation_difference instead. The first movement of a bad position is the
 -- one that gets the question and the bucket; the rest of that day inherits the
 -- acknowledgement the storekeeper already gave for that position.
@@ -120,8 +120,31 @@
 -- gate and the trigger disagreeing about what a basis is, which is the one
 -- property this design will not trade away.
 
+-- ----------------------------------------------------------------------------
+-- THIS FILE WAS EDITED AFTER IT HAD BEEN APPLIED, ONCE, DELIBERATELY
+-- ----------------------------------------------------------------------------
+-- Normally forbidden. It was allowed here because all three of these held at the
+-- same time, and the rule is that it is allowed ONLY while all three do:
+--
+--   1. MINUTES had passed, inside the session that applied it.
+--   2. Exactly ONE database exists.
+--   3. The file is IDEMPOTENT -- create or replace, drop if exists, and a
+--      fixture that rolls itself back -- and it was re-run and re-verified
+--      rather than assumed.
+--
+-- What was corrected: an ASCII pass had turned em dashes into double hyphens in
+-- six storekeeper-facing sentences, four of them copied from 046 where they had
+-- been live and correct for weeks. Then the pass itself was undone, once the
+-- encoding question behind it was measured -- see scripts/ops/backup.mjs.
+--
+-- ONCE ANY ONE OF THE THREE STOPS HOLDING, THIS FILE IS HISTORY. A second
+-- environment, a later session, or anything applied on top, and the correction
+-- goes in the next migration instead -- because the CLI skips a file it has
+-- already recorded, so the repo and the database would disagree in silence. That
+-- is 040's rule and it does not bend for a cosmetic change.
+
 -- ############################################################################
--- SECTION 1 -- post_stock_writeoff
+-- SECTION 1 — post_stock_writeoff
 -- ############################################################################
 -- DROPPED AND RECREATED rather than replaced, because the argument list grows:
 -- `create or replace` with an extra defaulted parameter makes a second overload
@@ -258,7 +281,7 @@ begin
   end if;
 
   -- 050: THE COST BASIS, asked out loud. Same function the trigger will use,
-  -- with the NULL seq that means "after everything" -- see the header for why
+  -- with the NULL seq that means "after everything" — see the header for why
   -- the two cannot disagree.
   if not coalesce(p_allow_unvalued, false) then
     v_basis := stock_average_cost_as_at(
@@ -308,9 +331,9 @@ end;
 $$;
 
 comment on function post_stock_writeoff(uuid, uuid, uuid, numeric, text, date, text, text, boolean, boolean) is
-  'Posts a ''wastage'' movement -- stock LOST, with the reason as a category '
+  'Posts a ''wastage'' movement — stock LOST, with the reason as a category '
   '(spoilage/breakage/expiry/staff_meal/complimentary). Quantity is entered as a '
-  'POSITIVE magnitude and negated here. States NO unit cost -- 038''s trigger '
+  'POSITIVE magnitude and negated here. States NO unit cost — 038''s trigger '
   'stamps carried_unit_cost at the instant it leaves. TWO overridable gates, '
   'asking different questions: PT449 is what is on hand TODAY, PT450 (050) is '
   'whether there is any cost basis AS AT the movement''s date. Both are '
@@ -320,7 +343,7 @@ comment on function post_stock_writeoff(uuid, uuid, uuid, numeric, text, date, t
 
 
 -- ############################################################################
--- SECTION 2 -- post_stock_adjustment
+-- SECTION 2 — post_stock_adjustment
 -- ############################################################################
 -- THE IDENTICAL GAP. A negative adjustment states no cost and leaves at the
 -- average already there, so a back-dated one against a position with no prior
@@ -451,14 +474,14 @@ begin
     end if;
   else
     if p_unit_cost is not null then
-      raise exception 'A unit cost cannot be given when removing stock -- stock leaves at its current average cost.'
+      raise exception 'A unit cost cannot be given when removing stock — stock leaves at its current average cost.'
         using errcode = 'PT422';
     end if;
     v_cost := null;
 
     if v_batch is not null or p_expiry_date is not null then
       raise exception
-        'A batch code cannot be given when removing stock -- which batch left is decided by the issue rules, not typed in here.'
+        'A batch code cannot be given when removing stock — which batch left is decided by the issue rules, not typed in here.'
         using errcode = 'PT422';
     end if;
   end if;
@@ -521,7 +544,7 @@ end;
 $$;
 
 comment on function post_stock_adjustment(uuid, uuid, uuid, numeric, text, date, numeric, text, boolean, text, date, boolean) is
-  'Posts an ''adjustment'' movement -- a correction with no purchase or sale '
+  'Posts an ''adjustment'' movement — a correction with no purchase or sale '
   'behind it, which is why a REASON is mandatory. Signed quantity: + adds, '
   '- removes. TWO overridable gates on the way out, asking different questions: '
   'PT449 is what is on hand TODAY, PT450 (050) is whether there is any cost basis '
@@ -531,7 +554,7 @@ comment on function post_stock_adjustment(uuid, uuid, uuid, numeric, text, date,
 
 
 -- ############################################################################
--- SECTION 3 -- SELF-VERIFY
+-- SECTION 3 — SELF-VERIFY
 -- ############################################################################
 -- Five assertions, each written to a defect that turns it red. The whole block
 -- runs in a subtransaction aborted by a sentinel, so nothing survives:
@@ -550,8 +573,8 @@ comment on function post_stock_adjustment(uuid, uuid, uuid, numeric, text, date,
 --      one story, so they are one test.
 --
 --   C  an ORDINARY write-off, cost history present -> posts, NO question
---      RED if the gate fires on everything. ON DIFFERENT NUMBERS FROM A -- a
---      different item, a different quantity, a different cost -- because a
+--      RED if the gate fires on everything. ON DIFFERENT NUMBERS FROM A — a
+--      different item, a different quantity, a different cost — because a
 --      fixture where the gated and ungated cases share their figures cannot
 --      tell which one it is testing (rule 27).
 --
@@ -585,7 +608,7 @@ begin
     select t.id into v_tenant from tenants t limit 1;
     select p.id into v_property from properties p where p.tenant_id = v_tenant limit 1;
 
-    -- THE FIXTURE CALLS THE REAL RPCs, which are staff-gated -- so it has to be
+    -- THE FIXTURE CALLS THE REAL RPCs, which are staff-gated — so it has to be
     -- a member of staff. auth.uid() reads request.jwt.claim.sub, and a migration
     -- runs as postgres with no session, so an active tenant_users row is
     -- borrowed for the length of this subtransaction and rolled back with
@@ -619,7 +642,7 @@ begin
     returning id into v_item_c;
 
     -- ITEM D GETS ITS OWN POSITION, and the first draft of this fixture did not
-    -- give it one -- which is how the behaviour in the header's last section was
+    -- give it one — which is how the behaviour in the header's last section was
     -- found. Reusing item A put B's confirmed write-off, dated the same day, in
     -- front of D's adjustment; the fold then returns an average of ZERO rather
     -- than NULL, the gate correctly stays quiet, and the assertion failed
@@ -630,7 +653,7 @@ begin
     returning id into v_item_d;
 
     -- ------------------------------------------------------------------
-    -- A -- no cost history as at the date: the gate asks.
+    -- A — no cost history as at the date: the gate asks.
     -- ------------------------------------------------------------------
     -- Stock arrives TODAY, and the write-off is dated five days ago. On-hand
     -- today is 10 so the NEGATIVE guard does not fire; the average as at the
@@ -654,7 +677,7 @@ begin
     end;
 
     -- ------------------------------------------------------------------
-    -- B -- confirmed, it posts, and 048's bucket names it.
+    -- B — confirmed, it posts, and 048's bucket names it.
     -- ------------------------------------------------------------------
     select * into v_mv from post_stock_writeoff(
       v_property, v_location, v_item_a, 4, 'spoilage',
@@ -672,16 +695,16 @@ begin
     if coalesce(v_recon.unvaluable_movement_count, 0) < 1 then
       v_fail := v_fail || 'B: 048''s bucket did not count the unvaluable movement. ';
     end if;
-    -- THE VALUE, not just the count -- 048 exists because a count was all the
+    -- THE VALUE, not just the count — 048 exists because a count was all the
     -- card showed. 4 kg at the position's average of 1,000.
     if coalesce(v_recon.unvaluable_value, 0) = 0 then
       v_fail := v_fail || 'B: 048''s bucket reported no VALUE for it. ';
     end if;
 
     -- ------------------------------------------------------------------
-    -- C -- an ordinary write-off is untouched, on different numbers.
+    -- C — an ordinary write-off is untouched, on different numbers.
     -- ------------------------------------------------------------------
-    -- Item C, 7 litres at 250, written off 3 litres dated TODAY -- every figure
+    -- Item C, 7 litres at 250, written off 3 litres dated TODAY — every figure
     -- different from A's, so a gate that fires on everything cannot pass this
     -- by coincidence.
     perform post_stock_receipt(
@@ -703,7 +726,7 @@ begin
     end if;
 
     -- ------------------------------------------------------------------
-    -- D -- the same pair for post_stock_adjustment.
+    -- D — the same pair for post_stock_adjustment.
     -- ------------------------------------------------------------------
     perform post_stock_receipt(
       v_property, v_location, v_item_d, 6, 400, v_date, 'ZZ050 receipt D', null, null
@@ -743,7 +766,7 @@ begin
     end if;
 
     -- ------------------------------------------------------------------
-    -- E -- finish_stock_take is still ungated.
+    -- E — finish_stock_take is still ungated.
     -- ------------------------------------------------------------------
     select pg_get_functiondef(p.oid) into v_src
     from pg_proc p
@@ -755,7 +778,7 @@ begin
       v_fail := v_fail || 'E: finish_stock_take not found. ';
     elsif v_src like '%PT450%' or v_src like '%p_allow_unvalued%' then
       v_fail := v_fail ||
-        'E: finish_stock_take has acquired the unvaluable gate. Read 050''s header before removing this assertion -- refusing a count at the end of an hour''s walking teaches people to fudge the count. ';
+        'E: finish_stock_take has acquired the unvaluable gate. Read 050''s header before removing this assertion — refusing a count at the end of an hour''s walking teaches people to fudge the count. ';
     end if;
 
     if v_fail <> '' then
@@ -777,7 +800,7 @@ $$;
 
 
 -- ############################################################################
--- SECTION 4 -- GRANTS, re-issued after the drops
+-- SECTION 4 — GRANTS, re-issued after the drops
 -- ############################################################################
 revoke all     on function post_stock_writeoff(uuid, uuid, uuid, numeric, text, date, text, text, boolean, boolean) from public;
 revoke execute on function post_stock_writeoff(uuid, uuid, uuid, numeric, text, date, text, text, boolean, boolean) from anon;

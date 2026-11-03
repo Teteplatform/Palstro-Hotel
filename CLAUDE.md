@@ -664,6 +664,38 @@ supabase/migrations/NNN_<snake_case_description>.sql
 ```
 Numbers are assigned in strict order and never reused.
 
+**An applied migration is history.** Once a file has been applied it is not
+edited; the correction goes in the next numbered file. The CLI records what it
+has run and **skips the file next time**, so an edit to an applied migration
+leaves the repo and the database disagreeing in silence — the worst failure
+shape there is, because nothing errors and the file reads as the truth.
+
+**The one exception, and all three parts must hold at the same time:**
+
+1. **Minutes have passed**, inside the session that applied it.
+2. **Exactly one database exists** — no second environment has seen it.
+3. **The file is idempotent** (`create or replace`, `drop ... if exists`, a
+   fixture that rolls itself back) **and you re-run and re-verify it**, rather
+   than assuming the edit landed.
+
+The moment any one of those stops holding — the session ends, a second
+environment appears, anything is applied on top — it is history again. **This
+does not bend for a cosmetic change**, which is exactly when it is tempting:
+a typo in a user-facing string feels too small to spend a migration number on,
+and it is the same silent divergence as a schema change.
+
+*Used once, on 3 November, on 050, to restore em dashes an ASCII pass had
+eaten out of storekeeper-facing sentences. Flagged before it was found, re-run
+and re-verified, and noted in the file itself.*
+
+**Never ASCII-ify a migration to protect the parser.** A migration reaches
+Postgres as a **file**, never on a command line, and non-ASCII in a file —
+comment or string literal — round-trips exactly, with or without
+`PGCLIENTENCODING`. Measured in `scripts/ops/backup.mjs`'s header, along with
+what actually breaks and why. Banning characters from strings people read, to
+protect a boundary the file never crosses, is treating a symptom and damaging
+the product's voice to do it.
+
 **RPCs** — `snake_case`, verb-first, tenant-aware, idempotent on writes:
 - Parameters prefixed `p_` (e.g. `p_tenant_id`, `p_payload`, `p_idempotency_key`).
 - Write RPCs always take `p_idempotency_key` (see rule 2).

@@ -70,12 +70,16 @@ delete env.RESTORE_ADMIN_URL
 delete env.BACKUP_AGE_KEY
 delete env.BACKUP_DB_URL
 const conn = d => ['-h', u.hostname, '-p', u.port || '5432', '-U', decodeURIComponent(u.username), '-d', d]
-const run = (cmd, a, { ok = [0] } = {}) => {
-  const r = spawnSync(bin(cmd), a, { env, encoding: 'utf8', maxBuffer: 1 << 30 })
+const run = (cmd, a, { ok = [0], input } = {}) => {
+  const r = spawnSync(bin(cmd), a, { env, input, encoding: 'utf8', maxBuffer: 1 << 30 })
   if (!ok.includes(r.status)) die(`${cmd} failed (${r.status}): ${(r.stderr || '').split('\n').slice(0, 8).join(' | ')}`)
   return r
 }
-const sql = (d, q) => run('psql', [...conn(d), '-X', '-q', '-At', '-v', 'ON_ERROR_STOP=1', '-c', q]).stdout
+// ON STDIN, NOT ON argv -- see the note in backup.mjs. A query sent as a command
+// line argument is re-encoded by Windows into the console codepage before psql
+// ever sees it, and no PGCLIENTENCODING can undo that.
+const sql = (d, q) =>
+  run('psql', [...conn(d), '-X', '-q', '-At', '-v', 'ON_ERROR_STOP=1', '-f', '-'], { input: q }).stdout
 
 // ---- the three-state ledger of results -------------------------------------
 let pass = 0, fail = 0, vacuous = 0
@@ -287,10 +291,19 @@ try {
           JOIN public.properties pr ON pr.tenant_id = tu.tenant_id
          WHERE pr.id = '${p}' AND tu.is_active ORDER BY tu.user_id LIMIT 1), '')`).trim()
       if (!member) { skipped.push(`${p} (no active member to call it as)`); continue }
-      const r = spawnSync(bin('psql'), [...conn(db), '-X', '-q', '-At', '-v', 'ON_ERROR_STOP=1',
-        '-c', `SELECT set_config('request.jwt.claims', json_build_object('sub','${member}','role','authenticated')::text, false)`,
-        '-c', `SELECT r.ledger_difference FROM public.inventory_gl_reconciliation('${p}') r`],
-        { env, encoding: 'utf8' })
+      // BOTH STATEMENTS IN ONE SESSION, on stdin rather than as two -c flags: the
+      // set_config is session-level and the reconciliation must run under it.
+      // Reading the LAST non-empty line is unchanged -- two -c flags concatenated
+      // their output the same way.
+      const r = spawnSync(bin('psql'), [...conn(db), '-X', '-q', '-At', '-v', 'ON_ERROR_STOP=1', '-f', '-'], {
+        env,
+        input:
+          `SELECT set_config('request.jwt.claims', json_build_object('sub','${member}','role','authenticated')::text, false);
+`
+          + `SELECT r.ledger_difference FROM public.inventory_gl_reconciliation('${p}') r;
+`,
+        encoding: 'utf8',
+      })
       if (r.status !== 0) {
         if (/PT424/.test(r.stderr)) { skipped.push(`${p} (the inventory account is unmapped — resolve_account refusing loudly, rule 4)`); continue }
         bad.push(`${p}: the function errored: ${(r.stderr || '').split('\n')[0].slice(0, 160)}`)
