@@ -3,6 +3,7 @@ import { CurrencyField, DateField, NumberField, TextField } from '../../ui/form'
 import { useToast } from '../../ui/Toast';
 import { todayIsoInZone } from '../../../lib/date';
 import { describeError } from '../../../lib/errors';
+import { ConfirmGatePanel } from './ConfirmGatePanel';
 import { formatMoney, formatQuantity } from '../../../lib/format';
 import {
   fetchItemPosition,
@@ -14,6 +15,7 @@ import {
   stockErrorCode,
   stockErrorMessage,
   STOCK_NEEDS_CONFIRMATION,
+  STOCK_NEEDS_COST_CONFIRMATION,
 } from '../../../lib/stock';
 import {
   ADJUSTMENT_REASON_EXPLANATION,
@@ -112,12 +114,39 @@ export function StockEntryForm({
   const [position, setPosition] = useState<StockOnHandRow | null>(null);
   const [positionLoading, setPositionLoading] = useState(false);
 
-  // A PT449 the server raised: the adjustment is legal but would leave less than
-  // nothing on hand. Held with the key that produced it, so confirming re-sends
-  // the SAME intent and cannot post twice.
-  const [confirm, setConfirm] = useState<{ message: string; key: string } | null>(
-    null,
-  );
+  // A CONFIRM-GATE THE SERVER RAISED. Two of them exist and they ask different
+  // questions: PT449 is "this leaves less than nothing on hand", PT450 is "we do
+  // not know what this stock cost". A back-dated movement against a healthy
+  // position trips the second and not the first, which is the gap 050 was built
+  // for, so they are never merged into one "are you sure".
+  //
+  // `allowed` CARRIES FORWARD. A movement can trip both, one after the other, and
+  // answering the second must not silently drop the answer to the first. Held
+  // with the key that produced it, so confirming re-sends the SAME intent and
+  // cannot post twice.
+  const [confirm, setConfirm] = useState<{
+    message: string;
+    key: string;
+    gate: 'negative' | 'unvalued';
+    signature: string;
+    allowed: { negative: boolean; unvalued: boolean };
+  } | null>(null);
+
+  // THE CONFIRMATION BELONGS TO THE FORM THAT RAISED IT.
+  //
+  // 1.1a found this on the receiving screen: a refusal outlived the form it
+  // described, and sat there offering a confirmation for an intent nobody was
+  // attempting any more. Here it would be worse, because confirming re-sends the
+  // SAME idempotency key -- so a panel raised for one date, answered after the
+  // date was changed, would be answering with the wrong key for the wrong thing.
+  //
+  // DERIVED, NOT CLEARED IN EVERY SETTER. A setState from an effect body is the
+  // cascading render the linter rightly refuses, and these forms have eight
+  // fields; a signature compared during render says the same thing with nothing
+  // to keep in step.
+  const intentSignature = `${mode}|${locationId}|${itemId}|${direction}|${quantity}|${unitCost}|${date}|${reason}|${note}`;
+  const liveConfirm =
+    confirm && confirm.signature === intentSignature ? confirm : null;
 
   useEffect(() => {
     let cancelled = false;
@@ -224,7 +253,10 @@ export function StockEntryForm({
     setFormError(null);
   }
 
-  async function submit(allowNegative: boolean, existingKey?: string) {
+  async function submit(
+    allowed: { negative: boolean; unvalued: boolean },
+    existingKey?: string,
+  ) {
     setFormError(null);
 
     if (!itemId) {
@@ -283,7 +315,8 @@ export function StockEntryForm({
           // removal rather than ignoring it, so it is never sent.
           unitCost: direction === 'add' ? unitCost : null,
           idempotencyKey: key,
-          allowNegative,
+          allowNegative: allowed.negative,
+          allowUnvalued: allowed.unvalued,
           batchCode: tracksBatch ? batchCode.trim() || null : null,
           expiryDate: tracksBatch ? expiryDate || null : null,
         });
@@ -295,8 +328,15 @@ export function StockEntryForm({
       // 036 raises sentences a storekeeper can act on ("a unit cost cannot be
       // given when removing stock"), so the server's own message is shown
       // verbatim rather than replaced with soft generic copy.
-      if (stockErrorCode(e) === STOCK_NEEDS_CONFIRMATION) {
-        setConfirm({ message: stockErrorMessage(e), key });
+      const code = stockErrorCode(e);
+      if (code === STOCK_NEEDS_CONFIRMATION || code === STOCK_NEEDS_COST_CONFIRMATION) {
+        setConfirm({
+          message: stockErrorMessage(e),
+          key,
+          gate: code === STOCK_NEEDS_CONFIRMATION ? 'negative' : 'unvalued',
+          signature: intentSignature,
+          allowed,
+        });
       } else {
         setFormError(stockErrorMessage(e));
       }
@@ -543,33 +583,25 @@ export function StockEntryForm({
 
       {/* The server said this would leave less than nothing on hand. Not an
           error to dismiss — a question to answer. */}
-      {confirm ? (
-        <div className="mt-4 rounded-xl border border-accent/40 bg-accent/10 p-3">
-          <p className="text-sm font-medium text-charcoal">{confirm.message}</p>
-          <p className="mt-1 text-xs text-charcoal-muted">
-            Recording it anyway is the honest thing to do if the stock really is
-            gone — the shortfall stays visible instead of being rounded away, and
-            it is what makes the difference show up in a report.
-          </p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => void submit(true, confirm.key)}
-              disabled={submitting}
-              className="rounded-full bg-accent px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-cream disabled:opacity-60"
-            >
-              {submitting ? 'Recording…' : 'Record it anyway'}
-            </button>
-            <button
-              type="button"
-              onClick={() => setConfirm(null)}
-              disabled={submitting}
-              className="rounded-full border border-sand-border bg-white/70 px-4 py-2 text-xs font-semibold text-charcoal transition-colors hover:bg-sand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-cream disabled:opacity-60"
-            >
-              Let me check the number
-            </button>
-          </div>
-        </div>
+      {liveConfirm ? (
+        <ConfirmGatePanel
+          message={liveConfirm.message}
+          gate={liveConfirm.gate}
+          verb="recording it"
+          busy={submitting}
+          confirmLabel="Record it anyway"
+          cancelLabel="Let me check the number"
+          onConfirm={() =>
+            void submit(
+              {
+                negative: liveConfirm.allowed.negative || liveConfirm.gate === 'negative',
+                unvalued: liveConfirm.allowed.unvalued || liveConfirm.gate === 'unvalued',
+              },
+              liveConfirm.key,
+            )
+          }
+          onCancel={() => setConfirm(null)}
+        />
       ) : null}
 
       {formError ? (
@@ -581,7 +613,7 @@ export function StockEntryForm({
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <button
           type="button"
-          onClick={() => void submit(false)}
+          onClick={() => void submit({ negative: false, unvalued: false })}
           disabled={submitting || confirm !== null}
           className="rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-cream disabled:opacity-60"
         >

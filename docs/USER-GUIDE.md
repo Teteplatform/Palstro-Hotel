@@ -1429,6 +1429,42 @@ Record a loss as a correction and your variance report stops meaning anything �
 variance *is* the gap between what should have gone and what did, and putting a
 real loss on the wrong side of that sum quietly deletes the answer.
 
+#### When the system does not know what the stock cost
+
+Sometimes it will stop and tell you there is **no cost history** for that item in
+that location **as at the date you have entered**, and ask you to confirm.
+
+It is a different question from the one about less than nothing, and it catches a
+different mistake. That one is about **how much** is on the shelf. This one is
+about **what it was worth**, and it is nearly always a back-dated date:
+
+> You write off 4 kg dated 1 October. The shelf holds 10 kg today, so the
+> quantity is fine and nothing looks wrong. But that stock was received on
+> 5 October, so on 1 October the system has no record of this item in this
+> location at all — and therefore no idea what a kilo of it cost.
+
+Confirm it and the write-off posts, but it will **take stock off the shelf
+without taking any value off the books**, and the gap shows on *Accounts →
+Does it agree?* until somebody records what the stock cost.
+
+Three ways out, and the message lists them:
+
+- **Record the opening balance first**, if this stock was there before the system
+  was — that is what an opening balance is for.
+- **Change the date** to on or after the first receipt, if the date was the slip.
+- **Confirm anyway**, if the loss is real and the cost genuinely is not known.
+  It stays visible on the reconciliation rather than disappearing.
+
+The same question appears on an **adjustment that removes stock**, for the same
+reason. It never appears when you are *adding* stock, because adding states its
+own cost.
+
+**It does not appear during a stock take**, and that is deliberate: a count is
+already a deliberate act with a manager's PIN in front of it, and stopping
+somebody at the end of an hour's counting would only teach people to change the
+count until it finishes. Unvaluable count adjustments post, and they show up on
+the same reconciliation.
+
 **Choose a reason from the five**, rather than typing one:
 
 | Reason | What it covers |
@@ -1522,6 +1558,10 @@ If a correction would leave **less than nothing** on hand, the system stops and
 tells you what it would come to. You can still record it — and sometimes you
 should, because a negative figure is real information: it means stock left
 without a movement behind it. It is never quietly rounded up to zero.
+
+If there is **no cost history** for that item in that location as at the date,
+the system asks before recording a removal — see *When the system does not know
+what the stock cost*, above.
 
 The **Adjustments** tab lists every correction ever posted — what changed, where,
 why, and in whose name — filtered by location, item, date range, or direction.

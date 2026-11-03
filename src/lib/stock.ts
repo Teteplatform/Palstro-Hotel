@@ -112,6 +112,13 @@ export const STOCK_INVALID = 'PT422';
 // allowNegative: true and the SAME idempotency key — which is what stops the
 // confirmation from posting a second movement.
 export const STOCK_NEEDS_CONFIRMATION = 'PT449';
+// THE SECOND CONFIRM-GATE (050), and it asks a DIFFERENT question from the
+// first. PT449 is about what is on hand TODAY; PT450 is about whether there is
+// any cost basis AS AT the movement's date. A back-dated write-off against a
+// healthy position trips the second and not the first, which is precisely the
+// gap it was built for — so they are two constants, two sentences and two
+// confirmations, never one merged "are you sure".
+export const STOCK_NEEDS_COST_CONFIRMATION = 'PT450';
 // The property's books are closed through posting_locked_through (038 §4), so a
 // movement dated on or before it is refused. A BRANCHING CONSTANT ONLY — the
 // sentence the user reads is the server's, which names both the lock date and
@@ -505,6 +512,9 @@ export interface StockAdjustmentInput {
   idempotencyKey: string;
   // Re-submit after a PT449 with the SAME key to record a result below zero.
   allowNegative?: boolean;
+  // Re-submit after a PT450 with the SAME key to record a movement that will
+  // carry no cost out with it.
+  allowUnvalued?: boolean;
   // 038 §1C. Required by the server on a stock-IN of a batch-tracked item, and
   // REFUSED on a stock-out — which batch left is an issue-rules decision, not a
   // typed one, so a guess here would put a wrong answer into the history a
@@ -528,6 +538,7 @@ export async function postStockAdjustment(
     p_allow_negative: input.allowNegative ?? false,
     p_batch_code: input.batchCode ?? null,
     p_expiry_date: input.expiryDate ?? null,
+    p_allow_unvalued: input.allowUnvalued ?? false,
   });
 
   if (error) throw error;
@@ -616,6 +627,8 @@ export interface StockWriteoffInput {
   idempotencyKey: string;
   // Re-submit after a PT449 with the SAME key to record a result below zero.
   allowNegative?: boolean;
+  // Re-submit after a PT450 with the SAME key to write stock off unvalued.
+  allowUnvalued?: boolean;
 }
 
 // Post a write-off. NO unit cost is sent and none is accepted: leaving stock
@@ -635,6 +648,7 @@ export async function postStockWriteoff(
     p_note: input.note,
     p_idempotency_key: input.idempotencyKey,
     p_allow_negative: input.allowNegative ?? false,
+    p_allow_unvalued: input.allowUnvalued ?? false,
   });
 
   if (error) throw error;

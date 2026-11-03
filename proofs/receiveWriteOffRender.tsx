@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { ToastProvider } from '../src/components/ui/Toast';
 import { ReceiveStockForm } from '../src/components/admin/inventory/ReceiveStockForm';
 import { WriteOffForm } from '../src/components/admin/inventory/WriteOffForm';
+import { ConfirmGatePanel } from '../src/components/admin/inventory/ConfirmGatePanel';
 import { formatMoney } from '../src/lib/format';
 import {
   WRITEOFF_REASONS,
@@ -379,6 +380,112 @@ ok('and it is not hidden behind the ⓘ',
 const lost = 12, average = 1200;
 ok('a write-off costs quantity × the average it left at',
   lost * average === 14_400, `${money(lost * average)}`);
+
+// ---------------------------------------------------------------------------
+// 4. THE TWO CONFIRM-GATES (1.1g2)
+// ---------------------------------------------------------------------------
+// WHAT CAN BE WRONG HERE, AND NONE OF IT THROWS. 050 added a second overridable
+// gate beside the one that was already there, and the two ask different
+// questions: PT449 is "this leaves less than nothing on hand", PT450 is "we do
+// not know what this stock cost". The failure that matters is the panel printing
+// the WRONG consequence — a storekeeper reading "the shortfall stays visible"
+// when what is actually about to happen is that stock leaves the shelf and no
+// value leaves the books. That renders perfectly and is a lie.
+//
+// It is asserted on the REAL panel (rule 22), which is a component rather than
+// two copies of the same JSX precisely so that the two screens cannot drift
+// apart — the brief asked for them to read as the same kind of moment.
+console.log('\n=== 4. The two confirm-gates ===');
+
+const SERVER_NEGATIVE =
+  'Writing off 12 kg would leave -2 kg on hand, which is less than nothing. ' +
+  'Check the quantity — or confirm to record it anyway. — A negative on-hand ' +
+  'means stock left without a movement behind it.';
+const SERVER_UNVALUED =
+  'There is no cost history for this item in this location as at 01 Oct 2026, ' +
+  'so this write-off would remove stock without removing any value. — Record ' +
+  'the opening balance first, or date the write-off on or after the first receipt.';
+
+const panel = (gate: 'negative' | 'unvalued', message: string, verb: string) =>
+  strip(
+    renderToString(
+      <ConfirmGatePanel
+        message={message}
+        gate={gate}
+        verb={verb}
+        busy={false}
+        confirmLabel="Record it anyway"
+        cancelLabel="Let me check"
+        onConfirm={() => {}}
+        onCancel={() => {}}
+      />,
+    ),
+  );
+
+const negativePanel = panel('negative', SERVER_NEGATIVE, 'writing it off');
+const unvaluedPanel = panel('unvalued', SERVER_UNVALUED, 'writing it off');
+
+// RULE 21: the database's sentence, including its hint, verbatim.
+ok('the negative gate shows the server\'s sentence, hint and all',
+  negativePanel.includes('less than nothing') &&
+  negativePanel.includes('stock left without a movement behind it'));
+ok('and so does the cost gate',
+  unvaluedPanel.includes('no cost history for this item') &&
+  unvaluedPanel.includes('date the write-off on or after the first receipt'));
+
+// THE ASSERTION THIS SECTION EXISTS FOR. Each gate gets ITS OWN consequence, and
+// the two fixtures disagree on every word of it — so a panel that printed one
+// sentence for both would go red whichever one it chose (rule 27). A single
+// assertion on one gate could not tell a working switch from a hard-coded
+// branch.
+ok('the cost gate says what it actually does to the books',
+  unvaluedPanel.includes('reduce what is on the shelf without reducing what the books say it was worth'),
+  unvaluedPanel.slice(0, 160));
+ok('...and names where the difference will show up',
+  unvaluedPanel.includes('stock-against-ledger check'));
+ok('...and does NOT borrow the shortfall sentence, which is about a quantity',
+  !unvaluedPanel.includes('the shortfall stays visible'));
+ok('the negative gate keeps its own sentence',
+  negativePanel.includes('the shortfall stays visible'));
+ok('...and does NOT borrow the cost one',
+  !negativePanel.includes('stock-against-ledger check'));
+
+// The verb belongs to the screen, so a write-off says write-off.
+ok('the sentence uses the acting screen\'s own verb',
+  panel('unvalued', SERVER_UNVALUED, 'recording it').includes('so recording it will reduce') &&
+  unvaluedPanel.includes('so writing it off will reduce'));
+
+// BOTH SCREENS USE THE SAME PANEL, which is the structural half of "they read as
+// the same kind of moment". Asserted on the source, because a component used by
+// one screen and copied into the other would pass every assertion above.
+const entrySource = readFileSync('src/components/admin/inventory/StockEntryForm.tsx', 'utf8');
+const writeOffSource = readFileSync('src/components/admin/inventory/WriteOffForm.tsx', 'utf8');
+ok('the adjustment screen uses the shared panel',
+  entrySource.includes('<ConfirmGatePanel'));
+ok('and so does the write-off screen',
+  writeOffSource.includes('<ConfirmGatePanel'));
+// THE CARRY-FORWARD. A movement can trip both gates in turn, and answering the
+// second must not drop the answer to the first — which would send
+// p_allow_negative => false on the retry and re-raise the gate the storekeeper
+// has already confirmed, for ever.
+ok('confirming a second gate keeps the first answer',
+  entrySource.includes('allowed.negative || liveConfirm.gate ===') &&
+  writeOffSource.includes('allowed.unvalued || liveConfirm.gate ==='));
+// AND THE CONFIRMATION BELONGS TO THE FORM THAT RAISED IT. Found live during
+// this shipment: the panel outlived an edit, still offering to confirm an intent
+// nobody was attempting -- and confirming re-sends the SAME idempotency key, so
+// it would have answered with the wrong key for the wrong thing. Same defect
+// class 1.1a fixed on the receiving screen.
+ok('a confirmation raised for one intent does not survive an edit',
+  entrySource.includes('confirm.signature === intentSignature') &&
+  writeOffSource.includes('confirm.signature === intentSignature'));
+ok('...and the signature covers the date, which is what the cost gate turns on',
+  entrySource.includes('|${date}|') && writeOffSource.includes('|${date}|'));
+// AND THE COUNT SHEET IS DELIBERATELY NOT WIRED TO IT.
+const countSource = readFileSync('src/components/admin/inventory/CountSheet.tsx', 'utf8');
+ok('the count sheet does not handle the cost gate, by decision',
+  !countSource.includes('STOCK_NEEDS_COST_CONFIRMATION'),
+  'finish_stock_take is ungated — refusing a count after an hour of walking teaches people to fudge it');
 
 console.log(`\n================  ${pass} PASSED, ${fail} FAILED  ================`);
 process.exit(fail ? 1 : 0);

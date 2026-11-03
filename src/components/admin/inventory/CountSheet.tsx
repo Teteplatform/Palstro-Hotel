@@ -237,10 +237,21 @@ export function CountSheet({
       setMovedWarning(null);
       await onClosed(true);
     } catch (e) {
-      // PT449 is "legal, but look at this first" — the server's one refusal
-      // that asks a question rather than saying no. It becomes a panel with the
-      // server's own words and a way to answer, not an error the user is stuck
-      // behind. Everything else is an error.
+      // PT449 is "legal, but look at this first" — a refusal that asks a
+      // question rather than saying no. It becomes a panel with the server's own
+      // words and a way to answer, not an error the user is stuck behind.
+      // Everything else is an error.
+      //
+      // 050 ADDED A SECOND SUCH CODE, PT450, AND THIS SCREEN DELIBERATELY DOES
+      // NOT HANDLE IT. finish_stock_take is not gated by it and must not be: a
+      // count adjustment downward on a position with no cost history hits the
+      // same case, and refusing it at the end of an hour's walking teaches
+      // people to fudge the count so it finishes. The count is already a
+      // deliberate act with a variance threshold and a manager's PIN in front of
+      // it. Unvaluable count adjustments post, and 048's bucket surfaces them by
+      // value on the reconciliation card. 050's self-verify asserts that
+      // finish_stock_take has not acquired the gate, so adding it here would not
+      // be enough to make it fire — it would fail the migration.
       if (stockErrorCode(e) === STOCK_NEEDS_CONFIRMATION) {
         setMovedWarning(stockErrorMessage(e));
       } else {
