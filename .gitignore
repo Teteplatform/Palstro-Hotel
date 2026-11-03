@@ -16,3 +16,10 @@ palstro-hotels-handover.txt
 # by hand, and deliberately NOT committed: a committed derived file is a second
 # source of truth that can disagree with the first (CLAUDE.md checklist 18).
 docs/build-tracker.html
+
+# Backup artefacts. Encrypted, but production data all the same, and the
+# default output directory sits in the repo root — so a single mistyped flag
+# could otherwise commit a dump. Both the default and the "true" directory a
+# space-separated --out used to produce are ignored.
+backup-out/
+true/
