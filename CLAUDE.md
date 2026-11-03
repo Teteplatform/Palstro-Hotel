@@ -981,6 +981,47 @@ first.
 
 ---
 
+## 7a. Never `git add -A` in this repository
+
+**Stage by path. Every commit, every time.** `git add -A`, `git add .` and
+`git commit -a` stage whatever happens to be lying in the working tree, and what
+is lying there is not always what you wrote.
+
+*On 3 November a mistyped flag — `--out /tmp/x` where the parser takes
+`--out=PATH` — resolved to a directory called `true` in the repo root and put a
+full production backup in it: 1.7 MB of encrypted database dump and storage
+archive. The thing that carried it into a commit, and then onto a **public**
+remote, was `git add -A`. It is still in history.*
+
+The failure is not the flag. A flag was fixed that day and the next accident
+will be a different one — a tool's scratch output, a downloaded file, a dump
+somebody took to debug something. **`git add -A` is what turns any of them into
+a commit**, and it is the only part of the chain that is always the same.
+
+So:
+
+```bash
+git add src/lib/errors.ts docs/build-tracker.json    # yes
+git add -A                                           # no
+```
+
+- **Read `git status --porcelain` before every commit**, and stage the paths it
+  shows that you meant to change. If a path surprises you, stop — that is the
+  warning this rule exists to deliver.
+- **`git add -p`** when a file holds more than one change.
+- **A new untracked directory is never staged without being looked into.**
+  `.gitignore` covers the output directories known today; it cannot cover the
+  one the next tool invents.
+- This applies to generated and derived files too — it is the same rule that
+  keeps `docs/build-tracker.html` out (item 18).
+
+*Why a rule rather than more care: care is what was being exercised at the time.
+The diff was read, the stat was read, and the three binary files went past
+anyway because they were named like everything else in a nine-file commit. A
+command that cannot stage what you did not name cannot make that mistake.*
+
+---
+
 ## 8. Design conventions
 
 - **Contrast is a property of the token, not the component.** Every foreground
