@@ -834,6 +834,43 @@ first.
 13. **Touching a screen?** It ships a render proof, and you have made that proof
     fail before trusting it (rule 22). A passing SQL proof says nothing about
     what the browser does with the JSON.
+
+    **THE TYPE CHECK IS `tsc -b`. `npx tsc --noEmit` CHECKS NOTHING IN THIS
+    REPO, AND NEVER HAS.** The root `tsconfig.json` is a solution file —
+    `"files": []` with `references` to `tsconfig.app.json` and
+    `tsconfig.node.json`. TypeScript does not build referenced projects unless
+    you ask it to with `-b`, so `tsc --noEmit` against the root compiles an
+    empty file list, finds nothing, exits 0, and prints a reassuring blank.
+    `npm run build` is `tsc -b && vite build`, so CI has always been honest;
+    it is the quick check people run by hand that is not.
+
+    *This is not a hypothetical, and it is not one person's slip.* It was found
+    by accident on 3 November, testing whether rule 24's boundary check still
+    worked: `over_quantity` was deleted from a `boundary<T>()` field list and
+    `npx tsc --noEmit` passed. The first conclusion was that rule 24's compiler
+    guarantee had quietly stopped holding — a far worse finding, and the wrong
+    one. Under `tsc -b` the same edit fails immediately and names the field:
+
+    ```
+    error TS2345: Argument of type 'readonly ["ordered_quantity", …]' is not
+    assignable to parameter of type 'readonly [...] &
+    { __unparsedNumericFields: "over_quantity"; }'.
+      Property '__unparsedNumericFields' is missing …
+    ```
+
+    So **every "type check clean" claimed on this repo from a bare
+    `tsc --noEmit` was hollow**, including ones in this file's own history. The
+    guarantees were all still there; nobody was reading them.
+
+    Run `npx tsc -b` (add `--force` when you want it to ignore its build cache).
+    A green run that took no time at all is the symptom: `tsc -b` on this
+    project takes tens of seconds, and an instant exit 0 means it checked
+    nothing or reused a stale cache.
+
+    *Why this earns more words than a rule nobody doubts: a false green is worse
+    than a missing check. A missing check is a known gap somebody will close. A
+    false green is a gap everybody believes is closed, and it is trusted for
+    months — this one was.*
 14. **Reading from the database?** The read declares a boundary and parses its
     numerics there (rule 24) — never in the component, and never a string method
     on a value that came off the wire.

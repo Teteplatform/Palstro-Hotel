@@ -309,10 +309,19 @@ legacy.host.remove();
 // ---------------------------------------------------------------------------
 console.log('\n=== 3. The real Typeahead: server-side, and Zobo is item 400 ===');
 
-function Harness({ onPick }: { onPick: (id: string) => void }) {
+// `source` lets a later part point the SAME harness at a different backend —
+// part 7 needs a picker whose source is genuinely empty, and defining a second
+// component for it would add a second copy of this wiring to keep in step.
+function Harness({
+  onPick,
+  source = serverSearch,
+}: {
+  onPick: (id: string) => void;
+  source?: (term: string) => Promise<TypeaheadResult>;
+}) {
   const [value, setValue] = React.useState('');
   const [label, setLabel] = React.useState<string | null>(null);
-  const search = React.useCallback(serverSearch, []);
+  const search = React.useCallback((term: string) => source(term), [source]);
   return (
     <Typeahead
       label="Item"
@@ -514,6 +523,148 @@ await act(async () => {
   withDisabled.root.unmount();
 });
 withDisabled.host.remove();
+
+// ---------------------------------------------------------------------------
+// PART 7 — "no matches" is a claim about the database (1.1a)
+// ---------------------------------------------------------------------------
+// FOUND ON THE LIVE WALK, not in a proof. Typing one character into a fresh
+// supplier picker printed "No suppliers match that." and then, ~160ms later, the
+// supplier it had just denied existed. Measured deliberately rather than
+// reported from one sighting:
+//
+//   Z +0ms:   No suppliers match that.
+//   Z +80ms:  No suppliers match that.
+//   Z +160ms: ZZ Test Supplier / ZZ-01
+//
+// THE DEFECT: the panel chose between "Searching…" and the empty message on
+// `searching` alone, and `searching` is set INSIDE the 250ms debounce callback.
+// For the whole gap between a keystroke and the request it is false, so a picker
+// with no rows yet asserted that nothing matched — before it had asked anything.
+//
+// IT IS ASSERTED HERE, ON THE PRIMITIVE, because the defect is the Typeahead's
+// and every picker in the product inherits it. A proof written against the
+// supplier screen would have proved one caller and left the item picker, the
+// location picker and the account picker telling the same lie.
+//
+// THE DEFECT CLASS IS THE ONE 1.1a IS ABOUT: a screen stating something untrue
+// with confidence. Rule 26 names the cost — the storekeeper concludes the hotel
+// does not stock a thing that is sitting on the shelf.
+console.log('\n=== 7. The empty message is never shown before a search has run ===');
+
+// THE EMPTY MESSAGE AS THE COMPONENT ACTUALLY RENDERS IT. Asserting a string the
+// component does not use is an assertion that cannot fail; the first draft of
+// this part asserted "No matches" and went red against a correct component,
+// which is the harness fault rule 22 warns about.
+const DENIAL = 'Nothing matches that.';
+
+// Focus WITHOUT settling. openList waits out the debounce, which is exactly the
+// window this part is about, so it cannot be used here.
+async function focusNoSettle(el: HTMLInputElement) {
+  await act(async () => {
+    el.blur();
+    el.focus();
+    el.dispatchEvent(new win.Event('focusin', { bubbles: true }) as unknown as Event);
+  });
+}
+
+let picked3 = '';
+const fresh = mount(<Harness onPick={(id) => { picked3 = id; }} />);
+const input3 = doc.querySelectorAll('input[role="combobox"]')[0] as HTMLInputElement;
+const panelText = () =>
+  (doc.querySelector('[role="listbox"]')?.textContent ?? '').trim();
+
+// --- 7a: THE PICKER THAT HAS NEVER ASKED ANYTHING --------------------------
+// THE ASSERTION ONLY WORKS WITH AN EMPTY OPTIONS LIST, and getting that right
+// took two attempts. Written first as "open, type, read", it PASSED under the
+// defect — because opening had already loaded a starting set, so the panel was
+// showing stale rows and the empty branch was never reached. An assertion that
+// passes under the bug is decoration (rule 27). A picker that has not searched
+// at all is the state where the two implementations genuinely disagree.
+queries.length = 0;
+await focusNoSettle(input3);
+const beforeAnySearch = panelText();
+ok('a picker that has not searched yet does not claim there are no matches',
+   !beforeAnySearch.includes(DENIAL),
+   `panel read: "${beforeAnySearch.slice(0, 80)}"`);
+ok('...and it has indeed asked nothing yet, which is why it must not',
+   queries.length === 0, `queries: ${JSON.stringify(queries)}`);
+
+await settle();
+ok('...and once it has asked, it offers the starting set',
+   rowsIn(doc.querySelector('[role="listbox"]')).length > 0);
+
+// --- 7b: THE EMPTY MESSAGE MUST STILL ARRIVE WHEN IT IS TRUE ---------------
+// RULE 27, AND THE HALF THAT EARNS THE PAIR. Deleting the empty message
+// altogether would pass 7a and be worse than the bug: a picker that never says
+// "nothing matched" answers with silence, and silence is unreadable.
+await type(input3, 'Qqqq-no-such-item');
+await settle();
+ok('a term that genuinely matches nothing DOES say so, once the server answers',
+   panelText().includes(DENIAL), `panel read: "${panelText().slice(0, 80)}"`);
+ok('...and the server was actually asked', queries.includes('Qqqq-no-such-item'),
+   `queries: ${JSON.stringify(queries)}`);
+
+// --- 7c: TYPING ON FROM AN EMPTY RESULT -------------------------------------
+// The second state where options are empty, and the one a storekeeper meets:
+// a term that found nothing, then another character. Mid-debounce the picker
+// must not go on denying — the rows for THIS term have not been asked for yet.
+await type(input3, 'Zobo');
+const whileNarrowing = panelText();
+ok('typing on from an empty result stops denying immediately',
+   !whileNarrowing.includes(DENIAL),
+   `panel read: "${whileNarrowing.slice(0, 80)}"`);
+await settle();
+ok('...and the row it had been denying is there once the search lands',
+   rowsIn(doc.querySelector('[role="listbox"]'))
+     .some((r) => r.textContent?.includes('Zobo Concentrate')));
+
+// --- 7d: THE SAME LIE, ONE SESSION LATER ------------------------------------
+// close() resets what counts as an answer, and THE FIRST FIXTURE FOR THIS WAS
+// DECORATION. Written against the catalogue picker — type a no-match term,
+// Escape, re-open — it stayed GREEN with the reset deleted, because the settled
+// term was still 'Qqqq-no-such-item' and the reopened term is '', so the two
+// differed and the panel was pending anyway.
+//
+// The case the reset actually guards needs the EMPTY TERM ITSELF to be the
+// settled one that found nothing: a picker over a source with no rows at all.
+// That is not a contrived state — it is every picker at a property on its first
+// morning, which is exactly what Heledon's suppliers list was before the walk.
+// Without the reset, such a picker re-opens and denies before it has asked.
+const emptyQueries: string[] = [];
+async function emptySearch(term: string): Promise<TypeaheadResult> {
+  emptyQueries.push(term);
+  return { options: [], capped: false };
+}
+
+await act(async () => {
+  fresh.root.unmount();
+});
+fresh.host.remove();
+
+const none = mount(<Harness onPick={() => {}} source={emptySearch} />);
+const input4 = doc.querySelectorAll('input[role="combobox"]')[0] as HTMLInputElement;
+
+await openList(input4);
+ok('(setting up: a picker whose source has nothing in it says so)',
+   panelText().includes(DENIAL), `panel read: "${panelText().slice(0, 80)}"`);
+
+emptyQueries.length = 0;
+await press(input4, 'Escape');
+await focusNoSettle(input4);
+ok('re-opening it does not repeat the denial before asking again',
+   !panelText().includes(DENIAL), `panel read: "${panelText().slice(0, 80)}"`);
+ok('...and it genuinely had not asked yet at that moment',
+   emptyQueries.length === 0, `queries: ${JSON.stringify(emptyQueries)}`);
+
+await settle();
+ok('...and says it again, truthfully, once it has',
+   panelText().includes(DENIAL) && emptyQueries.length > 0);
+
+void picked3;
+await act(async () => {
+  none.root.unmount();
+});
+none.host.remove();
 
 console.log(`\n================  ${pass} PASSED, ${fail} FAILED  ================`);
 process.exit(fail ? 1 : 0);

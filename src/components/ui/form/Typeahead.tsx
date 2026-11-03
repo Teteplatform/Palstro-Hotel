@@ -127,6 +127,9 @@ export function Typeahead({
   const [options, setOptions] = useState<TypeaheadOption[]>([]);
   const [capped, setCapped] = useState(false);
   const [searching, setSearching] = useState(false);
+  // WHICH TERM THE ROWS IN `options` ARE THE ANSWER TO. null means nothing has
+  // been answered yet. This is the whole of the 1.1a fix — see `pending` below.
+  const [settledTerm, setSettledTerm] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   // Which row the keyboard is on. -1 means none — Enter then does nothing rather
   // than choosing whatever happened to be first, which is how a picker silently
@@ -151,6 +154,7 @@ export function Typeahead({
           if (cancelled) return;
           setOptions(result.options);
           setCapped(result.capped);
+          setSettledTerm(term);
           setError(null);
           // Reset the cursor on every new result: keeping index 3 across a
           // different set of rows points it at an unrelated item.
@@ -163,6 +167,10 @@ export function Typeahead({
           setError(e instanceof Error ? e.message : String(e));
           setOptions([]);
           setCapped(false);
+          // A failure is an ANSWER to this term too — the error branch renders
+          // it, and leaving the panel "pending" forever would hide it behind
+          // "Searching…".
+          setSettledTerm(term);
         } finally {
           if (!cancelled) setSearching(false);
         }
@@ -180,6 +188,11 @@ export function Typeahead({
     // The typed term is dropped on close, so re-opening offers the starting set
     // rather than the leftovers of a search the user abandoned.
     setTerm('');
+    // And the previous answer stops counting as an answer. Without this, a
+    // picker whose last search found nothing would re-open with settledTerm ===
+    // '' === term and no rows, and print "no matches" before the reopening
+    // query had run — the same lie, one session later.
+    setSettledTerm(null);
   }, []);
 
   const choose = useCallback(
@@ -191,6 +204,34 @@ export function Typeahead({
     },
     [onChange, close, input],
   );
+
+  // "NO MATCHES" IS A CLAIM ABOUT THE DATABASE AND MUST ONLY BE MADE AFTER
+  // ASKING IT (1.1a).
+  //
+  // The panel used to decide between "Searching…" and the empty message on
+  // `searching` alone — and `searching` is set INSIDE the debounce callback, so
+  // it is false for the whole 250ms between a keystroke and the request. With no
+  // rows yet, that window rendered "No suppliers match that." Measured on the
+  // live walk: typing one character into a fresh supplier picker printed the
+  // empty message immediately, then the matching supplier ~160ms later.
+  //
+  // It read as a flicker on localhost against one supplier. On a phone on
+  // Nigerian mobile data against a few hundred it is the FIRST thing the picker
+  // says, every time, and rule 26 is explicit about the cost: the storekeeper
+  // concludes the hotel does not stock a thing that is sitting on the shelf.
+  //
+  // WHY `searching` WAS NEVER ENOUGH, and why the fix is a term and not a flag:
+  // the question the panel has to answer is not "is a request in flight" but
+  // "are these rows the answer to what is in the box". Those differ for the
+  // whole debounce window, and they differ again if a request is cancelled.
+  // Comparing the settled term to the live one answers the real question.
+  //
+  // STALE ROWS ARE DELIBERATELY STILL SHOWN while a newer term settles. They are
+  // rows that genuinely exist, they are one keystroke out of date for ~250ms,
+  // and blanking them to "Searching…" on every keystroke makes the picker
+  // flicker unusably. Only the EMPTY claim is gated, because only the empty
+  // claim can be false.
+  const pending = searching || settledTerm !== term;
 
   // The rows a keystroke may land on. A disabled row is skipped by the arrows
   // rather than being a dead stop the cursor has to be pushed past.
@@ -330,7 +371,7 @@ export function Typeahead({
                 >
                   {error}
                 </p>
-              ) : searching && options.length === 0 ? (
+              ) : pending && options.length === 0 ? (
                 <p
                   className="px-3 py-3 text-sm text-charcoal-muted"
                   aria-live="polite"
