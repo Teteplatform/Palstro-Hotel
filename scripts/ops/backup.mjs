@@ -87,10 +87,6 @@ import path from 'node:path'
 import { createHash } from 'node:crypto'
 import { ageRecipient, runTool, toolPath } from './tools.mjs'
 
-const args = Object.fromEntries(process.argv.slice(2).map(a => {
-  const m = a.match(/^--([^=]+)(?:=(.*))?$/)
-  return m ? [m[1], m[2] ?? true] : [a, true]
-}))
 
 // The unencrypted files and staging directories this run made. Removed if the run
 // stops for ANY reason, so a half-made dump -- or a directory of freshly fetched
@@ -102,6 +98,33 @@ const die = m => {
   for (const d of tempDirs) fs.rmSync(d, { recursive: true, force: true })
   console.error(`backup: ${m}`)
   process.exit(1)
+}
+
+// ARGUMENTS ARE --name=value, AND ANYTHING ELSE IS REFUSED BY NAME.
+//
+// This used to accept whatever it was given and carry on. `--out /tmp/x` then
+// set out to the BOOLEAN true, `path.resolve(String(true))` resolved to a
+// directory called "true" in the repo root, and a backup of production landed
+// there -- where a `git add -A` swept it into a commit. The files were
+// encrypted, so it was embarrassing rather than a breach, and the lesson is the
+// same either way: a flag that silently means something other than what was
+// typed will eventually be typed by somebody in a hurry.
+// The options this script actually reads. Listing one it does not would be a
+// small lie of its own, and the first draft of this set listed two.
+const KNOWN = new Set(['out', 'recipient'])
+const args = {}
+for (const a of process.argv.slice(2)) {
+  const m = a.match(/^--([^=]+)(?:=(.*))?$/)
+  if (!m) {
+    die(`unexpected argument "${a}". Options are --name=value; a value separated by a space is not read.`)
+  }
+  if (!KNOWN.has(m[1])) {
+    die(`unknown option "--${m[1]}". Known options: ${[...KNOWN].map(k => '--' + k).join(', ')}.`)
+  }
+  if (m[1] === 'out' && (m[2] === undefined || m[2] === '')) {
+    die('--out needs a path, written as --out=PATH. A path after a space is a separate argument and is not read.')
+  }
+  args[m[1]] = m[2] ?? true
 }
 
 const url = process.env.BACKUP_DB_URL
