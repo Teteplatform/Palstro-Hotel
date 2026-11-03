@@ -164,9 +164,32 @@ export function SupplierActivityTable({
             <th className="py-2 pr-3">Raised</th>
             <th className="py-2 pr-3">Expected</th>
             <th className="py-2 pr-3">Status</th>
-            <th className="py-2 pr-3 text-right">Ordered</th>
-            <th className="py-2 pr-3 text-right">Arrived</th>
-            <th className="py-2 text-right">Outstanding</th>
+            {/* THREE BASES, NAMED IN THE HEADERS. The walk showed one row
+                reading "Ordered 190,000 · Arrived 200,000 · Outstanding
+                12,000" — every figure correct, and together unreadable,
+                because the reader has no way to know that the first is at the
+                agreed price, the second at the invoiced one, and the third is
+                what has not been invoiced at all. The arithmetic was never the
+                problem; the labels were lying by omission. The ⓘ carries the
+                rest, including the sentence this row is actually saying. */}
+            <th className="py-2 pr-3 text-right">
+              Ordered
+              <span className="block text-[0.65rem] font-normal normal-case">
+                at the agreed price
+              </span>
+            </th>
+            <th className="py-2 pr-3 text-right">
+              Arrived
+              <span className="block text-[0.65rem] font-normal normal-case">
+                at the invoiced price
+              </span>
+            </th>
+            <th className="py-2 text-right">
+              Still to come
+              <span className="block text-[0.65rem] font-normal normal-case">
+                at the agreed price
+              </span>
+            </th>
           </tr>
         </thead>
         <tbody>

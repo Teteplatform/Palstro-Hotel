@@ -1458,13 +1458,29 @@ hiding it teaches people to invent deliveries to cover it.
 
 **Where:** *Inventory* → **Provenance** tab.
 
-Three questions on one screen. **Every row here has an innocent explanation and
+Four questions on one screen. **Every row here has an innocent explanation and
 most of them are innocent** — the screen exists so you can see them, not so anybody
 is accused, and each row carries its own answer where there is one.
 
 **Delivered somewhere other than a store.** Deliveries that went straight to a
 kitchen or a bar, with the manager who authorised each one and the reason they
 gave. Usually that reason is the whole story.
+
+**More arrived than was ordered.** A delivery larger than the order asked for can
+only be accepted with a manager's PIN, because accepting it commits the hotel to
+paying for goods nobody agreed to buy. The row shows what was ordered, what came,
+how much of that was above the line, **what the extra cost at the price you were
+invoiced**, the reason given, and the manager who approved it.
+
+It is allowed at all — rather than simply refused — for the same reason the
+direct-delivery exception exists. Refusing it sends the stock back up the road,
+or, far more likely, gets it received quietly as something else, and then you have
+an invented movement in your records instead of a true one with a name against it.
+A supplier sending a full carton instead of a part one is an ordinary week.
+
+If two deliveries both go past the ordered quantity, each row shows only the part
+*it* added above the line, so the column adds up to the real excess rather than
+counting the first one twice.
 
 **Declared as opening stock in a place already in use.** An opening balance means
 "this is what was here when we started". On day one that is the honest beginning of

@@ -119,7 +119,19 @@ export function ReceiveForm({
   const notAStore = order.destination_kind !== 'store';
   const needsPin = totals.needsManager || notAStore;
 
+  // A REFUSAL IS ABOUT THE FORM AS IT WAS WHEN IT WAS SUBMITTED, and the walk
+  // found it outliving that form: the delivery was refused for the over-receipt,
+  // the over-received line was then unticked, and "You do not have permission to
+  // make this change" stayed on screen underneath a form it no longer described.
+  // A stale refusal is worse than none — it is a true sentence about a thing
+  // that is no longer being attempted, and the reader cannot tell. So every edit
+  // retires it, and the next submit earns a new one.
+  function edited() {
+    setFormError((current) => (current === null ? current : null));
+  }
+
   function toggle(line: PurchaseOrderLineStatus) {
+    edited();
     setDrafts((prev) => {
       const next = new Map(prev);
       if (next.has(line.purchase_order_line_id)) {
@@ -132,6 +144,7 @@ export function ReceiveForm({
   }
 
   function setDraft(id: string, patch: Partial<ReceiptLineDraft>) {
+    edited();
     setDrafts((prev) => {
       const current = prev.get(id);
       if (!current) return prev;
@@ -199,19 +212,19 @@ export function ReceiveForm({
         <DateField
           label="Delivery date"
           value={businessDate}
-          onChange={setBusinessDate}
+          onChange={(v) => { edited(); setBusinessDate(v); }}
           helpText="The day it arrived."
         />
         <TextField
           label="Delivery note"
           value={deliveryNote}
-          onChange={setDeliveryNote}
+          onChange={(v) => { edited(); setDeliveryNote(v); }}
           placeholder="Their reference"
         />
         <TextField
           label="Invoice number"
           value={invoiceNumber}
-          onChange={setInvoiceNumber}
+          onChange={(v) => { edited(); setInvoiceNumber(v); }}
         />
       </div>
 
@@ -251,6 +264,28 @@ export function ReceiveForm({
         </table>
       </div>
 
+      {/* THE REFUSAL SITS AGAINST THE TABLE IT IS ABOUT.
+          It used to render at the very bottom, below the Note box and the
+          manager panel, which on the walk put "Rice (long grain): 100 was
+          outstanding and 90 arrived…" most of a screen away from the rice.
+          Here it is the first thing under the rows it names.
+
+          IT IS STILL NOT MARKED ON THE FIELD, and that is deliberate rather
+          than unfinished: knowing WHICH field a refusal belongs to would mean
+          parsing the database's sentence in the client, which is rule 21's
+          defect wearing a helpful face — the client would be deciding what the
+          server meant, and would go on deciding it wrongly the first time the
+          server's wording changed. Proximity is what the client can honestly
+          offer. role="alert" is what a screen reader gets. */}
+      {formError ? (
+        <p
+          role="alert"
+          className="rounded-lg bg-primary/10 px-3 py-2 text-sm text-charcoal"
+        >
+          {formError}
+        </p>
+      ) : null}
+
       {/* THE EFFECT, in this delivery's own figures. Never hidden behind an
           icon: it is the sentence somebody is deciding on. */}
       {totals.lineCount > 0 ? (
@@ -287,7 +322,7 @@ export function ReceiveForm({
         <div className="space-y-2">
           <ManagerPinField
             value={pin}
-            onChange={setPin}
+            onChange={(v) => { edited(); setPin(v); }}
             title="A manager must authorise this delivery"
             // THE `lead` IS WHY A PIN IS NEEDED AT ALL, and it must not claim
             // "always": an ordinary delivery into the store needs none, which is
@@ -311,7 +346,7 @@ export function ReceiveForm({
             <TextField
               label="Why it went straight there"
               value={reason}
-              onChange={setReason}
+              onChange={(v) => { edited(); setReason(v); }}
               placeholder="The driver took it to the bar"
               required
             />
@@ -319,13 +354,7 @@ export function ReceiveForm({
         </div>
       ) : null}
 
-      <TextArea label="Note" value={note} onChange={setNote} rows={2} />
-
-      {formError ? (
-        <p className="rounded-lg bg-primary/10 px-3 py-2 text-sm text-charcoal">
-          {formError}
-        </p>
-      ) : null}
+      <TextArea label="Note" value={note} onChange={(v) => { edited(); setNote(v); }} rows={2} />
 
       <div className="flex flex-wrap justify-end gap-2">
         <button

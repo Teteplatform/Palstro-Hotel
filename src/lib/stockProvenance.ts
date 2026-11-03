@@ -174,6 +174,90 @@ export async function fetchLateOpeningsPage(
 }
 
 // ---------------------------------------------------------------------------
+// Over-receipts (049) — stock accepted above what the order asked for
+// ---------------------------------------------------------------------------
+// THE FOURTH QUESTION, and the one the walk found missing. 043's three sections
+// are all about stock arriving in the wrong PLACE. An over-receipt arrives in
+// exactly the right place in the wrong QUANTITY — the same question asked of a
+// different column, and the only OTHER act in this product that spends a
+// manager's PIN.
+//
+// It belongs here rather than only on the order it happened on, because the
+// owner's question is not "what happened to PO-000001", it is "what did we
+// accept this month that nobody ordered, and who said yes". That is a report,
+// and a report is what makes the PIN dialog's promise — "recorded against them
+// by name, permanently" — a thing the application can actually answer.
+
+export interface OverReceiptRow {
+  id: string;
+  business_date: string;
+  created_at: string;
+  receipt_number: string;
+  order_number: string;
+  delivery_note: string | null;
+  invoice_number: string | null;
+  supplier_name: string;
+  supplier_code: string | null;
+  item_name: string | null;
+  item_code: string | null;
+  base_unit: string | null;
+  location_name: string;
+  ordered_quantity: number;
+  quantity: number;
+  received_to_date: number;
+  // The part of THIS delivery that sat above the ordered quantity, and what it
+  // cost at the price it was invoiced at.
+  over_quantity: number;
+  over_value: number;
+  unit_cost: number;
+  reason: string | null;
+  note: string | null;
+  // The manager whose PIN accepted it. The whole reason the section exists.
+  authorised_by: string | null;
+  created_by: string | null;
+}
+
+export const overReceiptRows = boundary<OverReceiptRow>('stock_over_receipts')(
+  [
+    'ordered_quantity',
+    'quantity',
+    'received_to_date',
+    'over_quantity',
+    'over_value',
+    'unit_cost',
+  ] as const,
+  [] as const,
+);
+
+export async function fetchOverReceiptsPage(
+  tenantId: string,
+  propertyId: string,
+  page: number,
+  pageSize: number,
+  filters: ProvenanceFilters = EMPTY_PROVENANCE_FILTERS,
+): Promise<ProvenancePage<OverReceiptRow>> {
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+
+  let q = supabase
+    .from('stock_over_receipts')
+    .select('*', { count: 'exact' })
+    .eq('tenant_id', tenantId) // rule 19
+    .eq('property_id', propertyId); // rule 19
+
+  if (filters.fromDate) q = q.gte('business_date', filters.fromDate);
+  if (filters.toDate) q = q.lte('business_date', filters.toDate);
+
+  const { data, error, count } = await q
+    .order('business_date', { ascending: false })
+    .order('id', { ascending: true }) // unique → stable paging
+    .range(from, to);
+
+  if (error) throw error;
+  return { rows: overReceiptRows.rows(data), count: count ?? 0 };
+}
+
+// ---------------------------------------------------------------------------
 // Wastage by category (043 §3) — the loss report the reason_code exists for
 // ---------------------------------------------------------------------------
 // NOT ONE OF §4's THREE SECTIONS, and included here anyway for one reason: a

@@ -149,18 +149,20 @@ export function SupplierForm({
         />
       </div>
 
-      {/* THE TWO GROUPS BELOW CARRY ONE LINE EACH, and that line is not
-          teaching (rule 25) — it is the answer to "why am I being asked for
-          this, when nothing on this screen uses it?", which is a question the
-          form itself raises. */}
+      {/* THE SCOPE NOTE THAT USED TO SIT HERE IS BEHIND THE ⓘ (rule 25).
+          "Collected for supplier payments, which are being built next. Nothing
+          here is calculated with yet." was defended as the answer to "why am I
+          being asked for this?" — a fair question, and still not one the form
+          should answer in a paragraph above the fields. It reads the same on
+          every supplier anybody will ever type, which is the test: that makes it
+          an ABOUT, not an effect. It is SUPPLIERS_ABOUT's second paragraph and
+          is in the staff guide, both of which this screen's ⓘ links to, and the
+          Bank group below never had such a line — so the form now treats its two
+          groups the same way. */}
       <fieldset className="space-y-3 rounded-xl border border-sand-border p-3">
         <legend className="px-1 text-xs font-semibold tracking-wide text-charcoal-muted uppercase">
           Tax
         </legend>
-        <p className="text-xs text-charcoal-muted">
-          Collected for supplier payments, which are being built next. Nothing
-          here is calculated with yet.
-        </p>
         <div className="grid gap-3 sm:grid-cols-2">
           <TextField
             label="TIN"

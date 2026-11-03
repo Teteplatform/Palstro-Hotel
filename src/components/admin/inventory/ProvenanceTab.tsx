@@ -11,8 +11,10 @@ import {
   EMPTY_PROVENANCE_FILTERS,
   fetchDirectReceiptsPage,
   fetchLateOpeningsPage,
+  fetchOverReceiptsPage,
   type DirectReceiptRow,
   type LateOpeningRow,
+  type OverReceiptRow,
   type ProvenanceFilters,
 } from '../../../lib/stockProvenance';
 import {
@@ -120,6 +122,19 @@ export function ProvenanceTab({
         userId={user?.id ?? null}
       />
 
+      {/* THE FOURTH QUESTION (049). The three around it are all "did this stock
+          arrive in the right PLACE"; this one is "did this much of it arrive",
+          which is the same question asked of a different column — and the only
+          other act in the product that spends a manager's PIN. */}
+      <OverReceipts
+        key={`over:${filters.fromDate}|${filters.toDate}`}
+        tenantId={tenantId}
+        propertyId={propertyId}
+        currency={currency}
+        filters={filters}
+        userId={user?.id ?? null}
+      />
+
       <LateOpenings
         key={`openings:${filters.fromDate}|${filters.toDate}`}
         tenantId={tenantId}
@@ -128,7 +143,7 @@ export function ProvenanceTab({
         filters={filters}
       />
 
-      {/* THE THIRD QUESTION, as a way in rather than a second table. */}
+      {/* THE LAST QUESTION, as a way in rather than another table. */}
       <section className="rounded-2xl border border-sand-border bg-white/60 p-4">
         <h3 className="text-sm font-semibold text-charcoal">
           Stock showing less than nothing
@@ -281,6 +296,166 @@ function DirectReceipts({
         itemNoun="deliveries"
       />
     </Section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Over-receipts (049) — more arrived than was ordered, and a manager said yes
+// ---------------------------------------------------------------------------
+// WHY THIS IS A SECTION AND NOT A NOTE ON THE ORDER. The order page now names
+// the authoriser on its deliveries table, which answers "who approved THIS".
+// The owner's question is the other one — "what did we accept this month that
+// nobody ordered" — and that cannot be answered one order at a time.
+//
+// It carries the reason column for the same purpose the direct-receipt section
+// does: most of these are a supplier sending a full carton instead of a part
+// one, and a report that forces a conversation per row is a report that stops
+// being read.
+
+function OverReceipts({
+  tenantId,
+  propertyId,
+  currency,
+  filters,
+  userId,
+}: {
+  tenantId: string;
+  propertyId: string;
+  currency: string;
+  filters: ProvenanceFilters;
+  userId: string | null;
+}) {
+  const [rows, setRows] = useState<OverReceiptRow[]>([]);
+  const [count, setCount] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const { fromDate, toDate } = filters;
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      try {
+        const result = await fetchOverReceiptsPage(
+          tenantId, propertyId, page, pageSize, { fromDate, toDate },
+        );
+        if (cancelled) return;
+        const lastPage = Math.max(1, Math.ceil(result.count / pageSize));
+        if (page > lastPage) {
+          setPage(lastPage);
+          return; // the effect re-runs; stay loading
+        }
+        setRows(result.rows);
+        setCount(result.count);
+        setError(null);
+      } catch (e) {
+        if (!cancelled) setError(describeError(e)); // rule 11
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [tenantId, propertyId, page, pageSize, fromDate, toDate]);
+
+  return (
+    <Section
+      title="More arrived than was ordered"
+      lead="A delivery can only be accepted above what the order asked for with a manager’s PIN. These are the ones that were, and what the hotel took on by accepting them."
+      count={count}
+      loading={loading}
+      error={error}
+      empty="Nothing has been accepted above what was ordered."
+    >
+      <OverReceiptsTable rows={rows} currency={currency} userId={userId} />
+      <Pagination
+        page={page}
+        pageSize={pageSize}
+        totalCount={count}
+        onPageChange={setPage}
+        onPageSizeChange={setPageSize}
+        disabled={loading}
+        itemNoun="deliveries"
+      />
+    </Section>
+  );
+}
+
+// EXTRACTED RATHER THAN COPIED (rule 22): the render proof drives THIS, the
+// table the screen runs, so the proof cannot drift away from the thing it is
+// proving. The fetching stays in the section above it, where a proof has no
+// business going.
+export function OverReceiptsTable({
+  rows,
+  currency,
+  userId,
+}: {
+  rows: OverReceiptRow[];
+  currency: string;
+  userId: string | null;
+}) {
+  return (
+    <table className="w-full min-w-[56rem] border-collapse text-xs">
+      <thead>
+        <tr className="border-b border-sand-border text-left">
+          <Th>Date</Th>
+          <Th>Item</Th>
+          <Th>Delivery</Th>
+          <Th>Supplier</Th>
+          <Th right>Ordered</Th>
+          <Th right>Arrived</Th>
+          <Th right>Over by</Th>
+          <Th right>Cost of the extra</Th>
+          <Th>Why</Th>
+          <Th>Authorised by</Th>
+        </tr>
+      </thead>
+      <tbody className="divide-y divide-sand-border/50">
+        {rows.map((row) => (
+          <tr key={row.id}>
+            <Td>{formatDisplayDate(row.business_date)}</Td>
+            <Td strong>
+              {row.item_name ?? MISSING_VALUE}
+              {row.item_code ? (
+                <span className="block text-charcoal-muted">{row.item_code}</span>
+              ) : null}
+            </Td>
+            <Td>
+              {row.receipt_number}
+              <span className="block text-charcoal-muted">
+                {row.order_number}
+              </span>
+            </Td>
+            <Td>{row.supplier_name}</Td>
+            {/* ORDERED is the whole line's figure and ARRIVED is THIS
+                delivery's, which is the pair somebody needs to see the shape
+                of: 20 ordered, 25 came. OVER BY is the part of this delivery
+                above the line, so two deliveries past it do not both claim the
+                whole excess. */}
+            <Td right>
+              {formatQuantity(row.ordered_quantity)} {row.base_unit ?? ''}
+            </Td>
+            <Td right>
+              {formatQuantity(row.quantity)} {row.base_unit ?? ''}
+            </Td>
+            <Td right>
+              <span className="font-semibold text-amber-800">
+                +{formatQuantity(row.over_quantity)} {row.base_unit ?? ''}
+              </span>
+            </Td>
+            <Td right>{formatMoney(row.over_value, currency)}</Td>
+            <Td>{row.reason ?? MISSING_VALUE}</Td>
+            {/* THE PROMISE THE PIN DIALOG MAKES, kept where somebody can read
+                it. */}
+            <Td>{staffLabel(row.authorised_by, userId)}</Td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 }
 

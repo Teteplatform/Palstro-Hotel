@@ -429,6 +429,17 @@ export const PROVENANCE_ABOUT: string[] = [
     'something directly would record a fake store receipt and an instant ' +
     'transfer, which puts two invented movements in your ledger instead of one ' +
     'true one.',
+  // THE FOURTH SECTION (049). The three it sits among all ask whether stock
+  // arrived in the right PLACE; this one asks whether this much of it arrived.
+  'MORE ARRIVED THAN WAS ORDERED. A delivery of more than the order asked for ' +
+    'can only be accepted with a manager’s PIN, because accepting it commits ' +
+    'the hotel to paying for goods nobody agreed to buy. It is usually a ' +
+    'supplier sending a full carton instead of a part one, which is why it is ' +
+    'allowed at all rather than refused — refusing it would send the stock back ' +
+    'up the road or, far more likely, get it received quietly as something ' +
+    'else. The row shows what was ordered, what came, how much of it was above ' +
+    'the line, what that extra cost at the invoiced price, the reason given and ' +
+    'the manager who approved it.',
   'DECLARED AS OPENING STOCK IN A PLACE ALREADY IN USE. An opening balance means ' +
     '“this is what was here when we started”. Entered on day one it is the honest ' +
     'beginning of the record. Entered into a store that has been working for six ' +

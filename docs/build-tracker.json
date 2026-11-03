@@ -265,6 +265,41 @@
      "note": "037 has been applied to the live DB since before November; the stale 'apply 037' line was dropped on 2 November, the first drift caught by the rule that a shipment updates this file in the same commit as the work. What is still outstanding is the walkthrough itself: the tabs were verified by code review only, with no Supabase session, so this is still the first real test of them."
     },
     {
+     "id": "1.1a",
+     "t": "Fix what the walk found",
+     "s": "done",
+     "m": "golive",
+     "size": "M",
+     "r": "049",
+     "ships": [
+      "humanizeError stops eating the database's refusals: 42501 is two events wearing one SQLSTATE, and only the one Postgres itself raises gets the friendly substitution",
+      "The authoriser on screen — a column on an order's deliveries table, and a fourth provenance section for the owner reading across orders rather than down one",
+      "stock_over_receipts (049): the part of each delivery that sat above the ordered quantity, clamped so two deliveries past the line do not both claim the whole excess, valued at the invoiced price",
+      "The supplier columns say what they are measured on, and the ⓘ carries the sentence a row with more arrived than ordered is actually making",
+      "Nothing typed stops being read as zero arrived, so a ticked line no longer shows a shortfall against stock nobody has counted",
+      "A refusal sits against the table it names, and retires the moment the form it described changes",
+      "A cost that did not change reads as the em-dash, not as a blank that looks like a cell which failed to render",
+      "An order's line summary names the three states instead of reporting a fraction of the last one"
+     ],
+     "proof": "049's four fixtures each turn red for a cheaper definition that would otherwise look right: per-delivery comparison, unclamped excess, the >= boundary, and the excess valued at the ordered price. 114 render assertions, every new one broken against the defect it names. One of them was decoration and the breakage proved it — an em-dash assertion stayed GREEN with the blank restored, because the fixture already had a dash in its reason column; it was rebuilt on a fixture where the cost cell is the only thing that can produce one.",
+     "note": "Eight findings from the first live walk of Purchases and Suppliers, signed in as the owner against the real database. The first is the whole shipment's weight: 98 refusals across the migrations raise insufficient_privilege and 25 carry a hand-written hint, and every one of those 25 reached the user as \"You do not have permission to make this change.\" That is the 1.1c lesson at the generic layer — stockErrorMessage was fixed to stop swallowing hints and errors.ts, which ninety-odd surfaces call, was left doing exactly that. The second is a promise the product was not keeping: the PIN dialog tells a manager the approval is recorded against them by name, permanently, and it was — in a column no screen displayed, and in a provenance report whose three sections all ask whether stock arrived in the right PLACE rather than in the right QUANTITY. Phone width was found in the same walk and is deliberately NOT here: see 1.1a2."
+    },
+    {
+     "id": "1.1a2",
+     "t": "The purchasing screens on a phone",
+     "s": "next",
+     "m": "golive",
+     "size": "M",
+     "r": "—",
+     "ships": [
+      "A decision about what a table does below about 640px, made once and applied to all four purchasing tables rather than per screen",
+      "The receive form usable at 360px by somebody holding a phone at the store door, which is where receiving actually happens",
+      "Whatever the decision is, the render proof asserts it at 360px as well as at 1366x768, because rule 23 already requires both and only the second is checked today"
+     ],
+     "proof": "At 360px, a storekeeper can see which item a row is for and type what arrived without losing one to reach the other, and can find the reason field before the refusal tells them it is missing.",
+     "note": "Measured on the live walk, not estimated. The receive table renders 992px of content inside a 295px window: 697px — 2.4 screens — is off to the right. At rest not one input is visible; the screen reads as a list of what was ordered followed by a Note box. The first column is NOT sticky, so scrolling right to reach the Arrived boxes takes the item names away and leaves two unlabelled fields. Item sits at 40-289 and Reason at 922-992, so they can never be on screen together at any scroll position — and Reason is the column that is MANDATORY on a short delivery. The sequence on a phone is therefore: type a quantity, press Record delivery, read a refusal asking for a reason, scroll right 922px to find the field. All four tables share the pattern (Purchases 864px, order lines 832px, deliveries 704px, all in 295px) and none collapses to cards, which makes it a layout decision rather than one screen's bug — the same shape as rule 23's finding that four other menus had identical markup. The page itself does NOT overflow horizontally, so rule 23's no-horizontal-page-scroll requirement is met; what fails is reachability."
+    },
+    {
      "id": "1.1b",
      "t": "Harden the movement engine before anything else writes to it",
      "s": "done",

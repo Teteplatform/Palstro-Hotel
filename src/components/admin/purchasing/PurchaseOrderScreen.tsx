@@ -4,6 +4,8 @@ import { ScreenHeader } from '../../ui/ScreenHeader';
 import { ActionMenu } from '../../ui/ActionMenu';
 import { TextField } from '../../ui/form';
 import { useToast } from '../../ui/Toast';
+import { useAuth } from '../../../hooks/useAuth';
+import { staffLabel } from '../../../lib/staffLabel';
 import { describeError, humanizeError } from '../../../lib/errors';
 import { formatDisplayDate } from '../../../lib/date';
 import { formatMoney, formatQuantity, MISSING_VALUE } from '../../../lib/format';
@@ -17,6 +19,7 @@ import {
 } from '../../../lib/purchasing';
 import {
   NOTHING_OUTSTANDING,
+  orderLinesSummary,
   PURCHASES_ABOUT,
   PURCHASES_ABOUT_TITLE,
   purchaseStatusLabel,
@@ -58,6 +61,8 @@ export function PurchaseOrderScreen({
   purchaseOrderId,
 }: PurchaseOrderScreenProps) {
   const toast = useToast();
+  // Only so an authorisation by the signed-in user reads as "you".
+  const { user } = useAuth();
 
   const [order, setOrder] = useState<PurchaseOrderSummary | null>(null);
   const [lines, setLines] = useState<PurchaseOrderLineStatus[]>([]);
@@ -167,7 +172,13 @@ export function PurchaseOrderScreen({
   }
 
   const canReceive = order.status === 'ordered' || order.status === 'part_received';
-  const settled = lines.filter((l) => l.is_settled).length;
+  // Three states, not a fraction of one — see orderLinesSummary for what the
+  // walk read on an order that was plainly part-delivered.
+  const lineCounts = {
+    settled: lines.filter((l) => l.is_settled).length,
+    partly: lines.filter((l) => !l.is_settled && l.received_quantity > 0).length,
+    waiting: lines.filter((l) => !l.is_settled && l.received_quantity === 0).length,
+  };
 
   return (
     <div className="space-y-4">
@@ -303,9 +314,16 @@ export function PurchaseOrderScreen({
               : MISSING_VALUE
           }
         />
-        <Fact label="Ordered" value={formatMoney(order.ordered_value, currency)} />
+        {/* BOTH AT THE AGREED PRICE, and the labels now say so. These two are
+            consistent with each other — what changes basis is the deliveries
+            table below, which is at the INVOICED price, and that is why the
+            three figures a reader meets on this screen do not add up. */}
         <Fact
-          label="Outstanding"
+          label="Ordered, at the agreed price"
+          value={formatMoney(order.ordered_value, currency)}
+        />
+        <Fact
+          label="Still to come, at the agreed price"
           value={formatMoney(order.outstanding_value, currency)}
         />
       </dl>
@@ -314,7 +332,7 @@ export function PurchaseOrderScreen({
         <ScreenHeader
           level={2}
           title="What was ordered"
-          purpose={`${settled} of ${lines.length} line${lines.length === 1 ? '' : 's'} settled.`}
+          purpose={orderLinesSummary(lineCounts)}
         />
         <OrderLinesTable lines={lines} currency={currency} />
       </div>
@@ -341,7 +359,11 @@ export function PurchaseOrderScreen({
             title="Deliveries"
             purpose="What has arrived so far, at what the invoice charged."
           />
-          <ReceiptLinesTable rows={receipts} currency={currency} />
+          <ReceiptLinesTable
+            rows={receipts}
+            currency={currency}
+            currentUserId={user?.id ?? null}
+          />
         </div>
       ) : null}
     </div>
@@ -433,13 +455,36 @@ export function OrderLinesTable({
   );
 }
 
+// THE AUTHORISER IS A COLUMN BECAUSE THE PIN DIALOG PROMISES IT IS.
+//
+// Before a manager types their PIN, this module tells them in these words: "the
+// approval is recorded against them by name, permanently, and it can never be
+// edited or deleted." 046 kept that promise — purchase_receipts.authorised_by is
+// written and is immutable. Nothing in the application showed it. The walk
+// over-received five litres, the database recorded who approved it, and no
+// screen in the product could answer "who approved it".
+//
+// A promise a screen makes is a specification. This column is half of meeting
+// it; the provenance report's fourth section (049) is the other half, for the
+// owner who is looking across orders rather than at one.
 export function ReceiptLinesTable({
   rows,
   currency,
+  currentUserId,
 }: {
   rows: PurchaseReceiptLineDetail[];
   currency: string;
+  // Only so the signed-in user reads as "you". staffLabel owns the rest, and
+  // owns it in ONE place until a staff directory exists.
+  currentUserId: string | null;
 }) {
+  // A column of blanks on an order where nothing was ever authorised is noise,
+  // so the column appears only when this order HAS an authorisation to show.
+  // That is not the same as hiding it when it is inconvenient: the moment one
+  // exists it is on screen for every row, with the un-authorised rows reading
+  // as the dash that means "nobody had to".
+  const anyAuthorised = rows.some((row) => row.authorised_by !== null);
+
   return (
     <div className="overflow-x-auto">
       <table className="w-full min-w-[52rem] text-sm">
@@ -452,6 +497,9 @@ export function ReceiptLinesTable({
             <th className="py-2 pr-3 text-right">Invoiced</th>
             <th className="py-2 pr-3 text-right">Cost change</th>
             <th className="py-2 pr-3 text-right">Value</th>
+            {anyAuthorised ? (
+              <th className="py-2 pr-3">Authorised by</th>
+            ) : null}
             <th className="py-2">Reason</th>
           </tr>
         </thead>
@@ -481,20 +529,39 @@ export function ReceiptLinesTable({
               <td className="py-2 pr-3 text-right tabular-nums text-charcoal-muted">
                 {formatMoney(row.unit_cost, currency)}
               </td>
-              {/* THE FIGURE THIS MODULE EXISTS TO SURFACE. Shown only when it is
-                  not zero — a column of dashes trains people to stop reading it. */}
+              {/* THE FIGURE THIS MODULE EXISTS TO SURFACE, and a cell that used
+                  to be EMPTY when the cost had not changed. The reasoning was
+                  "a column of dashes trains people to stop reading it", which is
+                  true about dashes and wrong about blanks: on the walk, one
+                  delivery showed "+NGN 50.00" and the one under it showed
+                  nothing, and nothing is indistinguishable from a cell that
+                  failed to render. CLAUDE.md section 6 settles it — a figure
+                  that is not there reads as the em-dash, the way an accounting
+                  report prints it, so "no change" and "did not load" cannot look
+                  the same. */}
               <td className="py-2 pr-3 text-right tabular-nums">
                 {row.unit_cost_difference !== 0 ? (
                   <span className="font-semibold text-amber-800">
                     {row.unit_cost_difference > 0 ? '+' : ''}
                     {formatMoney(row.unit_cost_difference, currency)}
                   </span>
-                ) : null}
+                ) : (
+                  <span className="text-charcoal-muted">{MISSING_VALUE}</span>
+                )}
               </td>
               <td className="py-2 pr-3 text-right tabular-nums text-charcoal">
                 {formatMoney(row.line_value, currency)}
               </td>
-              <td className="py-2 text-charcoal-muted">{row.reason ?? ''}</td>
+              {anyAuthorised ? (
+                <td className="py-2 pr-3 text-charcoal-muted">
+                  {row.authorised_by
+                    ? staffLabel(row.authorised_by, currentUserId)
+                    : MISSING_VALUE}
+                </td>
+              ) : null}
+              <td className="py-2 text-charcoal-muted">
+                {row.reason ?? MISSING_VALUE}
+              </td>
             </tr>
           ))}
         </tbody>

@@ -534,7 +534,11 @@ export interface LineDifference {
   outstanding: number;
   // What is being entered.
   entered: number;
-  // Positive = more arrived than was expected. Negative = short.
+  // HAS A QUANTITY ACTUALLY BEEN TYPED. Null and zero are different facts and
+  // this is the flag that keeps them apart — see the note on lineDifference.
+  isEntered: boolean;
+  // Positive = more arrived than was expected. Negative = short. Zero while
+  // nothing has been typed, because "no answer" is not "none arrived".
   quantityDifference: number;
   // TRUE when the server will require a reason on this line.
   needsReason: boolean;
@@ -546,25 +550,47 @@ export interface LineDifference {
   lineValue: number;
 }
 
+// NOTHING TYPED IS NOT THE SAME FACT AS ZERO ARRIVED, and conflating them is
+// what the walk saw.
+//
+// Ticking a line to put it on the delivery used to read its empty quantity as 0
+// and compute a difference from it, so an untouched row immediately showed a red
+// "-100" against a hundred kilos nobody had counted yet — and, from the same
+// `quantityDifference !== 0`, demanded a reason for a shortfall that had not
+// been reported. The person has said "this line is on this delivery"; they have
+// not yet said how much came.
+//
+// THE DATA PATH WAS NEVER AT RISK, and that is worth writing down because it is
+// why this is a display fix: `submit` sends the RAW draft, so the untyped
+// quantity reaches 046 as a JSON null, and 046 refuses it by name — "enter how
+// much arrived. Zero is allowed, a negative is not." No zero-quantity line could
+// ever be written. The screen was telling a story the server would not have
+// accepted.
+//
+// A TYPED zero is a different thing again and still means something: it is
+// "nothing came and nothing more is coming", which 046 pairs with closed_short.
+// So `isEntered` is about whether an answer exists, never about its value.
 export function lineDifference(
   line: PurchaseOrderLineStatus,
   draft: ReceiptLineDraft,
 ): LineDifference {
+  const isEntered = draft.quantity !== null && draft.quantity !== undefined;
   const entered = draft.quantity ?? 0;
   const cost = draft.unitCost ?? 0;
   const outstanding = line.outstanding_quantity;
-  const quantityDifference = round4(entered - outstanding);
+  const quantityDifference = isEntered ? round4(entered - outstanding) : 0;
   const unitCostDifference = round2(cost - line.ordered_unit_cost);
 
   return {
     outstanding,
     entered,
+    isEntered,
     quantityDifference,
     // MIRRORS THE SERVER, and deliberately does not restate its sentence: this
     // decides whether the reason FIELD is shown, and the refusal — if the field
     // is left empty anyway — comes back from 046 in its own words.
-    needsReason: quantityDifference !== 0,
-    isOverReceipt: quantityDifference > 0,
+    needsReason: isEntered && quantityDifference !== 0,
+    isOverReceipt: isEntered && quantityDifference > 0,
     unitCostDifference,
     costDifferenceValue: round2(entered * unitCostDifference),
     lineValue: round2(entered * cost),

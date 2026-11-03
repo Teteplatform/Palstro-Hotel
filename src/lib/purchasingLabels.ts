@@ -91,6 +91,14 @@ export const SUPPLIER_ACTIVITY_ABOUT_TITLE = 'About supplier activity';
 export const SUPPLIER_ACTIVITY_ABOUT = [
   'What this hotel has ordered from this supplier and what has arrived. It is not an account and it does not show a balance.',
   'That is deliberate rather than missing. Receiving goods increases what the hotel owes, and there is no way to record a payment yet — so a figure called “owed” here would be correct until the first payment and quietly wrong from then on. Supplier payments are the next shipment, and this view gains its second side with them.',
+  // THE THREE COLUMNS ARE ON THREE DIFFERENT BASES, and the walk showed what
+  // that costs: an order read "Ordered NGN 190,000 · Arrived NGN 200,000 ·
+  // Outstanding NGN 12,000" and every figure was right. More had arrived than
+  // was ordered, and something was still to come, both at once — true, and
+  // unreadable without this paragraph. The columns now carry their basis in the
+  // header; this says why they can disagree.
+  'The three money columns are measured on three different things, so they are not meant to add up. Ordered is the quantity you asked for at the price you agreed. Arrived is the quantity that actually came at the price the invoice charged. Still to come is what has not arrived yet, at the agreed price, because nothing has been invoiced for it.',
+  'So an order can show more arrived than was ordered and still have something to come — a supplier sending a full carton on one line while another line is short is an ordinary week, not an error.',
 ];
 
 // ---------------------------------------------------------------------------
@@ -130,3 +138,37 @@ export const NO_ACTIVITY_YET =
 
 export const NOTHING_OUTSTANDING =
   'Everything on this order has arrived or been closed short.';
+
+// ---------------------------------------------------------------------------
+// What state an order's lines are in, as ONE sentence
+// ---------------------------------------------------------------------------
+// THE WALK READ "0 of 2 lines settled." BESIDE A BADGE SAYING "Partly
+// delivered", on an order where ninety of a hundred kilos had just arrived.
+// Both were true and together they said nothing: "settled" means a line is
+// finished, so a part-delivered line counts as zero, and the sentence reported
+// zero progress on an order that had plainly progressed.
+//
+// A line is in exactly one of three states, and the sentence names the ones
+// that are actually there rather than reporting a fraction of the last.
+// Exported so the render proof can exercise THE FUNCTION THE SCREEN CALLS
+// (rule 22) rather than a copy of its arithmetic (rule 27).
+export interface OrderLineCounts {
+  settled: number;
+  partly: number;
+  waiting: number;
+}
+
+export function orderLinesSummary(counts: OrderLineCounts): string {
+  const total = counts.settled + counts.partly + counts.waiting;
+  if (total === 0) return 'Nothing on this order yet.';
+
+  const lines = `${total} line${total === 1 ? '' : 's'}`;
+  if (counts.settled === total) return `${lines}, all settled.`;
+  if (counts.waiting === total) return `${lines}, none delivered yet.`;
+
+  const parts: string[] = [];
+  if (counts.settled > 0) parts.push(`${counts.settled} settled`);
+  if (counts.partly > 0) parts.push(`${counts.partly} part-delivered`);
+  if (counts.waiting > 0) parts.push(`${counts.waiting} still waiting`);
+  return `${lines} — ${parts.join(', ')}.`;
+}

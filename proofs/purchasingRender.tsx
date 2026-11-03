@@ -141,7 +141,15 @@ const {
   reconciliationPositionRows,
 } = await import('../src/lib/purchasing');
 const { supplierActivityRows } = await import('../src/lib/suppliers');
-const { formatMoney } = await import('../src/lib/format');
+const { OverReceiptsTable } = await import(
+  '../src/components/admin/inventory/ProvenanceTab'
+);
+const { overReceiptRows } = await import('../src/lib/stockProvenance');
+const { formatMoney, MISSING_VALUE } = await import('../src/lib/format');
+const { orderLinesSummary, SUPPLIER_ACTIVITY_ABOUT } = await import(
+  '../src/lib/purchasingLabels'
+);
+const { humanizeError } = await import('../src/lib/errors');
 
 type PurchaseOrderSummary = import('../src/types/purchasing').PurchaseOrderSummary;
 type PurchaseOrderLineStatus =
@@ -679,7 +687,11 @@ ok('the receipt boundary parses the cost difference',
 
 const receiptsText = strip(
   renderToString(
-    React.createElement(ReceiptLinesTable, { rows: receiptLines, currency: 'NGN' }),
+    React.createElement(ReceiptLinesTable, {
+      rows: receiptLines,
+      currency: 'NGN',
+      currentUserId: null,
+    }),
   ),
 );
 // THE SPACE IS THE HARNESS, NOT THE COMPONENT. React SSR separates two adjacent
@@ -699,8 +711,20 @@ ok('a price RISE is shown with a plus', signed.includes(`+${money(40)}`),
 // figure on every row would show "+₦0.00" and this would catch it. Without the
 // zero line, "shows the difference" could not tell a real figure from a
 // decoration.
-ok('...and a line at the agreed price shows NOTHING, not a zero',
+// 1.1a CHANGED THIS ASSERTION, and the change is the finding. The cell used
+// to be EMPTY when the cost had not moved, which on the live walk put '+NGN
+// 50.00' on one row and a blank on the row under it -- and a blank is what a
+// cell that failed to render also looks like. CLAUDE.md section 6: a figure
+// that is not there reads as the em-dash. Still never a '0.00', which would be
+// a different lie (a computed zero nobody computed).
+ok('...and never a zero where the price simply did not move',
    !receiptsText.includes(money(0)));
+// THE EM-DASH ASSERTION IS IN PART 6, ON A FIXTURE BUILT FOR IT. Written here
+// first as `receiptsText.includes(MISSING_VALUE)`, it STAYED GREEN when the cell
+// was reverted to a blank -- because WIRE_RECEIPT_LINES has a null reason on its
+// second row, so there was an em-dash on screen either way. Rule 27's second
+// shape exactly: an assertion whose fixture is already in the state being
+// asserted.
 ok('the short line keeps its reason on the record',
    receiptsText.includes('part delivery, rest Friday'));
 
@@ -1030,6 +1054,275 @@ ok('...and the ledger still reads as AGREEING, which is the point of 047',
    preWiredText.includes('Agrees'));
 ok('...and that sentence is absent when there is none',
    !agreesText.includes('before this property began posting'));
+
+// ===========================================================================
+// PART 6 — 1.1a: WHAT THE LIVE WALK FOUND
+// ===========================================================================
+// Every assertion below names the defect that turns it red, because four of the
+// five were written AFTER watching the real screen do the wrong thing and the
+// temptation is to assert the thing you just saw rather than the rule behind it.
+console.log('\n--- PART 6: the 1.1a fixes, each against the defect it caught ---');
+
+// --- 6.1 humanizeError: the hint the generic layer was eating ---------------
+// THE DEFECT: `case '42501': return 'You do not have permission to make this
+// change.'` — which discarded the message AND the hint on all 98 of the
+// migrations' insufficient_privilege refusals, 25 of them hand-written.
+//
+// THE FIXTURE MAKES THE TWO READINGS DISAGREE (rule 27). Under the OLD code
+// both of these produce the identical sentence, so a fixture with only one of
+// them could not tell the fix from the defect.
+const OURS = {
+  code: '42501',
+  message: 'More arrived than was ordered, so a manager has to authorise accepting it.',
+  hint: 'Hand the terminal to a manager.',
+};
+const POSTGRES_RLS = {
+  code: '42501',
+  message: 'new row violates row-level security policy for table "bookings"',
+};
+const POSTGRES_GRANT = {
+  code: '42501',
+  message: 'permission denied for table purchase_orders',
+};
+
+ok('a refusal the DATABASE wrote reaches the user in its own words',
+   humanizeError(OURS).includes('a manager has to authorise accepting it'));
+ok('...with its hint, which is the half that says what to do instead',
+   humanizeError(OURS).includes('Hand the terminal to a manager'));
+// RULE 27: without this, deleting the guard entirely would stay green and we
+// would be showing storekeepers raw Postgres text.
+ok('a real RLS denial still reads as the friendly sentence',
+   humanizeError(POSTGRES_RLS) === 'You do not have permission to make this change.');
+ok('...and so does a bare GRANT denial',
+   humanizeError(POSTGRES_GRANT) === 'You do not have permission to make this change.');
+// A 42501 with no message at all has nothing to show, so it takes the fallback.
+ok('...and a 42501 carrying no message falls back rather than printing nothing',
+   humanizeError({ code: '42501' }) ===
+     'You do not have permission to make this change.');
+// The other mapped codes are untouched, which is the blast radius staying small.
+ok('the unique-violation mapping is unchanged',
+   humanizeError({ code: '23505', message: 'duplicate key' }) ===
+     'That already exists. Please use a different value.');
+
+// --- 6.2 lineDifference: nothing typed is not zero arrived ------------------
+// THE DEFECT: `const entered = draft.quantity ?? 0`, which read an untouched
+// row as a delivery of none — so ticking a line immediately showed "-100"
+// against stock nobody had counted and demanded a reason for it.
+const UNTOUCHED_LINE = orderLines[0];
+const blank = {
+  purchaseOrderLineId: UNTOUCHED_LINE.purchase_order_line_id,
+  quantity: null,
+  unitCost: UNTOUCHED_LINE.ordered_unit_cost,
+  closedShort: false,
+  reason: '',
+  batchCode: '',
+  expiryDate: '',
+  note: '',
+};
+const blankDiff = lineDifference(UNTOUCHED_LINE, blank);
+ok('a ticked line with nothing typed reports NO difference',
+   blankDiff.quantityDifference === 0 && blankDiff.isEntered === false);
+ok('...and is not asked for a reason it has nothing to explain',
+   blankDiff.needsReason === false);
+// RULE 27, AND THIS IS THE ASSERTION THAT EARNS THE PAIR. Making the fix
+// "always return 0 difference" would pass the two above and be useless. A TYPED
+// zero is a real answer — "nothing came, nothing more is coming" — and must
+// still behave exactly as before.
+const typedZero = lineDifference(UNTOUCHED_LINE, { ...blank, quantity: 0 });
+ok('...while a TYPED zero is still a short delivery that needs a reason',
+   typedZero.isEntered === true &&
+   typedZero.quantityDifference === -UNTOUCHED_LINE.outstanding_quantity &&
+   typedZero.needsReason === true);
+// And the over-receipt path must not have been softened on the way past.
+const typedOver = lineDifference(UNTOUCHED_LINE, {
+  ...blank,
+  quantity: UNTOUCHED_LINE.outstanding_quantity + 5,
+});
+ok('...and an over-receipt still asks for a manager',
+   typedOver.isOverReceipt === true && typedOver.needsReason === true);
+
+// --- 6.3 orderLinesSummary: three states, not a fraction of one -------------
+// THE DEFECT: `${settled} of ${lines.length} lines settled`, which read
+// "0 of 2 lines settled" on an order where 90 of 100 kg had just arrived.
+ok('an order where nothing has come says so',
+   orderLinesSummary({ settled: 0, partly: 0, waiting: 2 }) ===
+     '2 lines, none delivered yet.');
+// THE ONE THE OLD SENTENCE GOT WRONG, and the only fixture on which the two
+// implementations disagree in the way that matters.
+ok('an order part-way through names the part-delivered line',
+   orderLinesSummary({ settled: 0, partly: 1, waiting: 1 }) ===
+     '2 lines — 1 part-delivered, 1 still waiting.');
+ok('...and a finished order says all of it',
+   orderLinesSummary({ settled: 2, partly: 0, waiting: 0 }) ===
+     '2 lines, all settled.');
+ok('...and one line reads as one line, not "1 lines"',
+   orderLinesSummary({ settled: 1, partly: 0, waiting: 0 }) ===
+     '1 line, all settled.');
+
+// --- 6.4 the authoriser, which the PIN dialog promises ----------------------
+// THE DEFECT: there was no column. The database recorded authorised_by and the
+// application could not answer "who approved this" anywhere.
+const AUTHORISED_LINES = receiptLineRows.rows([
+  { ...(WIRE_RECEIPT_LINES[0] as object), authorised_by: null },
+  { ...(WIRE_RECEIPT_LINES[1] as object), authorised_by: 'u-manager-7f3a1c9e' },
+]);
+const authorisedText = strip(
+  renderToString(
+    React.createElement(ReceiptLinesTable, {
+      rows: AUTHORISED_LINES,
+      currency: 'NGN',
+      currentUserId: null,
+    }),
+  ),
+);
+ok('an authorised delivery names who approved it',
+   authorisedText.includes('Authorised by') &&
+   authorisedText.includes('staff u-manage'));
+// RULE 27: the un-authorised line must read as a dash and not inherit the
+// manager above it — a component rendering the same cell for every row would
+// pass "names who approved it" and be wrong about the row that matters.
+ok('...and the line that needed no authorisation reads as the em-dash',
+   authorisedText.includes(MISSING_VALUE));
+// RULE 27 AGAIN, FROM THE OTHER SIDE: the column is conditional, so a fixture
+// where it is always present cannot test the condition. receiptsText above has
+// authorised_by null on BOTH rows.
+ok('...and an order with nothing authorised grows no such column',
+   !receiptsText.includes('Authorised by'));
+// The signed-in manager reads as "you", which is staffLabel's whole contract.
+const asMeText = strip(
+  renderToString(
+    React.createElement(ReceiptLinesTable, {
+      rows: AUTHORISED_LINES,
+      currency: 'NGN',
+      currentUserId: 'u-manager-7f3a1c9e',
+    }),
+  ),
+);
+ok('...and reads as "you" when it was you who approved it',
+   asMeText.includes('you'));
+
+// --- 6.4b the Cost change cell, on a fixture that can actually test it ------
+// THE DEFECT: `row.unit_cost_difference !== 0 ? (figure) : null` — an EMPTY
+// cell where the price had not moved, which on the walk sat directly under a
+// "+NGN 50.00" and read as a cell that had failed to render.
+//
+// THE FIRST VERSION OF THIS ASSERTION WAS DECORATION AND THE BREAK PROVED IT.
+// `receiptsText.includes(MISSING_VALUE)` stayed GREEN with the blank restored,
+// because that fixture's second row has a null REASON and the reason cell emits
+// a dash of its own. So this fixture gives every other dashable cell a value —
+// both item names, both reasons, no authorisation — leaving the cost change as
+// the only thing on the table that can produce one. Then the COUNT is the
+// assertion, and the two implementations disagree on it: 1 against 0.
+const dashes = (s: string) => s.split(MISSING_VALUE).length - 1;
+const COST_FIXTURE = receiptLineRows.rows([
+  { ...(WIRE_RECEIPT_LINES[0] as object), reason: 'short on the truck' },
+  { ...(WIRE_RECEIPT_LINES[1] as object), reason: 'price rise' },
+]);
+const costText = strip(
+  renderToString(
+    React.createElement(ReceiptLinesTable, {
+      rows: COST_FIXTURE,
+      currency: 'NGN',
+      currentUserId: null,
+    }),
+  ),
+);
+ok('a line whose price did not move reads as the em-dash, not a blank',
+   dashes(costText) === 1,
+   `expected exactly one em-dash on the table, found ${dashes(costText)}`);
+// RULE 27 FROM THE OTHER SIDE: a component that printed a dash in every Cost
+// change cell would pass the count above only by accident, so assert the row
+// that DID move its price still shows the figure and not a dash.
+ok('...while the line that did move its price still shows the figure',
+   costText.replace(/\+\s+/g, '+').includes(`+${money(40)}`));
+
+// --- 6.4c the provenance report's fourth section (049) ----------------------
+// THE DEFECT: the report's three sections were all about stock arriving in the
+// wrong PLACE, so an over-receipt — the only other act that spends a manager's
+// PIN — appeared nowhere, and the report said "No deliveries have gone anywhere
+// other than a store" on a day one had just been authorised.
+//
+// THE WIRE SHAPE IS THE HAZARD HERE (rule 24): stock_over_receipts returns six
+// numerics, every one of them a STRING over PostgREST, and `+${over_quantity}`
+// on an unparsed string is a figure that renders perfectly and is wrong.
+const WIRE_OVER: unknown[] = [
+  {
+    id: 'ovr-1',
+    tenant_id: 't-1',
+    property_id: 'p-1',
+    purchase_receipt_id: 'gr-9',
+    purchase_order_id: 'po-9',
+    purchase_order_line_id: 'pol-9',
+    receipt_number: 'GRN-000002',
+    order_number: 'PO-000001',
+    business_date: '2026-11-03',
+    created_at: '2026-11-03T09:00:00Z',
+    delivery_note: 'DN-002',
+    invoice_number: 'INV-002',
+    authorised_by: 'u-manager-7f3a1c9e',
+    created_by: 'u-store',
+    supplier_id: 's-9',
+    supplier_name: 'Bonny Fresh Foods',
+    supplier_code: 'BFF',
+    line_number: 1,
+    inventory_item_id: 'i-oil',
+    item_name: 'Vegetable oil',
+    item_code: 'FD-022',
+    base_unit: 'litre',
+    location_name: 'Main Store',
+    ordered_quantity: '20.0000',
+    received_to_date: '25.0000',
+    quantity: '25.0000',
+    over_quantity: '5.0000',
+    over_value: '17500.00',
+    unit_cost: '3500.00',
+    reason: 'supplier sent five litres extra',
+    note: null,
+    stock_movement_id: 'sm-9',
+  },
+];
+const overRows = overReceiptRows.rows(WIRE_OVER);
+ok('the over-receipt boundary parses the excess and its value',
+   overRows[0].over_quantity === 5 && overRows[0].over_value === 17500);
+const overText = strip(
+  renderToString(
+    React.createElement(OverReceiptsTable, {
+      rows: overRows,
+      currency: 'NGN',
+      userId: null,
+    }),
+  ),
+);
+// RULE 27: the fixture's ORDERED and ARRIVED are different numbers from the
+// EXCESS, so a table that printed the wrong one of the three in any cell goes
+// red. A fixture where they coincided could not test any of them.
+ok('the section shows what was ordered against what came',
+   overText.includes('20') && overText.includes('25'));
+ok('...and the excess on its own, which is the figure being authorised',
+   overText.replace(/\+\s+/g, '+').includes('+5'));
+ok('...valued at what the invoice charged for it',
+   overText.includes(money(17500)));
+ok('...with the reason given',
+   overText.includes('supplier sent five litres extra'));
+// THE WHOLE POINT OF THE SECTION.
+ok('...and the manager whose PIN accepted it',
+   overText.includes('staff u-manage'));
+
+// --- 6.5 the supplier columns, which were lying by omission -----------------
+// THE DEFECT: "Ordered / Arrived / Outstanding", three bases, nothing saying so,
+// on a row reading 190,000 / 200,000 / 12,000.
+ok('each money column says what it is measured on',
+   activityText.includes('at the agreed price') &&
+   activityText.includes('at the invoiced price'));
+ok('...and "Outstanding" is now the plainer "Still to come"',
+   activityText.includes('Still to come'));
+// RULE 27: the explanation must be BEHIND the ⓘ and not pasted into the row,
+// which is the lazy fix and the one rule 25 exists to stop.
+ok('...while the explanation itself stays off the row',
+   !activityText.includes('are measured on three different things'));
+ok('...and is in the panel, where somebody can choose to read it',
+   SUPPLIER_ACTIVITY_ABOUT.join(' ').includes(
+     'not meant to add up'));
 
 console.log(`\n${fail === 0 ? 'GREEN' : 'RED'}  ${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);

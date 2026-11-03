@@ -58,11 +58,57 @@ function withHint(message: string, err: PostgrestLikeError | null): string {
   return hint ? `${message} — ${hint}` : message;
 }
 
+// 42501 IS TWO DIFFERENT EVENTS WEARING ONE SQLSTATE, and this is the 1.1c
+// lesson arriving at the generic layer.
+//
+// 1.1c fixed stockErrorMessage to stop swallowing hints and left THIS — the
+// function ninety-odd other surfaces call — returning a hardcoded sentence for
+// every `insufficient_privilege`. The walk found what that costs: an
+// over-receipt refusal that the database had written out in full
+//
+//   "More arrived than was ordered, so a manager has to authorise accepting it."
+//   hint: "Hand the terminal to a manager. Accepting more than was ordered
+//          commits the hotel to paying for it, and the authorisation is
+//          recorded against them by name."
+//
+// reached the storekeeper as "You do not have permission to make this change."
+// 98 refusals across the migrations raise insufficient_privilege and 25 of them
+// carry a hand-written hint; all 25 were being replaced by that one sentence.
+// That is rule 21 inverted — the client authoring the refusal and discarding the
+// database's.
+//
+// The two events:
+//
+//   * POSTGRES raised it. An RLS policy or a GRANT refused, and the message is
+//     machine text ("new row violates row-level security policy for table
+//     \"bookings\"") with no hint. Nobody outside this codebase should read it,
+//     so the friendly substitution is right and stays.
+//
+//   * WE raised it. A `raise exception ... using errcode = 'insufficient_privilege'`
+//     in a migration, with a sentence written for the person reading it and
+//     usually a hint saying what to do instead. Rule 21 says show it verbatim.
+//
+// They are told apart by the message, because Postgres' own 42501 text is a
+// short closed set. THE FALLBACK DIRECTION IS DELIBERATE: if Postgres ever
+// rewords one of these, an unmatched message falls through to being SHOWN —
+// slightly raw, and the truth. The opposite default hides an instruction, which
+// is the defect being fixed here.
+const POSTGRES_PRIVILEGE_TEXT =
+  /^(permission denied|new row violates row-level security policy|must be owner of)/i;
+
+function isPostgresPrivilegeDenial(err: PostgrestLikeError | null): boolean {
+  const message = err?.message?.trim();
+  if (!message) return true; // nothing to show, so show the friendly sentence
+  return POSTGRES_PRIVILEGE_TEXT.test(message);
+}
+
 export function humanizeError(e: unknown): string {
   const err = e as PostgrestLikeError | null;
   switch (err?.code) {
-    case '42501': // insufficient_privilege — an RLS policy refused the write
-      return 'You do not have permission to make this change.';
+    case '42501': // insufficient_privilege — see the note above: two events, one code
+      return isPostgresPrivilegeDenial(err)
+        ? 'You do not have permission to make this change.'
+        : withHint(err?.message?.trim() ?? '', err);
     case '23505': // unique_violation
       return 'That already exists. Please use a different value.';
     case '23502': // not_null_violation
