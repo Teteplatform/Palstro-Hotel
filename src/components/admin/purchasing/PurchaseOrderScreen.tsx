@@ -15,6 +15,7 @@ import {
   fetchPurchaseOrder,
   fetchPurchaseOrderLines,
   fetchPurchaseReceiptLines,
+  groupDeliveries,
   newIdempotencyKey,
   placePurchaseOrder,
 } from '../../../lib/purchasing';
@@ -32,6 +33,7 @@ import type {
   PurchaseReceiptLineDetail,
 } from '../../../types/purchasing';
 import { ReceiveForm } from './ReceiveForm';
+import { ReverseDeliveryForm } from './ReverseDeliveryForm';
 
 // ONE PURCHASE ORDER — and RECEIVING HAPPENS HERE, on the same page.
 //
@@ -71,6 +73,10 @@ export function PurchaseOrderScreen({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [receiving, setReceiving] = useState(false);
+  // WHICH DELIVERY IS BEING UNDONE, by receipt id. One at a time: the form is
+  // an irreversible act with a manager standing over it, and two of them open
+  // at once is two PINs in two boxes with one pair of hands.
+  const [reversingId, setReversingId] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
   const [busy, setBusy] = useState(false);
@@ -140,6 +146,13 @@ export function PurchaseOrderScreen({
       setBusy(false);
     }
   }
+
+  // THE LINES FOLDED BACK INTO DELIVERIES (the seam in lib/purchasing.ts). The
+  // table is one row per receipt line; a reversal acts on a whole delivery, so
+  // the fold is what the action and the "was reversed" sentences hang off.
+  const deliveries = groupDeliveries(receipts);
+  const reversing =
+    deliveries.find((d) => d.receiptId === reversingId) ?? null;
 
   if (loading && !order) {
     return <p className="py-10 text-center text-sm text-charcoal-muted">Loading…</p>;
@@ -360,11 +373,55 @@ export function PurchaseOrderScreen({
             title="Deliveries"
             purpose="What has arrived so far, at what the invoice charged."
           />
+
+          {/* THE FORM OPENS ABOVE THE TABLE, not in a dialog. The figures the
+              decision rests on are in the rows underneath it, and a modal that
+              covers them makes somebody authorise a reversal from memory. */}
+          {reversing ? (
+            <ReverseDeliveryForm
+              delivery={reversing}
+              orderNumber={order.order_number}
+              supplierName={order.supplier_name}
+              currency={currency}
+              propertySlug={propertySlug}
+              onReversed={() => {
+                setReversingId(null);
+                reload();
+              }}
+              onCancel={() => setReversingId(null)}
+            />
+          ) : null}
+
           <ReceiptLinesTable
             rows={receipts}
             currency={currency}
             currentUserId={user?.id ?? null}
+            onReverse={(receiptId) => setReversingId(receiptId)}
           />
+
+          {/* WHAT WAS UNDONE, IN WORDS, WITH ITS REAL FIGURES. Not teaching and
+              not a tooltip: a reversed delivery is two facts, and a table can
+              carry "it arrived" in its columns but not "and it was sent back on
+              this date, for this reason, approved by this person". Rule 25 keeps
+              prose out of tables; it does not ask for a fact to be dropped
+              because the table has no column for it. */}
+          {deliveries
+            .filter((d) => d.isReversed)
+            .map((d) => (
+              <p key={d.receiptId} className="text-xs text-charcoal-muted">
+                <span className="font-semibold text-charcoal">
+                  {d.receiptNumber}
+                </span>{' '}
+                was reversed
+                {d.reversedOn ? ` on ${formatDisplayDate(d.reversedOn)}` : ''}
+                {d.reversalApprovedBy
+                  ? `, approved by ${staffLabel(d.reversalApprovedBy, user?.id ?? null)}`
+                  : ''}
+                {d.reversalReason ? ` — ${d.reversalReason}` : ''}. Its{' '}
+                {formatMoney(d.value, currency)} is not counted in anything
+                above.
+              </p>
+            ))}
         </div>
       ) : null}
     </div>
@@ -505,13 +562,25 @@ export function ReceiptLinesTable({
   rows,
   currency,
   currentUserId,
+  onReverse,
 }: {
   rows: PurchaseReceiptLineDetail[];
   currency: string;
   // Only so the signed-in user reads as "you". staffLabel owns the rest, and
   // owns it in ONE place until a staff directory exists.
   currentUserId: string | null;
+  // Omitted by the render proof's read-only cases, and by any future surface
+  // that shows deliveries without being the place to undo one.
+  onReverse?: (receiptId: string) => void;
 }) {
+  // A REVERSAL ACTS ON A DELIVERY AND THIS TABLE IS PER LINE, so the control
+  // belongs to the FIRST row of each delivery — once per delivery, not once per
+  // line. groupDeliveries already decides which row that is, and it is the same
+  // fold the sentences under the table read, so the button and the sentence can
+  // never disagree about which delivery they mean.
+  const firstRowOf = new Map(
+    groupDeliveries(rows).map((d) => [d.firstRowId, d]),
+  );
   // A column of blanks on an order where nothing was ever authorised is noise,
   // so the column appears only when this order HAS an authorisation to show.
   // That is not the same as hiding it when it is inconvenient: the moment one
@@ -525,7 +594,32 @@ export function ReceiptLinesTable({
       role: 'heading',
       header: 'Delivery',
       cellClassName: 'pr-3 font-medium text-charcoal',
-      cell: (row) => row.receipt_number,
+      cell: (row) => {
+        const group = firstRowOf.get(row.id);
+        return (
+          <span className="flex flex-wrap items-center gap-2">
+            {/* THE NUMBER STAYS READABLE on a reversed delivery. It is not
+                struck through: the delivery is a fact that still stands, and
+                what changed is that nothing is counted from it. The chip says
+                that, in a word, and the sentence under the table says the
+                rest. */}
+            <span>{row.receipt_number}</span>
+            {row.is_reversed ? (
+              <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
+                Reversed
+              </span>
+            ) : group && onReverse ? (
+              <button
+                type="button"
+                onClick={() => onReverse(group.receiptId)}
+                className="rounded-full border border-sand-border bg-white/70 px-2 py-0.5 text-xs font-semibold text-charcoal-muted transition-colors hover:bg-sand hover:text-charcoal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-cream"
+              >
+                Reverse
+              </button>
+            ) : null}
+          </span>
+        );
+      },
     },
     {
       key: 'date',

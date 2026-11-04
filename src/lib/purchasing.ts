@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { boundary, scalarNumber } from './rowParse';
+import { boundary, passthrough, scalarNumber } from './rowParse';
 import { fetchAllPagedRows } from './fetchAllPaged';
 import { PICKER_SEARCH_LIMIT, safeSearchTerm, type PickerSearchResult } from './inventory';
 import { newIdempotencyKey } from './stock';
@@ -15,6 +15,7 @@ import type {
   PurchaseReceipt,
   PurchaseReceiptLineDetail,
   ReceiptLineDraft,
+  Reversal,
 } from '../types/purchasing';
 
 export { newIdempotencyKey };
@@ -529,6 +530,101 @@ export interface ReceiveInput {
   // does it.
   managerPin?: string | null;
   reason?: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// Undoing a delivery (056) — the seam the screen and the proof share
+// ---------------------------------------------------------------------------
+// purchase_receipt_line_detail is one row per receipt LINE, and a reversal acts
+// on a whole RECEIPT (056: a partial undo is indistinguishable from a second,
+// corrected delivery). So the screen needs the lines folded back into
+// deliveries, and that fold is where the mistakes live: which delivery a
+// reverse button belongs to, whether it has already been undone, and what the
+// act would be worth. Extracted rather than written inline so the render proof
+// exercises the real thing (rule 22).
+export interface DeliveryGroup {
+  receiptId: string;
+  receiptNumber: string;
+  businessDate: string;
+  // The row the action attaches to, so a per-receipt control appears ONCE in a
+  // per-line table rather than on every line of the delivery.
+  firstRowId: string;
+  lineCount: number;
+  // What the delivery was invoiced at, across its lines — the figure the effect
+  // sentence names, because it is what comes off the supplier balance.
+  value: number;
+  // Whether undoing it moves stock. A delivery of a freezer and a plumber's
+  // call-out moves none, and saying it does would be a sentence somebody
+  // decides an irreversible act on.
+  movesStock: boolean;
+  isReversed: boolean;
+  reversedOn: string | null;
+  reversalReason: string | null;
+  reversalApprovedBy: string | null;
+}
+
+export function groupDeliveries(
+  rows: PurchaseReceiptLineDetail[],
+): DeliveryGroup[] {
+  const byReceipt = new Map<string, DeliveryGroup>();
+
+  for (const row of rows) {
+    const existing = byReceipt.get(row.purchase_receipt_id);
+    if (!existing) {
+      byReceipt.set(row.purchase_receipt_id, {
+        receiptId: row.purchase_receipt_id,
+        receiptNumber: row.receipt_number,
+        businessDate: row.business_date,
+        firstRowId: row.id,
+        lineCount: 1,
+        value: row.line_value,
+        movesStock: row.stock_movement_id !== null,
+        isReversed: row.is_reversed,
+        reversedOn: row.reversed_on,
+        reversalReason: row.reversal_reason,
+        reversalApprovedBy: row.reversal_approved_by,
+      });
+      continue;
+    }
+    existing.lineCount += 1;
+    existing.value += row.line_value;
+    // ANY stock line makes the delivery one that moves stock. Written as `||`
+    // rather than as a check on the first row, because the first line of a
+    // delivery can perfectly well be the plumber's call-out.
+    existing.movesStock = existing.movesStock || row.stock_movement_id !== null;
+  }
+
+  return [...byReceipt.values()];
+}
+
+// ---------------------------------------------------------------------------
+// Undoing a delivery (056)
+// ---------------------------------------------------------------------------
+// A reversals row carries no numeric column, so this reads through
+// `passthrough` — which is not a way out of rule 24 but the other half of it:
+// it refuses to COMPILE if the type ever gains a numeric field, naming it, the
+// same way `boundary` refuses when a field list is short. The day somebody adds
+// an amount to this table, the build stops here rather than a component calling
+// a string method on it.
+export const reversalRows = passthrough<Reversal>('reversals');
+
+export async function reversePurchaseReceipt(input: {
+  purchaseReceiptId: string;
+  reason: string;
+  // Held for the length of one call and cleared in a `finally`, exactly as the
+  // receive form does it. Never stored, never logged, never put in state that
+  // outlives the submit.
+  managerPin: string;
+  idempotencyKey: string;
+}): Promise<Reversal> {
+  const { data, error } = await supabase.rpc('reverse_purchase_receipt', {
+    p_purchase_receipt_id: input.purchaseReceiptId,
+    p_reason: input.reason,
+    p_manager_pin: input.managerPin,
+    p_idempotency_key: input.idempotencyKey,
+  });
+  if (error) throw error;
+  return reversalRows.row(data);
 }
 
 export async function receivePurchaseOrder(

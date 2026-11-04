@@ -2190,6 +2190,71 @@ posted** — Inventory goes up by what arrived, and what you owe the supplier go
 up by the invoice total. The order's state moves to *Partly delivered*, or to
 *Complete* once every line is settled.
 
+### Reversing a delivery
+
+**Where:** on the order → *Deliveries* → **Reverse**, beside the delivery's
+number.
+
+A delivery is never edited and never deleted. It is the record that goods
+arrived, and it is the document a supplier payment gets allocated against — so
+correcting one means **reversing** it: posting the exact opposite of everything
+it did, and leaving both records standing. Afterwards the delivery is still
+listed, marked *Reversed*, with the date, the reason and the manager who
+approved it. A delivery that happened and was sent back is two facts, not none.
+
+**It needs a reason and a manager's PIN.** The manager is recorded by name,
+permanently. The reason is what the next person reads when they ask why the
+stock went back out.
+
+#### What it undoes
+
+All at once, in one go:
+
+- **The stock goes back out**, valued at what it came in at — not at what the
+  item averages today. So reversing a delivery leaves the valuation exactly
+  where it was before the delivery, to the kobo.
+- **The lines return to outstanding** on the order, and the order's state walks
+  back with them — to *Partly delivered* if another delivery still stands, or
+  all the way to *Sent* if that was the only one. You can then receive against
+  it again.
+- **What you owe the supplier comes down** by the invoice total, and the
+  accounts are posted with the mirror of the original entry.
+- **Every figure stops counting it**: received, outstanding, the supplier's
+  balance, and the over-receipt report. The one place it stays is the delivery
+  history, which is the record of what happened rather than of what stands.
+
+#### It undoes the whole delivery, never one line
+
+There is deliberately no way to reverse a single line. A half-undone delivery is
+indistinguishable in the records from a second, corrected one — and it makes
+"was this over-received?" unanswerable. If one line of three was wrong, reverse
+the delivery and record what actually arrived. **That is a new delivery note and
+it gets a new number**, which is right: it is a different delivery.
+
+#### If the goods have already been used
+
+The position goes negative, and that is shown rather than blocked. A negative
+on-hand is a fact worth seeing — it means stock left without a movement — and
+refusing an honest correction only teaches people to paper over it, which
+damages the records far more than a negative on a report does. Correct the
+position with an adjustment afterwards.
+
+#### What you cannot reverse this way
+
+Stock that did **not** arrive on a delivery — something typed straight into the
+item ledger as a receipt — has no delivery document behind it. There the
+movement *is* the record, so you correct it from the item ledger instead: see
+[Reversing a stock movement](#reversing-a-stock-movement). Going the other way
+round is blocked on purpose: reversing a delivery's movement by itself would put
+the stock back and leave the delivery still saying the goods arrived.
+
+#### Once a payment has been allocated
+
+Not yet possible, because supplier payments are not built. When they are, a
+delivery that a payment has been allocated against cannot be reversed, and a
+payment cannot be allocated to a delivery that has been reversed — otherwise the
+hotel has paid for goods that went back.
+
 ### Suppliers
 
 **Where:** sidebar → **Suppliers**, beside *Purchases*.

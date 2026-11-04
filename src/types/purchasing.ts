@@ -264,6 +264,44 @@ export interface PurchaseReceiptLineDetail {
   description: string | null;
   expense_category_id: string | null;
   expense_category_name: string | null;
+  // 057. The ONE read of the five that keeps a reversed delivery, because a
+  // delivery that happened and was undone is two facts, not zero. The other
+  // four exclude it, so every figure on them is what still stands.
+  //
+  // NONE OF THESE IS NUMERIC, which is why the boundary field lists in
+  // src/lib/purchasing.ts did not change: a date, a timestamp, a boolean and
+  // three uuid/text columns all arrive from PostgREST as themselves.
+  is_reversed: boolean;
+  reversed_on: string | null;
+  reversed_at: string | null;
+  reversal_reason: string | null;
+  reversal_recorded_by: string | null;
+  reversal_approved_by: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// reversals — the shared reversal document (031, extended by 038 and 056)
+// ---------------------------------------------------------------------------
+// What reverse_purchase_receipt returns. No numeric columns at all, which is
+// why it reads through `passthrough` rather than `boundary` — and why
+// `passthrough` refuses to compile if that ever stops being true (rule 24).
+export interface Reversal {
+  id: string;
+  tenant_id: string;
+  property_id: string;
+  reversed_at: string;
+  reversed_by: string;
+  approved_by: string;
+  reason: string;
+  target_type: string;
+  target_id: string;
+  counter_entry_id: string | null;
+  business_date: string;
+  idempotency_key: string | null;
+  created_at: string;
+  updated_at: string;
+  created_by: string | null;
+  updated_by: string | null;
 }
 
 // ---------------------------------------------------------------------------

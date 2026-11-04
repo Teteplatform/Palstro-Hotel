@@ -1692,5 +1692,285 @@ ok('the delivery history names the freezer that arrived',
 ok('...rather than the em-dash it showed before 055',
    !historyText.includes(`GRN-000007 ${MISSING_VALUE}`));
 
+// ---------------------------------------------------------------------------
+// PART 8 WAS MADE TO FAIL NINE WAYS (rules 22, 27)
+// ---------------------------------------------------------------------------
+// Each mutation is in the code the SCREENS run. All nine red:
+//
+//   A  the delivery value comes off the first line   -> value 250000, not
+//                                                       310000 (2 red)
+//   B  movesStock reads only the first line          -> the delivery that DOES
+//                                                       move stock says it
+//                                                       does not (2 red)
+//   C  movesStock is always true                     -> the call-out is told
+//                                                       its stock goes back
+//                                                       (3 red)
+//   D  the line count stops counting                 -> lineCount 1 (2 red)
+//   E  the control attaches to the LAST row          -> prl-b, not prl-a
+//   F  the control renders on every line             -> 2 buttons for one
+//                                                       delivery
+//   G  a reversed delivery is offered it again       -> 3 red
+//   H  the effect drops the supplier figure          -> the sentence an
+//                                                       irreversible act is
+//                                                       decided on loses its
+//                                                       number
+//   I  the general rule moves onto the screen        -> rule 25 (4 red)
+//
+// B AND C ARE THE PAIR THAT MATTERS, and the fixture is ordered for them. Its
+// FIRST line is the freezer (no movement) and its SECOND is the rice (a
+// movement), so a movesStock that reads only the first row gives a DIFFERENT
+// answer from one that folds across the lines. With the stock line first both
+// are true and B is green -- the fixture would make the correct and the
+// incorrect computation coincide, which is rule 27's fourth shape. C is the
+// other side of the same boundary: without a non-stock delivery to assert on,
+// a movesStock hardcoded to true passes everything B asserts.
+//
+// AND ONE ASSERTION WENT RED AGAINST CORRECT CODE before it was fixed, which
+// is the alarming direction and the expensive one -- checklist item 13's point
+// about a harness that lies while feeling like diligence. It asserted that a
+// non-stock delivery does not say "goes back out", and the non-stock sentence
+// reads "nothing goes back out of a store", so the assertion matched its own
+// wording. It now anchors on a phrase that exists in only one of the two
+// branches.
+// ---------------------------------------------------------------------------
+// PART 8 — UNDOING A DELIVERY (1.1h2d)
+// ---------------------------------------------------------------------------
+// WHAT THE SQL CANNOT REACH. 056 and 057 prove, against the real database, that
+// a reversal moves the stock, mirrors the ledger, walks the order's status back
+// and drops out of four reads while staying on the fifth. None of that says
+// anything about the three things a person actually meets:
+//
+//   * the table is one row per receipt LINE and the act is per DELIVERY, so the
+//     control has to appear once per delivery and on the right row;
+//   * a reversed delivery has to be distinguishable from a standing one at a
+//     glance, or somebody reverses it twice and meets a refusal instead of an
+//     answer;
+//   * the EFFECT sentence is what an irreversible act is decided on, and it has
+//     to be true of THIS delivery — a delivery of a freezer and a plumber's
+//     call-out moves no stock, and telling somebody the stock goes back out is
+//     a false sentence at the worst possible moment.
+//
+// THE FIXTURE IS BUILT SO THE RIGHT AND WRONG ANSWERS DIFFER (rule 27). Its
+// FIRST line is the non-stock one and its second carries the movement, so a
+// `movesStock` that reads only the first row gives a DIFFERENT answer from one
+// that folds across the lines. With the stock line first, both are true and the
+// assertion proves nothing. The two lines are also 250,000 and 60,000, so a
+// value taken from the first row and a value summed across them are different
+// numbers.
+console.log('\n=== 8. Undoing a delivery ===');
+
+const { groupDeliveries } = await import('../src/lib/purchasing');
+const { ReverseDeliveryForm } = await import(
+  '../src/components/admin/purchasing/ReverseDeliveryForm'
+);
+
+const REV_BASE = {
+  tenant_id: 't-1', property_id: 'p-1',
+  purchase_order_id: 'po-9', order_number: 'PO-000019',
+  business_date: '2026-08-24', delivery_note: 'DN-5', invoice_number: 'INV-77',
+  closed_short: false, reason: null, batch_code: null, expiry_date: null,
+  note: null, created_at: '2026-08-24T10:00:00Z', created_by: null,
+  item_code: null, base_unit: null,
+  unit_cost_difference: '0.00', cost_difference_value: '0.00',
+  expense_category_id: null, expense_category_name: null,
+  is_reversed: false, reversed_on: null, reversed_at: null,
+  reversal_reason: null, reversal_recorded_by: null,
+  reversal_approved_by: null,
+};
+
+// GRN-000008: the freezer FIRST (no movement), the rice SECOND (a movement).
+const TWO_LINE_DELIVERY = receiptLineRows.rows([
+  {
+    ...REV_BASE, id: 'prl-a', purchase_receipt_id: 'pr-8',
+    receipt_number: 'GRN-000008', authorised_by: null,
+    purchase_order_line_id: 'pol-a', line_number: 1,
+    quantity: '1.0000', unit_cost: '250000.00',
+    ordered_quantity: '1.0000', ordered_unit_cost: '250000.00',
+    inventory_item_id: null, item_name: null, line_value: '250000.00',
+    line_type: 'asset', description: 'Chest freezer',
+    stock_movement_id: null,
+  },
+  {
+    ...REV_BASE, id: 'prl-b', purchase_receipt_id: 'pr-8',
+    receipt_number: 'GRN-000008', authorised_by: null,
+    purchase_order_line_id: 'pol-b', line_number: 2,
+    quantity: '50.0000', unit_cost: '1200.00',
+    ordered_quantity: '50.0000', ordered_unit_cost: '1200.00',
+    inventory_item_id: 'item-1', item_name: 'Rice', line_value: '60000.00',
+    line_type: 'inventory', description: null,
+    stock_movement_id: 'sm-1',
+  },
+]);
+
+const twoLine = groupDeliveries(TWO_LINE_DELIVERY);
+ok('two lines of one delivery fold into ONE delivery',
+   twoLine.length === 1, `${twoLine.length} groups`);
+ok('...whose value is the SUM of its lines, not the first line',
+   twoLine[0]?.value === 310000, `value ${twoLine[0]?.value}`);
+ok('...and whose line count is both of them',
+   twoLine[0]?.lineCount === 2, `lineCount ${twoLine[0]?.lineCount}`);
+// THE ONE THE FIXTURE WAS ORDERED FOR. The first line has no movement.
+ok('...and it moves stock because its SECOND line does',
+   twoLine[0]?.movesStock === true);
+ok('...and the control belongs to its first row',
+   twoLine[0]?.firstRowId === 'prl-a', `${twoLine[0]?.firstRowId}`);
+
+// A DELIVERY OF A FREEZER AND A CALL-OUT MOVES NO STOCK. The other side of the
+// same boundary -- without this, `movesStock = true` always would pass above.
+const nonStockOnly = groupDeliveries([TWO_LINE_DELIVERY[0]]);
+ok('a delivery with no stock line does NOT move stock',
+   nonStockOnly[0]?.movesStock === false);
+
+// ---- the table: one control per delivery, on the right row ---------------
+const revRows = [
+  ...TWO_LINE_DELIVERY,
+  ...receiptLineRows.rows([
+    {
+      ...REV_BASE, id: 'prl-c', purchase_receipt_id: 'pr-7',
+      receipt_number: 'GRN-000007', authorised_by: 'mgr-1',
+      purchase_order_line_id: 'pol-b', line_number: 1,
+      quantity: '10.0000', unit_cost: '1200.00',
+      ordered_quantity: '8.0000', ordered_unit_cost: '1200.00',
+      inventory_item_id: 'item-1', item_name: 'Rice', line_value: '12000.00',
+      line_type: 'inventory', description: null, stock_movement_id: 'sm-0',
+      reason: 'Two extra on the truck',
+      is_reversed: true, reversed_on: '2026-08-26',
+      reversed_at: '2026-08-26T09:00:00Z',
+      reversal_reason: 'Sent the whole delivery back',
+      reversal_recorded_by: 'staff-1', reversal_approved_by: 'mgr-1',
+    },
+  ]),
+];
+
+const reverseClicks: string[] = [];
+const tableHost = doc.createElement('div');
+doc.body.appendChild(tableHost);
+const tableRoot = createRoot(tableHost);
+await act(async () => {
+  tableRoot.render(
+    React.createElement(ReceiptLinesTable, {
+      rows: revRows,
+      currency: 'NGN',
+      currentUserId: null,
+      onReverse: (id: string) => reverseClicks.push(id),
+    } as never),
+  );
+});
+
+const reverseButtons = () =>
+  (Array.from(tableHost.querySelectorAll('button')) as HTMLButtonElement[])
+    .filter((b) => norm(b.textContent ?? '') === 'Reverse');
+
+// ONE button for the two-line delivery, and NONE for the reversed one -- so
+// exactly one across three rows. A control rendered per LINE would give two.
+ok('a two-line standing delivery offers ONE reverse control, not one per line',
+   reverseButtons().length === 1, `${reverseButtons().length} buttons`);
+
+await act(async () => { reverseButtons()[0]?.click(); });
+ok('...and it names the delivery, not the row',
+   reverseClicks.length === 1 && reverseClicks[0] === 'pr-8',
+   JSON.stringify(reverseClicks));
+
+const tableText = norm(tableHost.textContent ?? '');
+ok('a reversed delivery is marked as reversed',
+   tableText.includes('Reversed'));
+// AND IT CANNOT BE REVERSED AGAIN FROM THE SCREEN. Not because the server
+// would allow it -- it refuses by name -- but because offering a control whose
+// only outcome is a refusal is the same defect as a button that does nothing.
+const reversedRowHasButton = (
+  Array.from(tableHost.querySelectorAll('button')) as HTMLButtonElement[]
+).some((b) =>
+  norm(b.textContent ?? '') === 'Reverse' &&
+  norm(b.closest('tr')?.textContent ?? '').includes('GRN-000007'),
+);
+ok('...and offers no second reverse control', !reversedRowHasButton);
+
+// The receipt number stays readable on a reversed row: the delivery happened,
+// and what changed is that nothing is counted from it.
+ok('...while still naming the delivery that was undone',
+   tableText.includes('GRN-000007'));
+
+tableRoot.unmount();
+tableHost.remove();
+
+// ---- the form: the EFFECT names THIS delivery's figures ------------------
+const revFormHost = doc.createElement('div');
+doc.body.appendChild(revFormHost);
+const revFormRoot = createRoot(revFormHost);
+await act(async () => {
+  revFormRoot.render(
+    React.createElement(
+      ToastProvider,
+      null,
+      React.createElement(ReverseDeliveryForm, {
+        delivery: twoLine[0],
+        orderNumber: 'PO-000019',
+        supplierName: 'Gbenga Supplies',
+        currency: 'NGN',
+        propertySlug: 'finima',
+        onReversed: () => {},
+        onCancel: () => {},
+      }),
+    ),
+  );
+});
+const revFormText = norm(revFormHost.textContent ?? '');
+
+ok('the subject names the delivery, its date and its lines',
+   revFormText.includes('GRN-000008') && revFormText.includes('2 lines'));
+ok('the effect names what comes off the supplier balance',
+   revFormText.includes('comes off what Gbenga Supplies is owed'));
+// THE FIGURE ITSELF, through the real formatter -- Intl puts a NON-BREAKING
+// space after the currency, which `norm` collapses to an ordinary one.
+ok('...with this delivery\'s own total in it',
+   revFormText.includes(formatMoney(310000, 'NGN').replace(/ /g, ' ')),
+   formatMoney(310000, 'NGN'));
+// THE PHRASE HAS TO BE UNIQUE TO THE STOCK CASE. The first version asserted
+// `goes back out`, and the NON-stock sentence reads "nothing goes back out of
+// a store" -- so the negative assertion below matched its own wording and went
+// red against correct code. An assertion whose substring appears in both
+// branches is testing the English, not the rule.
+ok('...and says the stock goes back, because this delivery moved stock',
+   revFormText.includes('The stock this delivery brought in goes back out'));
+
+// RULE 25: the general rule is BEHIND the icon, not on the screen.
+ok('the general rule is not on screen',
+   !revFormText.includes('A delivery is never edited or deleted'));
+
+revFormRoot.unmount();
+revFormHost.remove();
+
+// THE OTHER SIDE OF THE EFFECT SENTENCE, which is the one that would be a lie.
+const callOutOnly = groupDeliveries([TWO_LINE_DELIVERY[0]]);
+const nsHost = doc.createElement('div');
+doc.body.appendChild(nsHost);
+const nsRoot = createRoot(nsHost);
+await act(async () => {
+  nsRoot.render(
+    React.createElement(
+      ToastProvider,
+      null,
+      React.createElement(ReverseDeliveryForm, {
+        delivery: callOutOnly[0],
+        orderNumber: 'PO-000019',
+        supplierName: 'Gbenga Supplies',
+        currency: 'NGN',
+        propertySlug: 'finima',
+        onReversed: () => {},
+        onCancel: () => {},
+      }),
+    ),
+  );
+});
+const nsText = norm(nsHost.textContent ?? '');
+ok('a delivery that moved no stock says so',
+   nsText.includes('moved no stock'));
+ok('...and does NOT claim stock goes back out',
+   !nsText.includes('The stock this delivery brought in goes back out'));
+
+nsRoot.unmount();
+nsHost.remove();
+
+
 console.log(`\n${fail === 0 ? 'GREEN' : 'RED'}  ${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);
