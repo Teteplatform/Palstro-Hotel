@@ -111,12 +111,27 @@ export const DISCOUNT_ABOUT: string[] = [
     'its approver on the record.',
 ];
 
+// WHAT THE FRONT DESK MAY CHOOSE. Every entry here must resolve to a mapped
+// account when the folio posts (059 §4): cash, bank, pos_clearing, and
+// company_receivable — which is not really a payment at all, it moves the debt
+// from the guest to the company.
+//
+// 'other' IS DELIBERATELY ABSENT. It is a missing answer, not a destination, and
+// 044 settled that a missing mapping is a LOUD FAILURE and never a suspense
+// account — so leaving it here meant the first "Other" payment raising
+// resolve_account's refusal at the counter with a guest standing there. Zero
+// payments in the database carried it when 059 checked, so nothing is lost.
+//
+// THE VALUE IS STILL LEGAL IN THE DATABASE, on purpose: folio_payments.method's
+// check constraint keeps it, so a hotel that recorded one before this stays
+// representable and paymentMethodLabel below still names it. A hotel that needs
+// cheque or mobile money gets a NAMED method with its own account — a day's
+// work when somebody asks for it, and the right answer rather than a bucket.
 export const PAYMENT_METHODS: readonly PaymentMethod[] = [
   'cash',
   'bank_transfer',
   'pos',
   'company_account',
-  'other',
 ];
 
 export function paymentMethodLabel(method: PaymentMethod | string): string {

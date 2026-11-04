@@ -301,7 +301,12 @@ open, and it nets off as room nights post.
 1. Tap **⋮** → **Make payment** on the right stay.
 2. Type the **Amount**. It starts empty on purpose — **never assume the balance
    due**; type what the guest actually handed over.
-3. Pick the **Method**: Cash, Bank transfer, POS / card, Company account, Other.
+3. Pick the **Method**: Cash, Bank transfer, POS / card, Company account.
+   **Company account is not really a payment** — it moves what is owed from the
+   guest to the company, and the company is then invoiced. There is deliberately
+   no "Other": every method has to say which account the money landed in, and
+   "other" cannot. If the hotel starts taking cheques or mobile money, ask for
+   that method by name and it gets added with its own account.
 4. Put the **Reference** in — teller number, POS slip, transfer reference. It is
    optional against a stay, and required for a payment that belongs to no stay.
 5. Check the **Payment date**. It defaults to the hotel's operating day today.

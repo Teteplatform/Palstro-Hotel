@@ -32,10 +32,10 @@ the right order.
 
 ---
 
-## 2. Engineering non-negotiables (27)
+## 2. Engineering non-negotiables (28)
 
 Every one of these came from a real bug — most from a prior product, the last
-seven from this one. They are binding.
+eight from this one. They are binding.
 
 ### 1. Every list read is bounded correctly — two cases, split below
 A bounded query with no way to reach the rest is **worse** than an unbounded one:
@@ -592,6 +592,47 @@ ordering gate runs against the LIVE rows before the migration and again against 
 shuffled fixture in the render proof, because the two catch different things: one
 proves it of the data, the other of the function the screen calls.
 
+**A FIFTH SHAPE, and it is the easiest of all to write:** an assertion satisfied
+by **any** failure at all. `exception when others then null` around a call that
+is supposed to refuse proves that *something* went wrong, which is not the same
+as proving the right thing refused. 059's assertion 8 passed with the guard it
+was testing deleted — the function fell through to a NOT NULL violation three
+lines later, something raised, and the proof agreed, while what the front desk
+would have met was `null value in column "account_role_key"` instead of the
+sentence naming the retired category. **An assertion about a refusal reads the
+SQLSTATE and the message**, never merely the fact of an exception.
+
+### 28. A comment that promises stability while its mechanism promises freshness is a lie
+Two comments in this codebase stated a goal and then described the mechanism that
+defeated it — `src/types/folio.ts` on a captured tax figure, and 032's on the
+category a counter charge is posted under. Both survived more than a year of
+reading. The rule that catches them:
+
+> **If the sentence promises stability and the mechanism promises freshness, one
+> of the two is a lie, and it is never the mechanism.**
+
+And the reason it is not caught by careful reading, which is the half worth
+remembering, because it explains why *this* kind of comment and not others:
+
+> **A comment that is half right in the reassuring direction gets agreed with.**
+
+*Why: 032's comment said a counter charge "attracts exactly the same taxes at
+exactly the same rates" because it is posted under the same category. The first
+half was true — the category does fix which taxes apply — so a reader checking
+the claim found it confirmed and stopped. The second half was never true, and the
+code it was defending left a ₦2,480 tax residue on every reversal of a bill from
+before a rate change: a pair of entries that balanced, reconciled, and did not
+net. The comment was the only thing standing where a bug was, and it was
+reassuring.*
+
+**So: when a comment asserts that something cannot change, go and read what
+actually produces the value.** A live `select`, a join to a configuration table,
+a flag with an admin UPDATE policy — any of those under a sentence about
+permanence is the bug, and the sentence is how it stayed. The fix is always to
+capture the fact (rules 6, 24 and §6's "a fact captured when it was true"), never
+to reword the comment. **And when you find the third one, the pattern is no
+longer a coincidence: look for the fourth before closing the shipment.**
+
 ---
 
 ## 3. Multi-tenancy model
@@ -832,7 +873,7 @@ first.
 
 ## 7. Before-you-write-code checklist (run every session)
 
-1. **Read this file.** Confirm the 27 non-negotiables are fresh in mind.
+1. **Read this file.** Confirm the 28 non-negotiables are fresh in mind.
    **Starting a new module?** Read [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
    first — the system map, shared engines, and dependency order that decide where
    the module fits and what must exist before it.
@@ -978,6 +1019,11 @@ first.
     only by reading `git status` one last time before committing.* So: after any
     stash, rebase or checkout, re-read `git status --porcelain` and confirm
     `docs/build-tracker.html` is absent from it before you commit.
+19. **Read a comment that promises permanence as a bug report** (rule 28). If a
+    sentence says a figure, a rate or an account cannot change, go and read what
+    produces the value before you believe it. Two such comments in this codebase
+    were each hiding a real defect, and both had been read and agreed with for
+    over a year because the half that was true was the half a reader checks.
 
 ---
 

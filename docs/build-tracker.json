@@ -587,22 +587,30 @@
     {
      "id": "1.1h4",
      "t": "The folio wired into the books",
-     "s": "later",
+     "s": "next",
      "m": "golive",
      "size": "M",
      "r": "048",
      "ships": [
-      "Tax captured on the charge at post time, before anything is wired. Today it is computed live from the current rate, so changing VAT silently rewrites every past bill, the same defect booking_nights was built to prevent",
+      "LANDED (058): tax captured on the charge at post time, before anything is wired. It was computed live from the current rate, so changing VAT silently rewrote every past bill \u2014 the same defect booking_nights was built to prevent",
+      "LANDED (059): the REVENUE ACCOUNT captured on the charge too. charge_categories.account_role_key has an admin UPDATE policy, so a charge posted under one account and reversed after a repoint credited one and debited another: both entries balancing, neither ever clearing. 058's defect one column over",
+      "LANDED (059): a tax carries its OWN account instead of one inferred from applies_to, and 058's captured rows carry it. A state consumption tax is also 'taxable' and would have landed in the VAT account, reconciling perfectly while owing money to the wrong authority",
+      "LANDED (059): gl_wired_at split into stock_gl_wired_at and folio_gl_wired_at. One timestamp cannot explain two modules' pre-wiring gaps, and a charge posted between the two wirings is explained by neither",
+      "LANDED (059): 'other' off the payment picker. It has no account and must not have one (044: a missing mapping is a loud failure, never a suspense account), so it would have refused at the counter with a guest standing there. Zero payments carried it",
+      "A charge's entry is struck on GROSS and DISCOUNT as separate legs, never on net. On net, a discounted charge and its reversal leave equal residues in revenue and discounts_allowed that balance, reconcile and never clear; it also hides how much was given away",
       "Room charges, food and drink charges, taxes, service charge, discounts and payments all post through the spine",
+      "The night audit posts ONE ENTRY PER NIGHT, at the grain run_night_audit already keys on, never one per run. An entry covering several nights cannot be idempotent against a half-run audit, and a half-run night audit is not a hypothetical",
+      "A discount posts the DELTA. apply_charge_discount is absolute, not cumulative \u2014 500 then 800 is 800 \u2014 so an entry per application double-counts. The TAX delta moves with it, because restate rewrites the tax rows on every application and a missed tax leg drifts the VAT account by exactly the discount's tax",
       "Deposits and refunds post as what they are, a liability taken and released",
       "Reversals post counter-entries, so a reversed charge leaves both rows visible",
-      "Guest ledger balances agree with the receivable account, and the check that proves it runs on demand",
+      "Guest ledger balances agree with the receivable account, and the check that proves it runs on demand: the left side from journal_entry_lines, the right computed independently from the folio rows across ALL folios, with pre_gl and pre_wiring named as buckets and rounding NOT among them \u2014 tax is captured per (charge, tax) so this one is exactly zero",
       "A void posts a counter-entry rather than becoming unavailable. The front desk keeps its one-click undo and the books stay append-only",
       "Charge categories get a form for the first time, with the account picker on it. Until this ships, the only way to create one is to type SQL, so the guard 044 added is correct and inert",
-      "The mapping screen shows categories under their key, so a category quietly pointed at Other revenue is visible instead of absent"
+      "The mapping screen shows categories under their key, so a category quietly pointed at Other revenue is visible instead of absent",
+      "THE FOLIO'S FIRST RENDER PROOF (rule 22). There is none today, which is why 059 shipped its picker change without one \u2014 driving TakePaymentForm needs a folio and its whole data layer. It covers the payment picker refusing to offer a method with no account, and paymentMethodLabel still naming 'other' so a historical payment does not render as a raw string"
      ],
      "proof": "Check a guest in, charge a room and a meal, take a part payment, apply a discount, reverse one charge, check out. The guest ledger and the receivable account agree to the naira, and every entry names the folio row it came from.",
-     "note": "The folio has been charging and taking payments since 021 and posting nowhere. Before go-live that is a gap; after go-live it is history to reconstruct. This closes it while there is still nothing to reconstruct. Also carries two commitments made when the spine shipped: the charge category form, because 044's guard protects a path that does not exist on screen yet, and the deletion of the revenue_misc fallback, because a silent default is fine while only SQL can reach it and wrong the moment a person can create a category from a screen."
+     "note": "TWO PIECES ALREADY LANDED, both ahead of the wiring and for the same reason: each decides what a posting WRITES, so finding it afterwards means a correction migration against entries already in the books. 058 captured the tax; 059 captured the revenue account, gave a tax its own account, and split gl_wired_at. 059 also recorded the arithmetic that fixes the entry's shape \u2014 gross and discount as separate legs \u2014 and the three findings that are this shipment's to honour. The folio has been charging and taking payments since 021 and posting nowhere. Before go-live that is a gap; after go-live it is history to reconstruct. This closes it while there is still nothing to reconstruct. Also carries two commitments made when the spine shipped: the charge category form, because 044's guard protects a path that does not exist on screen yet, and the deletion of the revenue_misc fallback, because a silent default is fine while only SQL can reach it and wrong the moment a person can create a category from a screen."
     },
     {
      "id": "1.1h5",
