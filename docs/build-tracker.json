@@ -801,6 +801,21 @@
       "Filter by person, date, action"
      ],
      "proof": "A discount, a reversal and a stock adjustment all appear with names and reasons"
+    },
+    {
+     "id": "2.9",
+     "t": "Effective-dated tax rates",
+     "s": "later",
+     "m": "market",
+     "size": "M",
+     "r": "—",
+     "ships": [
+      "A tax rate carries the date it takes effect, so a change announced in October and effective 1 January is TYPED IN in October",
+      "The rate a charge is taxed at is resolved from the charge's own business date, not from whatever is live when it is posted",
+      "The existing captured rows are what history reads; this changes only which rate a NEW charge captures"
+     ],
+     "proof": "A rate effective 1 January is entered in October; a charge posted on 31 December captures the old rate and one posted on 1 January captures the new one, with nobody touching anything at midnight. A charge posted in February but DATED 31 December captures the December rate.",
+     "note": "WHAT 058 DELIBERATELY DOES NOT COVER, scheduled rather than left to be rediscovered as a surprise. 058 captures what a charge was taxed at the moment it is posted, which makes every bill ever issued immune to a later rate change and is the whole of the problem it set out to solve. Two things remain, and they are the two cases where capture still captures the wrong number or captures it late. FIRST, A SCHEDULED CHANGE. A rate announced in October and effective 1 January has to be typed in by a human at midnight. A hotel without a controller charges the old rate for a week, and the system cannot currently prevent it — there is nowhere to put the future rate. SECOND, AND THIS IS THE SHARPER ONE, A BACK-DATED CHARGE. post_charge takes p_charge_date verbatim: there is no past-date guard, measured in the function rather than assumed. So a charge posted today with a business date before a rate change takes TODAY's rate rather than the rate that applied on its own date, and 058 then makes that figure permanent instead of making it correct. Capture is the right foundation and is not the whole answer. The in-place UPDATE of a rate stays, deliberately: once charges carry their own rate the audit answer comes from the charge rather than from the rate table, and a second mechanism would have to do something capture does not. Effective dating is that something, which is why it is a shipment and not a footnote."
     }
    ]
   },

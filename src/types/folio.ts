@@ -10,9 +10,28 @@
 // TWO THINGS ARE NEVER STORED, AND SO ARE NEVER FIELDS HERE:
 //   * the folio BALANCE — computed by the folio_balance / folio_totals RPCs
 //     (rule 6: a cached balance drifts and cannot be repaired),
-//   * per-charge TAX — computed by folio_charge_tax from the currently active
-//     tax_charges, so a rate change cannot make history disagree with itself.
-// If you find yourself wanting either as a column, read §5 and §8 of the migration.
+// If you find yourself wanting the balance as a column, read §5 and §8 of 021.
+//
+// PER-CHARGE TAX USED TO BE THE SECOND ITEM ON THAT LIST, and the sentence it
+// carried is worth keeping, because it is why nobody looked at this for a year:
+//
+//     * per-charge TAX — computed by folio_charge_tax from the currently
+//       active tax_charges, so a rate change cannot make history disagree
+//       with itself.
+//
+// That describes the mechanism that CAUSES the thing it claims to prevent. One
+// source of truth is the right instinct for a definition; for a RATE it is the
+// opposite — computing every bill from the live rate is exactly what makes
+// history disagree with itself. One `update tax_charges set rate = 0.10` moved
+// the tax on every bill the hotel had ever issued, open, settled and closed,
+// with nothing erroring.
+//
+// 058 captures it instead: folio_charge_tax_lines holds the rate, the label, the
+// basis and the amount as they stood when the charge was posted, and every read
+// sums those rows. The same decision booking_nights makes for the nightly rate.
+// NOT a cache (rule 6): a cache stores something also derivable now, and this is
+// derivable only at write time — a recompute function cannot exist, which is the
+// point.
 //
 // EVERY MONEY FIELD BELOW IS A `number`, ALREADY PARSED (rule 24). The wire
 // sends numeric(14,2)/numeric(14,4) as a string so the exact decimal survives;
