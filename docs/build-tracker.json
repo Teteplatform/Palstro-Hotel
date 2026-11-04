@@ -598,7 +598,11 @@
       "LANDED (059): gl_wired_at split into stock_gl_wired_at and folio_gl_wired_at. One timestamp cannot explain two modules' pre-wiring gaps, and a charge posted between the two wirings is explained by neither",
       "LANDED (059): 'other' off the payment picker. It has no account and must not have one (044: a missing mapping is a loud failure, never a suspense account), so it would have refused at the counter with a guest standing there. Zero payments carried it",
       "LANDED (061): a charge's entry is struck on GROSS and DISCOUNT as separate legs, never on net. On net, a discounted charge and its reversal leave equal residues in revenue and discounts_allowed that balance, reconcile and never clear; it also hides how much was given away",
-      "Room charges, food and drink charges, taxes, service charge, discounts and payments all post through the spine",
+      "LANDED (062): CHARGES POST. post_charge and post_charge_reversal each call the helper at the end, after their own tax step \u2014 posting before it gives an entry with NO TAX LEGS that still BALANCES, because the receivable is the open line, so the bill posts short by the whole VAT with nothing erroring and post_journal's uniqueness makes it permanent. Not on any of the three early-return paths: a redelivered key must not mint an entry for a pre-wiring document",
+      "LANDED (062, no code): ONE ENTRY PER NIGHT. booking_nights has no folio link \u2014 a night reaches the bill as its own folio_charges row via post_room_night_charge \u2014 so one charge is one entry and item 3 was a proof, not a build. Found by counting the call sites, of which the whole folio module has four",
+      "LANDED (062): THE FOLIO PRODUCES FUTURE-DATED DOCUMENTS AND post_journal REFUSES THEM. Found by wiring it: check_out_booking bills the FULL reserved range, so a guest leaving early is billed for nights still ahead, and naive wiring made checkout fail outright with PT422 \u2014 026's own scenario. The helper now DECLINES a document whose day has not come (null, 046's precedent) because revenue for the 7th belongs to the 7th, and post_charge REFUSES a forward date it was not given (p_allow_future, passed only by post_room_night_charge), because a bar charge dated next week is a typo and nothing refused it before",
+      "LANDED (062): folio_gl_wired_at stamped, and the six pre-wiring documents left unposted \u2014 as 047 did on the stock side rather than invent entries for documents written before the code. Backfilling is worse here: two discount applications have moved the laundry charge's net since it was posted, so reconstructing its entry means deciding what it looked like at a moment nobody recorded",
+      "Food and drink charges, service charge and payments post through the spine (payments: item 5)",
       "LANDED (061, as a consequence): the night audit posts ONE ENTRY PER NIGHT without a line of code for it, because booking_nights has no folio link — a night reaches the bill as its own folio_charges row via post_room_night_charge, so one charge is one entry. Found by counting the call sites rather than by reasoning about the modules, which would have produced a fourth helper nobody needed. At the grain run_night_audit already keys on, never one per run. An entry covering several nights cannot be idempotent against a half-run audit, and a half-run night audit is not a hypothetical",
       "LANDED (060): a discount is an EVENT, not a column. folio_charge_discounts holds one insert-only row per application of apply_charge_discount \u2014 previous amount, new amount, a GENERATED signed delta, its own approver, its own idempotency key, and a seq for real insertion order. The four discount_* columns stay as current state so no reader changes",
       "LANDED (060): the live retry defect it exposed. The idempotency check read ONE mutable column, so it could only recognise the newest key; a redelivered earlier key looked new and re-applied itself \u2014 measured on the live schema, an 800 discount went back to 500, the tax from 699.20 to 722.00, and the later manager's reason was overwritten. Nothing errored. A replay also now refuses a key that belongs to a DIFFERENT charge, naming both: keys are unique per tenant, so the lookup found a real application and handed that other charge back as a success",
@@ -619,6 +623,40 @@
      "note": "TWO PIECES ALREADY LANDED, both ahead of the wiring and for the same reason: each decides what a posting WRITES, so finding it afterwards means a correction migration against entries already in the books. 058 captured the tax; 059 captured the revenue account, gave a tax its own account, and split gl_wired_at. 059 also recorded the arithmetic that fixes the entry's shape \u2014 gross and discount as separate legs \u2014 and the three findings that are this shipment's to honour. The folio has been charging and taking payments since 021 and posting nowhere. Before go-live that is a gap; after go-live it is history to reconstruct. This closes it while there is still nothing to reconstruct. Also carries two commitments made when the spine shipped: the charge category form, because 044's guard protects a path that does not exist on screen yet, and the deletion of the revenue_misc fallback, because a silent default is fine while only SQL can reach it and wrong the moment a person can create a category from a screen."
     },
     {
+     "id": "1.1h4b",
+     "t": "The sweep: posting what has come due",
+     "s": "later",
+     "m": "golive",
+     "size": "S",
+     "r": "063",
+     "ships": [
+      "A folio document whose business date is still ahead posts NOTHING when it is written (062): revenue for the 7th belongs to the 7th, and post_journal refuses a future-dated entry because rules 8 and 12 already said so. Something has to post it when the day arrives, and that is this",
+      "It lives in the NIGHT AUDIT, which already runs once a day at the property's cutoff and is already idempotent through the document pair (tenant, source type, source id). A sweep buried inside a wiring migration is a thing nobody can find when it misfires",
+      "It posts every folio_charge, folio_charge_discount and folio_payment whose business date has come and which has no entry \u2014 bounded and paged, never an unbounded scan (rule 1a)",
+      "It reports what it posted and what it could not, in the audit's own summary jsonb, so a morning with a refusal is visible rather than silent",
+      "RE-RUNNABLE BY CONSTRUCTION: a second run the same morning posts nothing, because post_journal hands back the existing entry on the document pair. Asserted rather than assumed"
+     ],
+     "proof": "Check a four-night guest out on arrival day: one entry tonight, three nights waiting. Move the clock forward a day and run the audit: the second night posts, dated to itself, at its own locked rate. Run it twice and nothing changes.",
+     "note": "Its own item because 062 established the need and must not also answer it. The decline in post_folio_charge_journal is what creates the backlog; this is what drains it, and item 8's not_yet_due bucket is what makes the backlog readable in between. Small, but it is the difference between a ledger that is behind by a known amount and one that is behind."
+    },
+    {
+     "id": "1.1h4c",
+     "t": "A mapping cannot be pulled from under a category",
+     "s": "later",
+     "m": "golive",
+     "size": "S",
+     "r": "064",
+     "ships": [
+      "A trigger refusing to DELETE or deactivate an account_mappings row that a live charge category or tax charge still points at, with the hint NAMING what depends on it",
+      "The other half of a rule that is currently guarded in one direction only. enforce_charge_category_account (044) already refuses to point a category at an unmapped role key, on INSERT and on UPDATE \u2014 and then an admin can delete the mapping underneath it, or deactivate the account it points at, and the next charge in that category fails at the counter with a guest standing there",
+      "ONE DIRECTION GUARDED AND THE OTHER OPEN READS AS 'GUARDED' TO THE NEXT PERSON, which is worse than neither: the reviewer who sees the category trigger stops looking",
+      "Refuse at the moment of the DECISION, not at the moment of the consequence \u2014 052's expense-category ruling in a third place. The person who unmaps an account is not the person who meets the refusal, and they are days apart",
+      "044's loud failure at the posting site stays as the floor. This is the interface"
+     ],
+     "proof": "Map a category, then try to delete its mapping: refused, naming the category. Deactivate the account instead: refused the same way. Delete a mapping nothing points at: allowed.",
+     "note": "Named rather than squeezed into 062, where it would have been a trigger nobody asked for in a migration about wiring. account_mappings has an admin DELETE policy and an admin UPDATE policy, so this is reachable from the Accounts screen today, not theoretical."
+    },
+    {
      "id": "1.1h5",
      "t": "Paying suppliers",
      "s": "later",
@@ -635,6 +673,23 @@
      ],
      "proof": "Receive ₦500,000 of goods across two orders, pay ₦300,000 against one of them. The supplier balance reads ₦200,000, the payable account in the books agrees with it to the kobo, and the statement shows both documents in order.",
      "note": "Pulled forward out of stage 7 by a question from Lanre about supplier management. Receiving credits supplier payable and nothing in the plan ever debited it, so Heledon's first trial balance would have carried a liability that had never once gone down. An account that only grows is not a book. What stays in stage 7 is the depth: approvals and spend limits, price history and comparison, ageing analytics."
+    },
+    {
+     "id": "1.1h6",
+     "t": "Taking what a company owes",
+     "s": "later",
+     "m": "golive",
+     "size": "M",
+     "r": "065",
+     "ships": [
+      "A payment FROM a company: who paid, into which account, on what date, by what method — the mirror of 1.1h5's supplier payment and deliberately nothing more",
+      "Allocation against what that company owes, explicit and reversible, reversed by counter-entry like everything else",
+      "It DEBITS nothing and CREDITS company_receivable, which is the whole point: today the account can only grow",
+      "A company account that is the SUM OF ITS DOCUMENTS with no stored balance column (rule 6), paginated and excluding voided rows (rules 1b, 5)",
+      "NOT invoicing, NOT ageing, NOT one invoice covering many stays. Those stay at 9.3 where they are"
+     ],
+     "proof": "Settle a corporate stay to the company account, then record the company paying part of it. The company balance falls by what was paid, company_receivable in the books agrees with it, and reversing the payment puts both back.",
+     "note": "PULLED FORWARD INTO GO-LIVE, for the reason 1.1h5 was. 062 wired company_account — a payment by that method debits company_receivable, because nothing was received: the debt moves from the guest to the company. Nothing anywhere in the codebase credits it, and the path that would (9.3) sits two milestones out, so the balance sheet has a second account that can only go one way. 046's header had already written the same sentence about supplier_payable: 'Receiving CREDITS supplier_payable, and NOTHING IN THIS SHIPMENT EVER DEBITS' — which is why 1.1h5 moved. REACHABLE, not theoretical: the account is mapped (1210), company_account is live on the payment picker, bookings have carried company_id since 015, one company already has negotiated rates, and mark_no_show charges only a GUARANTEED booking, which means a company one. The first corporate booking Heledon takes starts the balance. THE REALISTIC FIRST TEST OF THIS SHIPMENT IS A GUARANTEED NO-SHOW: mark_no_show charges only a booking with a company or billed to one, so the first charge in the whole product that will settle against company_receivable is a guest who never arrived. Learned by asserting a charge on a guest-billed no-show and getting none — 062's fixture was wrong and the code was right."
     },
     {
      "id": "1.1i",
@@ -714,7 +769,8 @@
       "Audit every SECURITY DEFINER function shipped so far",
       "REVOKE ALL FROM public, anon then GRANT to authenticated",
       "In-migration assertion that anon EXECUTE is false",
-      "Confirm no internal guard relies on auth.uid() IS NOT NULL"
+      "Confirm no internal guard relies on auth.uid() IS NOT NULL",
+      "FLAGS REACHABLE THROUGH PostgREST THAT NO SCREEN OFFERS, decided as a set rather than one at a time. Six today: p_allow_negative and p_allow_unvalued (post_stock_adjustment, post_stock_writeoff), p_allow_moved_stock (finish_stock_take), p_count_no_show (count_available), p_post_journal (post_stock_receipt) and p_allow_future (post_charge, 062). PostgREST passes whatever named arguments a request carries, so any of them can be set by a staff user even where no UI offers it. The boundary has always been is_tenant_staff and RLS rather than the absence of a parameter, and these flags are a CONFIRMATION of an override — but some are offered in a dialog and some are not, and the ones that are not may belong behind a function nothing grants. This is the place to look at all six together: deciding them one at a time inside unrelated shipments is how you end up with five answers"
      ],
      "proof": "A query listing anon-executable functions returns only the intended public readers",
      "note": "This exact hole bit Palstro ERP twice. Sweep it before real staff and real guests are on the system."
