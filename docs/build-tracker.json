@@ -1659,9 +1659,11 @@
      "r": "—",
      "ships": [
       "Index and query budget per screen",
-      "Behaviour checked at realistic data volume"
+      "Behaviour checked at realistic data volume",
+      "The known-cost list below, measured at a year of trading rather than argued about"
      ],
-     "proof": "Every list screen stays fast against a year of data"
+     "proof": "Every list screen stays fast against a year of data",
+     "note": "THE KNOWN-COST LIST. Each of these was noticed while building something else, left deliberately because it is right at this size, and written down so the performance pass measures rather than hunts. None is a defect today and none should be optimised before it is measured — the point of recording them is that the next person does not rediscover them one at a time. (1) 051, the unvaluable movement count: it comes from the same subquery as the value so there is one definition of what unvaluable means, which is correct and costs a pass over the position's movements per row of the reconciliation. (2) 051's correlated subquery, for the same reason and in the same place. (3) 056, purchase_order_settled_status(): the transition trigger calls it on EVERY status update, and it scans the order's receipt lines. That is what makes the status unable to be a lie — the trigger checks the claim rather than the caller — so the cost is bought deliberately and the alternatives were worse. One order's receipt lines is a handful of rows at Heledon; it is worth knowing at a year of trading, and worth knowing again if a tenant ever has orders with hundreds of deliveries against them. The answer, when it is measured, is NOT a counter column: that is rule 6's cache with no recompute function, and 036 already says what to do instead if it ever stops being cheap."
     },
     {
      "id": "13.8",
