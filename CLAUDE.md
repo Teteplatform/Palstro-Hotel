@@ -548,12 +548,13 @@ have revisited it is reading a diff where a `<select>` looks fine.
 
 ### 27. An assertion that cannot distinguish working from absent is not an assertion
 Rule 22 says a proof must be **made to fail**. This is the sharper form of the
-same rule, and it exists because breaking the code has FOUR times revealed that
+same rule, and it exists because breaking the code has SIX times revealed that
 the *assertion* was the broken thing, not the code — each time from a different
 direction, each time green.
 
 An assertion earns its place only if there is a plausible defect it would go RED
-for. Four shapes fail that test, and all four look like thorough testing:
+for. SIX shapes fail that test, and every one of them looks like thorough
+testing. The first four are about the figure being checked:
 
 - **It recomputes the answer it is checking.** 1.1g's receipt preview: breaking
   the weighted average to an unweighted mean left the proof at 35/35, because the
@@ -601,6 +602,41 @@ lines later, something raised, and the proof agreed, while what the front desk
 would have met was `null value in column "account_role_key"` instead of the
 sentence naming the retired category. **An assertion about a refusal reads the
 SQLSTATE and the message**, never merely the fact of an exception.
+
+**A SIXTH SHAPE, one layer deeper than the fifth:** an assertion that reads the
+SQLSTATE *and* the message, and is still satisfied by the **wrong** refusal.
+
+> **Reading the sqlstate and the message is not enough when two different
+> refusals share both.**
+
+The test to apply, which is what makes this usable rather than a thing to
+remember:
+
+> **Before trusting an assertion on a refusal, ask which OTHER layer could
+> refuse this same act, and whether its refusal would satisfy your pattern. If
+> it would, match on something only yours says.**
+
+*Why: 063 added a refusal to `record_payment` for a payment dated in the future,
+and asserted it by SQLSTATE `PT422` plus `message like '%cannot be dated in the
+future%'`. Deleting the refusal left the assertion GREEN — the payment went in,
+the posting call ran, and `post_journal` raised ITS own refusal, "A JOURNAL ENTRY
+cannot be dated in the future", carrying the same SQLSTATE and containing the
+same substring. Two layers, one act, one pattern. The fix was to match on "A
+payment cannot be dated…", naming the subject.*
+
+**And the distinction is never pedantry, which is the half worth keeping.** The
+two refusals mean opposite things to the person in front of the screen:
+`record_payment` refusing is a date rejected at the keystroke, while
+`post_journal` refusing means **the row was already written and the transaction
+died on the way to the ledger** — which tells a cashier the ledger rejected their
+takings. An assertion that cannot tell those apart cannot tell you the refusal
+moved.
+
+**So prefer a DISTINCT ERRCODE wherever two layers can plausibly refuse the same
+act.** A pattern on prose is the floor; the code is the interface — the same
+sentence as the unique index and the lookup in rule 3. Prose gets reworded,
+translated and reflowed; an errcode is a contract, and a client that switches on
+it cannot be fooled by a sentence that merely reads alike.
 
 ### 28. A comment that promises stability while its mechanism promises freshness is a lie
 Two comments in this codebase stated a goal and then described the mechanism that

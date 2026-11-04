@@ -602,7 +602,10 @@
       "LANDED (062, no code): ONE ENTRY PER NIGHT. booking_nights has no folio link \u2014 a night reaches the bill as its own folio_charges row via post_room_night_charge \u2014 so one charge is one entry and item 3 was a proof, not a build. Found by counting the call sites, of which the whole folio module has four",
       "LANDED (062): THE FOLIO PRODUCES FUTURE-DATED DOCUMENTS AND post_journal REFUSES THEM. Found by wiring it: check_out_booking bills the FULL reserved range, so a guest leaving early is billed for nights still ahead, and naive wiring made checkout fail outright with PT422 \u2014 026's own scenario. The helper now DECLINES a document whose day has not come (null, 046's precedent) because revenue for the 7th belongs to the 7th, and post_charge REFUSES a forward date it was not given (p_allow_future, passed only by post_room_night_charge), because a bar charge dated next week is a typo and nothing refused it before",
       "LANDED (062): folio_gl_wired_at stamped, and the six pre-wiring documents left unposted \u2014 as 047 did on the stock side rather than invent entries for documents written before the code. Backfilling is worse here: two discount applications have moved the laundry charge's net since it was posted, so reconstructing its entry means deciding what it looked like at a moment nobody recorded",
-      "Food and drink charges, service charge and payments post through the spine (payments: item 5)",
+      "LANDED (063): DISCOUNTS AND PAYMENTS POST. apply_charge_discount posts the DELTA keyed on the application row (060), skipping a zero delta because post_journal RAISES on a zero balancing line — so without the skip a manager re-approving the same amount would be refused. record_payment posts the money side at the account its METHOD maps to, by an explicit whitelist that refuses an unknown method BY NAME",
+      "LANDED (063): the same forward-date question on both paths, answered OPPOSITELY. A discount on a night that has not arrived is dated to that night (060), so the helper DECLINES — a manager reducing a forward night must not be told the ledger refused. A PAYMENT dated forward was accepted with no guard at all, and there is no caller for whom it is real: money is not received tomorrow, so record_payment REFUSES with no escape parameter",
+      "LANDED (063): a payment by method 'other' is now refused outright rather than written as a row the ledger can never accept. 044 settled that a missing mapping is a loud failure and never a suspense account; 059 took it off the picker. Nothing offers it, zero rows carry it, and the constraint still allows it so history stays representable",
+      "Food and drink charges and service charge post through the spine as ordinary charges (062)",
       "LANDED (061, as a consequence): the night audit posts ONE ENTRY PER NIGHT without a line of code for it, because booking_nights has no folio link — a night reaches the bill as its own folio_charges row via post_room_night_charge, so one charge is one entry. Found by counting the call sites rather than by reasoning about the modules, which would have produced a fourth helper nobody needed. At the grain run_night_audit already keys on, never one per run. An entry covering several nights cannot be idempotent against a half-run audit, and a half-run night audit is not a hypothetical",
       "LANDED (060): a discount is an EVENT, not a column. folio_charge_discounts holds one insert-only row per application of apply_charge_discount \u2014 previous amount, new amount, a GENERATED signed delta, its own approver, its own idempotency key, and a seq for real insertion order. The four discount_* columns stay as current state so no reader changes",
       "LANDED (060): the live retry defect it exposed. The idempotency check read ONE mutable column, so it could only recognise the newest key; a redelivered earlier key looked new and re-applied itself \u2014 measured on the live schema, an 800 discount went back to 500, the tax from 699.20 to 722.00, and the later manager's reason was overwritten. Nothing errored. A replay also now refuses a key that belongs to a DIFFERENT charge, naming both: keys are unique per tenant, so the lookup found a real application and handed that other charge back as a success",
@@ -655,6 +658,22 @@
      ],
      "proof": "Map a category, then try to delete its mapping: refused, naming the category. Deactivate the account instead: refused the same way. Delete a mapping nothing points at: allowed.",
      "note": "Named rather than squeezed into 062, where it would have been a trigger nobody asked for in a migration about wiring. account_mappings has an admin DELETE policy and an admin UPDATE policy, so this is reachable from the Accounts screen today, not theoretical."
+    },
+    {
+     "id": "1.1h4d",
+     "t": "A forward date gets its own errcode",
+     "s": "later",
+     "m": "golive",
+     "size": "S",
+     "r": "066",
+     "ships": [
+      "A DISTINCT errcode for 'this document cannot be dated in the future', carried by post_charge (062) and record_payment (063), separate from post_journal's PT422 for 'this JOURNAL ENTRY cannot be dated in the future'",
+      "Rule 27's sixth shape is what asks for it: an assertion read the sqlstate AND the message and was still satisfied by the WRONG refusal, because two layers refuse the same act with the same code and overlapping prose. A pattern on prose is the floor; the code is the interface — the same sentence as the unique index and the lookup",
+      "THE TWO REFUSALS MEAN OPPOSITE THINGS to the person at the screen. post_charge or record_payment refusing is a date rejected at the keystroke. post_journal refusing means the row was already written and the transaction died on the way to the ledger — a cashier told the ledger rejected their takings. A client that switches on the code can tell them apart; one that matches prose cannot",
+      "Both assertions re-pointed at the new code, and a breakage confirming that post_journal's refusal no longer satisfies either"
+     ],
+     "proof": "Delete post_charge's forward-date refusal and the assertion goes red naming the code, not merely the sentence. Key a forward-dated payment and read the errcode the client receives.",
+     "note": "Its own file rather than smuggled into 063, which is about wiring discounts and payments: 062 is already applied history, so a consistent answer re-emits two functions for a reason unrelated to either shipment. 063 meets the FLOOR — its assertion matches on 'A payment cannot be dated...', naming its subject — so nothing is unproven today; this raises it to the interface."
     },
     {
      "id": "1.1h5",
