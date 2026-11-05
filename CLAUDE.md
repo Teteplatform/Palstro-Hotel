@@ -32,10 +32,10 @@ the right order.
 
 ---
 
-## 2. Engineering non-negotiables (28)
+## 2. Engineering non-negotiables (29)
 
 Every one of these came from a real bug — most from a prior product, the last
-eight from this one. They are binding.
+nine from this one. They are binding.
 
 ### 1. Every list read is bounded correctly — two cases, split below
 A bounded query with no way to reach the rest is **worse** than an unbounded one:
@@ -669,6 +669,50 @@ capture the fact (rules 6, 24 and §6's "a fact captured when it was true"), nev
 to reword the comment. **And when you find the third one, the pattern is no
 longer a coincidence: look for the fourth before closing the shipment.**
 
+### 29. A grep that confirms a suspicion is not evidence until each match is read in place
+Rule 28's family, and it earns its own line because the failure is in **how the
+evidence was gathered** rather than in what a comment claimed.
+
+> **A proximity window is not a parser, and a pattern that agrees with you
+> agrees in the reassuring direction.**
+
+*Twice in three shipments, and both times the cost would have been a wrong
+build:*
+
+- **062.** A census of which functions call `post_charge` reported that
+  `post_charge_reversal` does. It does not — it INSERTs the counter itself, and
+  the match was the function's name inside its own **comment text**. Believed,
+  the wiring would have gone into one function and been skipped in the other,
+  leaving every charge reversal unposted.
+- **065.** A census of which functions write `is_voided` used a 300-character
+  window between `set` and the column, and reported `reverse_no_show` as setting
+  the flag directly — which, after 064 made voids post, would have been a void
+  with no counter-entry and the no-show's revenue stranded in the books.
+  `reverse_no_show` **reads** the flag, in `if found and v_charge.is_voided is
+  not true then`, and routes the actual work through `reverse_charge`. Believed,
+  item 7 would have shipped a posting call into a function that needed none and
+  a tracker line claiming a gap that did not exist.
+
+Both times the narrower, earlier census had been right, and the broader one was
+run precisely because a gap was suspected.
+
+**So, in order:**
+
+1. **Strip comments and string literals before matching.** A function's own name
+   appears in its own comments more often than anywhere else.
+2. **Require the syntax you actually mean.** A call needs the open parenthesis
+   with no word character before the name; an assignment needs the `=` and the
+   value, not the column within shouting distance of a `set`.
+3. **Then open every match and read it in place.** A `where is_voided` is not a
+   `set is_voided`; a name in a comment is not a call. The count is a
+   **shortlist, never a finding.**
+4. **When two searches disagree, the one that looked at the syntax wins** — and
+   if neither did, neither has told you anything yet.
+
+*The corollary, which is the part that actually costs time: this applies hardest
+when the grep says what you expected. A result that contradicts you gets checked
+automatically. A result that confirms you gets written into a plan.*
+
 ---
 
 ## 3. Multi-tenancy model
@@ -909,7 +953,7 @@ first.
 
 ## 7. Before-you-write-code checklist (run every session)
 
-1. **Read this file.** Confirm the 28 non-negotiables are fresh in mind.
+1. **Read this file.** Confirm the 29 non-negotiables are fresh in mind.
    **Starting a new module?** Read [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
    first — the system map, shared engines, and dependency order that decide where
    the module fits and what must exist before it.
@@ -1060,6 +1104,11 @@ first.
     produces the value before you believe it. Two such comments in this codebase
     were each hiding a real defect, and both had been read and agreed with for
     over a year because the half that was true was the half a reader checks.
+20. **Ran a grep to confirm something?** It is a shortlist, not a finding —
+    open every match and read it in place (rule 29). Strip comments and string
+    literals first, and require the syntax you mean: a call needs its open
+    parenthesis, an assignment needs its `=`. This bites hardest when the
+    result agrees with you, because that is the result nobody re-checks.
 
 ---
 
