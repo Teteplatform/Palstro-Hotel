@@ -416,14 +416,53 @@ export async function postCharge(input: PostChargeInput) {
 
 export interface RecordPaymentInput {
   folioId: string;
-  // SIGNED: positive = money in (deposit, settlement), negative = money out
-  // (refund). There is no direction flag — a magnitude plus a direction is two
-  // facts that can contradict each other (021 §6).
+  // MONEY IN ONLY, from 067. The COLUMN is still signed (021 §6), because a
+  // reversal counter and a refund are both negative rows and a magnitude plus a
+  // direction flag is two facts that can contradict each other. What changed is
+  // this DOOR: record_payment refuses a negative amount by name, and money
+  // going back to a guest goes through recordRefund below.
   amount: number;
   method: PaymentMethod;
   reference: string | null;
   paymentDate: string | null;
   idempotencyKey: string;
+}
+
+export interface RecordRefundInput {
+  folioId: string;
+  /** POSITIVE: how much to hand back. The RPC writes the negative payment. */
+  amount: number;
+  method: PaymentMethod;
+  reference: string | null;
+  reason: string;
+  managerPin: string;
+  idempotencyKey: string;
+}
+
+// GIVING MONEY BACK IS ITS OWN ACT (067), and this is the only path to it from
+// the client. record_payment refuses a negative amount by name, so there is no
+// longer a "type a minus sign" route — which is what this used to be, with no
+// approval and no reason, while the same movement through reverse_payment
+// demanded a manager PIN.
+//
+// Three things it needs that a payment does not, all mandatory in the RPC's
+// signature rather than in a branch: a REASON, a MANAGER PIN, and an amount
+// within what the folio has actually RECEIVED. Over that ceiling it refuses
+// with both figures and says the act belongs in petty cash instead — the
+// client renders that message and its hint verbatim and authors neither
+// (rule 21), which is why there is no validation of any of it here.
+export async function recordRefund(input: RecordRefundInput) {
+  const { data, error } = await supabase.rpc('record_refund', {
+    p_folio_id: input.folioId,
+    p_amount: input.amount,
+    p_method: input.method,
+    p_reference: input.reference,
+    p_reason: input.reason,
+    p_manager_pin: input.managerPin,
+    p_idempotency_key: input.idempotencyKey,
+  });
+  if (error) throw error;
+  return data;
 }
 
 // Record a payment. A PRE-ARRIVAL DEPOSIT IS JUST A PAYMENT ON THE OPEN FOLIO —

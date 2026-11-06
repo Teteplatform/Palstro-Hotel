@@ -139,9 +139,21 @@ export function TakePaymentForm({
           onChange={setAmount}
           currency={currency}
           disabled={submitting}
-          // Signed, per 021 §6: a refund is a NEGATIVE payment on the same folio,
-          // which is why there is no direction toggle here to contradict the sign.
-          helpText="Type the amount received. Enter a negative amount to record a refund."
+          // 067: THIS NO LONGER INVITES A REFUND, and the line had to go in the
+          // same push as the guard. It used to read "Enter a negative amount to
+          // record a refund", which was true and is now refused: giving money
+          // back is record_refund, because it needs a reason, a manager PIN and
+          // a ceiling of what this folio has actually received. A screen that
+          // instructs the desk to do what the database has just started
+          // refusing is the same defect as a hint naming the wrong remedy,
+          // pointing the other way.
+          //
+          // Nothing here restates the rule (rule 21). A negative amount is
+          // refused by record_payment, by name, with a hint that says to use
+          // record_refund — so the database teaches it at the one moment
+          // somebody needs to know. The refund FORM, and the folio's first
+          // render proof, are item 10.
+          helpText="Type the amount received."
         />
         <Select
           label="Method"

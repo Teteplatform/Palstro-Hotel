@@ -204,6 +204,19 @@ export interface FolioPayment {
   // the ORIGINAL line be marked as reversed, from ONE fetch of the folio's
   // payments with no join to `reversals`.
   reversal_of_payment_id: string | null;
+  // 067: A REFUND CARRIES ITS OWN REASON AND ITS OWN APPROVER, both NULL on
+  // every payment in and NULL on a reversal counter (whose reason and approver
+  // live on the `reversals` row, 031). The pair is enforced at the table by a
+  // deferred constraint trigger, not only by record_refund, so a row with a
+  // negative amount and neither is impossible rather than merely unwritten.
+  //
+  // approved_by is the MANAGER whose PIN authorised it, resolved server-side by
+  // verify_manager_pin and never sent from here. It is deliberately NOT
+  // created_by: a payout has to answer "who keyed it" and "who allowed it"
+  // separately, and on a single-user tenant they happen to be the same person,
+  // which is exactly why the column is separate rather than inferred.
+  refund_reason: string | null;
+  approved_by: string | null;
   is_voided: boolean;
   voided_at: string | null;
   voided_by: string | null;
