@@ -588,6 +588,39 @@ run buys confidence it did not earn. Write the defect into the proof's header
 alongside what actually went red, so the next person inherits the reasoning
 rather than the number.
 
+**THE ASSERTIONS NOW FAIL MORE OFTEN THAN THE CODE DOES, AND THAT IS THE
+DISCIPLINE WORKING RATHER THAN A BAD SIGN.** 066's breakage run turned FIVE
+assertions red in one shipment while the code under them was right. Worth
+noticing because three of those five were the same instinct:
+
+> **Build the fixture for the happy case, then assert against it.**
+
+- Its amounts made the correct and incorrect computations coincide (8,000 with
+  1,500 off, where round-then-difference and difference-then-round agree).
+- It ran before its own precondition existed — the comparison it was written for
+  had nothing to compare, because no document had reached that state yet.
+- It compared live folios that have **no payments at all**, so a bulk reader
+  which dropped payments entirely passed.
+
+A fixture built to make the thing work is a fixture built to agree with you, and
+every assertion standing on it inherits that. **So build the fixture for the
+DEFECT: name the wrong answer first, then choose data on which the right answer
+and the wrong one are different numbers, in a state that exists by the time the
+assertion reads it.** And where the fixture's power depends on a figure that
+could change — a tax rate, a threshold — **assert that the two answers still
+differ**, so the day it changes the proof says so instead of quietly disarming
+itself.
+
+**A HARNESS PERMITTED TO DO WHAT PRODUCTION CANNOT IS MEASURING A DIFFERENT
+SYSTEM.** 066 needed a posted charge carrying an unposted discount, and the
+quick way there was to apply the discount through its RPC and then DELETE the
+journal entry. Postgres refused — PT403, journal entries are permanent — and the
+refusal was correct. Disabling that trigger to get the state would have made the
+fixture pass in a database the product does not have. The state was reached
+legitimately instead, by moving `gl_start_date` forward so the next document
+declines. **When a guard blocks your fixture, the fixture is wrong, not the
+guard** — this is the same family as a dry run more permissive than production.
+
 This applies to database dry runs exactly as it applies to render proofs. 045's
 ordering gate runs against the LIVE rows before the migration and again against a
 shuffled fixture in the render proof, because the two catch different things: one
@@ -637,6 +670,67 @@ act.** A pattern on prose is the floor; the code is the interface — the same
 sentence as the unique index and the lookup in rule 3. Prose gets reworded,
 translated and reflowed; an errcode is a contract, and a client that switches on
 it cannot be fooled by a sentence that merely reads alike.
+
+### AND ALL OF THIS APPLIES TO MEASUREMENTS, NOT ONLY TO ASSERTIONS
+
+**A measurement that cannot distinguish working from absent is not a
+measurement.** Timing a thing that never ran reads as a triumph.
+
+> **When a number is implausibly GOOD, suspect the harness before celebrating.**
+
+*Why: item 8's measurement timed `folio_posting_state` over 17,800 documents as
+`select count(*) from (select folio_posting_state(...) from ...)`. The function
+is `STABLE` and `count(*)` never reads the column, so **the planner elided every
+call** — four separate runs came back between 5 ms and 200 ms. Forcing evaluation
+with `count(distinct s)` gave **20.2 seconds**, and the decision those four runs
+would have produced (no inversion needed) was the opposite of the right one.*
+
+**The tell, and it is arithmetic rather than instinct:** 17,800 plpgsql calls in
+5 ms is 0.3 microseconds each. A plpgsql call that runs two queries cannot be
+that fast, so it did not run. **Divide the time by the number of things and ask
+whether one of them could possibly cost that.**
+
+### A TIMING ON A SHARED INSTANCE IS A DISTRIBUTION, NOT A NUMBER
+
+Report the **median of at least five, with the spread**, and time it
+SERVER-SIDE (`clock_timestamp()` inside a `DO` block) so the figure is the work
+rather than the round trip — this Supabase instance answers a trivial query in
+~130 ms, which swamps anything smaller.
+
+*Why: the same query on the same data read 9,607 ms, then 188 ms, then 162 ms on
+three consecutive runs, and a naive join read 11,680 ms once and 21 ms later.
+Both single readings were contention, and one of them nearly bought a
+complicated rewrite.*
+
+**The corollary is the part that saves work: PREFER THE SIMPLE SHAPE UNLESS A
+SOUND MEASUREMENT SAYS OTHERWISE.** Item 8's "better" left-hand side — aggregate
+the ledger first, then map to the folio — measured 69 ms against the naive
+join's 21 ms once both were timed properly. The clever query had been justified
+by a single contended reading, and **a clever query defended by a bad number is
+harder to unpick later than a slow one**, because the number is gone and the
+cleverness remains.
+
+### AND WHEN SOMETHING IS SLOW, READ THE PLAN BEFORE CHANGING THE QUERY
+
+> **The clock says slow. Only the plan says quadratic — and the shape that looks
+> wrong is usually not the one costing the time.**
+
+*Why: item 8's reconciliation did not finish inside a FIFTEEN-MINUTE statement
+timeout at 4,000 folios. Nothing in the SQL looked like the culprit, and two
+rounds of reading it produced candidate rewrites that would have been wrong.
+`EXPLAIN (ANALYZE)` named both real causes in one pass, and neither is a thing
+reading suggests: a `LATERAL` running per charge when only voided charges are
+ever asked about, and three self-joins on a function's result that the planner
+answered with a `CTE Scan` **at 5,402 loops** — a materialised CTE has no index,
+so a nested loop against it is a sequential scan per row. 15 min -> 13 s -> 277 ms,
+both fixes pointed at by `loops` and `Actual Rows`, neither by the text.*
+
+Print the plan as a TREE with loops beside each node, not sorted by cost: a
+single `loops 5402` is the finding, and inclusive times make every ancestor look
+equally guilty. **And a fix that halves the time without changing the shape of
+the plan is the signal that the cost is structural** — three successive
+"optimisations" moved the filtered classifier 10.9 -> 14.1 ms, which is what
+finally said the design was wrong rather than the plan.
 
 ### 28. A comment that promises stability while its mechanism promises freshness is a lie
 Two comments in this codebase stated a goal and then described the mechanism that
@@ -1109,6 +1203,11 @@ first.
     literals first, and require the syntax you mean: a call needs its open
     parenthesis, an assignment needs its `=`. This bites hardest when the
     result agrees with you, because that is the result nobody re-checks.
+21. **Measuring, not asserting?** Rule 27 applies: divide the time by the
+    number of things and ask whether one could cost that — an implausibly GOOD
+    number means the harness, not the code. Time it server-side, report the
+    median of five with the spread, and prefer the simple shape unless a sound
+    measurement says otherwise.
 
 ---
 
