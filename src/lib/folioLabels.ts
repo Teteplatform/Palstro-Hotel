@@ -55,11 +55,44 @@ export const PAYMENT_ABOUT: string[] = [
   'The amount starts EMPTY on purpose, and is never pre-filled with the balance ' +
     'due. A figure already in the box gets accepted without being read, and a ' +
     'payment recorded for money that never arrived is worse than no record at all.',
-  'The amount is signed by what you are doing: a payment or a deposit goes in, a ' +
-    'refund goes out. Both land on the same bill, so the account reads as one ' +
-    'story rather than two lists.',
+  // 1.1h4a: THIS PARAGRAPH USED TO SAY "a payment or a deposit goes in, a refund
+  // goes out", describing this form as the way to do both. 067 closed that: a
+  // negative amount here is refused by name, and giving money back is its own
+  // action with a reason, a manager PIN and a ceiling. The sentence was the same
+  // defect as the help text 067 replaced — a screen teaching the one thing the
+  // database now refuses — and it survived that shipment because the fix went to
+  // the field and not to the panel above it.
+  'Money going OUT is a different action. A refund needs a reason, a manager and ' +
+    'a check that the folio actually received the money first, so it has its own ' +
+    'button rather than a minus sign in this box. Both still land on the same ' +
+    'bill, so the account reads as one story rather than two lists.',
   'A payment is dated by the day it was TAKEN, which may not be today — the ' +
     'business date is what every report and statement groups by.',
+];
+
+export const REFUND_ABOUT_TITLE = 'Refund, or reverse?';
+
+// 1.1h4a. The same shape as VOID_ABOUT, and for the same reason: two actions a
+// person could reach for, and the choice is easier to get right in a panel than
+// in hindsight.
+export const REFUND_ABOUT: string[] = [
+  'REFUND gives back PART of what this folio received, or all of it, as a new ' +
+    'line on the bill. Use it when the guest is owed money and you are handing ' +
+    'it over: a deposit on a stay cut short, an overpayment, a service not used.',
+  'REVERSE A PAYMENT undoes ONE payment in full, and is on that payment’s own ' +
+    'menu. Use it when a particular payment should not stand: a transfer ' +
+    'recalled by the bank, a card payment charged back, a receipt issued against ' +
+    'money that never arrived.',
+  'A refund can never be more than this folio has actually received, and the ' +
+    'system refuses one that is — naming both figures. Paying out more than came ' +
+    'in is not a refund; it is a petty cash payment, with its own approval and ' +
+    'its own account.',
+  'Every refund needs a manager’s PIN, whatever the amount, and the approval is ' +
+    'recorded against them by name. This is cash leaving the building, so there ' +
+    'is no threshold below which it is waved through.',
+  'The money goes back by whichever method you choose here. It does not have to ' +
+    'be the method the money came in on — a transfer in can be refunded in cash ' +
+    'at the desk — so pick what actually happened.',
 ];
 
 export const CHARGE_ABOUT_TITLE = 'About charges';

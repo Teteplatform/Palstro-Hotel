@@ -25,6 +25,33 @@ import { LockIcon } from '../ui/icons';
 // a PIN has somewhere to get one.
 //
 // ----------------------------------------------------------------------------
+// WHERE THAT DIRECTION OF TRAVEL HAS ACTUALLY REACHED (1.1h4a)
+// ----------------------------------------------------------------------------
+// Kept current deliberately, because the paragraphs above are written in the
+// present tense and a stale "first consumer" is how a reader concludes the four
+// forms were converted when they were not.
+//
+//   USES THIS COMPONENT — SEVEN. Six on the stock and purchasing side
+//   (CountSheet, CountVarianceReport, ReceiveStockForm, ReverseMovementForm,
+//   ReceiveForm, ReverseDeliveryForm) and, from 1.1h4a, RefundForm — THE FIRST
+//   FOLIO SURFACE to use it.
+//
+//   STILL HAND-ROLLS AN IDENTICAL BLOCK — FIVE. The four reversal forms named
+//   above, plus DiscountForm, whose panel is threshold-gated rather than always
+//   shown and is why `lead` is a prop at all.
+//
+// The conversion of those five is 1.1h4b1 on the tracker. It is not folded into
+// the shipment that becomes this component's first folio consumer, and the
+// reason is the PROOF rather than the risk: a refund form's render proof that
+// also rewrote three other money screens could no longer tell "the refund form
+// is right" from "I touched three other money screens", and the conversion's own
+// claim is a different one — that all five render as they did before, which is a
+// visual-regression assertion and not a thing a refund shipment tests.
+//
+// WHEN THAT LINE SHIPS, DELETE THIS SECTION. A list of who has adopted a
+// component is worth keeping only while the answer is "not everybody".
+//
+// ----------------------------------------------------------------------------
 // THE PIN ITSELF — the constraint every consumer must honour
 // ----------------------------------------------------------------------------
 // This component is CONTROLLED and holds nothing. The PIN is one piece of the
@@ -63,8 +90,12 @@ interface ManagerPinFieldProps {
   // that the ledger says left" are different warnings, and collapsing them into
   // one would make the panel say less at every site than the four copies do now.
   reason: string;
-  // WHAT IS BEING AUTHORISED. Defaults to the reversal wording the four folio
-  // forms use.
+  // WHAT IS BEING AUTHORISED. The default wording was COPIED FROM the four
+  // reversal forms when this component was extracted — it is not wording they
+  // read from here, because none of them imports this file (see the adoption
+  // list above). Said precisely because the earlier phrasing, "the reversal
+  // wording the four folio forms use", reads as though they do, and a reader who
+  // believed it would assume those four are already this code.
   title?: string;
   // WHEN a PIN is needed. A reversal always needs one, whatever the amount; a
   // stock count needs one only above the property's threshold, and the screen

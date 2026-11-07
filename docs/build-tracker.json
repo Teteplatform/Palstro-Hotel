@@ -689,17 +689,40 @@
     {
      "id": "1.1h4a",
      "t": "The refund form",
-     "s": "next",
+     "s": "done",
      "m": "golive",
      "size": "S",
      "r": "\u2014",
      "ships": [
-      "The payment screen gains a REFUND action calling record_refund (067): a positive amount to hand back, a mandatory reason, a manager PIN field, and the database's refusals rendered verbatim \u2014 the ceiling one included, which names both figures and says a bigger payout is a petty cash payment rather than a refund",
-      "PARTIAL REFUNDS ARE SQL-ONLY UNTIL THIS SHIPS, and that is stated rather than left to be discovered. 067 closed the hole where a refund was a minus sign in the payment box with no approval and no reason; it also removed the only UI route to giving part of a payment back. Reversing a WHOLE payment still works from the screen, with its own PIN, so a full give-back is reachable \u2014 a guest who paid 50,000 and leaves early owed 20,000 back is not",
+      "LANDED: THE REFUND BUTTON, which closes a gap this project opened itself. 067 shut the door where a refund was a minus sign in the payment box with no approval, no reason and no limit \u2014 and left the act unreachable, because record_refund had no caller. A FOLIO-LEVEL button beside Take payment, never a row action on a payment: record_refund takes a folio and has no payment as its target, which is the same property that made record_refund the right name, and the act that DOES target a payment is already on that payment's menu as Reverse",
+      "LANDED: THE EFFECT LINE STATES THE RESULTING BALANCE, NOT A DIRECTION, and the first draft was wrong in the way that reads fluently. 'The balance goes up by X \u2014 the guest owes that again' is true above zero and FALSE below it: 50,000 received against no charges, refund 20,000, balance -50,000 to -30,000, and the guest owed nothing before OR after. It now names the resulting Outstanding Balance in the bill's own label and sign, and characterises it only when the figure does \u2014 BalanceRow's rule verbatim. The proof drives all three sides of zero plus the crossing case, because a fixture on the owing side alone would have passed the drafted sentence",
+      "LANDED: the ceiling SHOWN and never prefilled, and the distinction said out loud rather than left to be re-litigated \u2014 a figure displayed tells somebody the limit before they type, a figure in the box gets accepted without being read (rule 10). The button is disabled exactly where record_refund refuses and nowhere else, measured against the live function on all three statuses: OPEN and SETTLED allowed, CLOSED refused with 23514. No explanatory line under it, as Add charge carries none",
+      "LANDED: and a finding from that measurement \u2014 on a CLOSED folio the PIN is spent BEFORE the refusal lands, because record_refund verifies the manager and then delegates to record_payment, which owns the folio-status rule. Harmless now the button is disabled there, and the reason the button had to be rather than merely ought to be",
+      "LANDED: the FIRST FOLIO SURFACE to use the shared ManagerPinField. Four reversal forms plus DiscountForm still hand-roll a block identical to it; that conversion is 1.1h4b1 and deliberately not folded in, because a refund proof that also rewrote three money screens could no longer tell the refund form is right from I touched three other screens. ManagerPinField's own header claimed its defaults were the reversal wording the four folio forms use when none of them import it \u2014 rule 28 in a comment, corrected here with a self-expiring adoption list",
+      "LANDED: 32 render-proof assertions, 10 breakages, all 10 caught \u2014 and ONE of them caught the PROOF. The prefill check looked for a name attribute this codebase never renders, so it matched nothing, undefined satisfied it, and prefilling the field with the ceiling produced NO RED. The assertion meant to catch this proof's headline defect was decoration (rule 27), and the breakage run is the only reason that is known",
+      "LANDED: THE SAME STALE INSTRUCTION LIVED IN FOUR PLACES and 067 fixed one. A refund is a negative amount was in the field's help text (067), in PAYMENT_ABOUT's panel above it, and TWICE in the staff guide \u2014 including There is no separate refund button. One behaviour change, four copies of the instruction, each found only by looking. All four now corrected",
+      "AND THE GAP IT CLOSED, kept on the record rather than erased: between 067 and this shipment a partial refund was reachable only through SQL. 067 shut the door where a refund was a minus sign with no approval and no reason, and in doing so removed the only UI route to giving PART of a payment back. Reversing a WHOLE payment still worked from the screen with its own PIN, so a full give-back was reachable \u2014 a guest who paid 50,000 and left early owed 20,000 back was not. Stating it was the point; an unstated gap is the thing we do not do",
       "Its own render proof, because the split between this and item 10 is the SCREEN: item 10 is the Accounts screen and its proof, this is the payment screen and its proof"
      ],
      "proof": "Take a payment, refund part of it with a reason and a manager PIN, and watch the folio balance and the guest ledger agree. Then try to refund more than came in and read the refusal.",
-     "note": "SPLIT OUT OF 1.1h4 ITEM 10 DELIBERATELY. Item 10 already carried five pieces plus a migration, and two screens is two render proofs. It is next with nothing between, because the gap it closes was opened by 067 rather than inherited. FILED UNDER 1.1h4 AND NOT 1.1h5: a guest refund is not a supplier payment, and the gap exists because of 1.1h4, so the next reader finds the fix under the shipment that created the need for it without reconstructing why. It also sorts ahead of 1.1h4b, which is where 'next with nothing between' belongs."
+     "note": "PARTIAL REFUNDS ARE REACHABLE AGAIN, which they were not between 067 and this. SPLIT OUT OF 1.1h4 ITEM 10 DELIBERATELY. Item 10 already carried five pieces plus a migration, and two screens is two render proofs. It is next with nothing between, because the gap it closes was opened by 067 rather than inherited. FILED UNDER 1.1h4 AND NOT 1.1h5: a guest refund is not a supplier payment, and the gap exists because of 1.1h4, so the next reader finds the fix under the shipment that created the need for it without reconstructing why. It also sorts ahead of 1.1h4b, which is where 'next with nothing between' belongs."
+    },
+    {
+     "id": "1.1h4b1",
+     "t": "Five PIN panels become one",
+     "s": "later",
+     "m": "golive",
+     "size": "S",
+     "r": "\u2014",
+     "ships": [
+      "ReverseChargeForm, ReversePaymentForm, ReverseBookingStatusForm, ReverseCheckoutForm and DiscountForm adopt the shared ManagerPinField, which seven surfaces already use \u2014 six on the stock and purchasing side and, from 1.1h4a, the refund form",
+      "IT IS DUPLICATION RATHER THAN TWO SOURCES OF TRUTH, which is why it has waited: all five render the same type, inputMode, autoComplete and maxLength, and the database is the actual guard either way. Nothing is wrong today. What is wrong is that the next surface needing a PIN has two patterns to copy from",
+      "DiscountForm is the one that is not a straight swap: its panel is threshold-gated rather than always shown, which is why ManagerPinField takes its lead sentence as a prop at all. It converts last and proves that branch",
+      "Its own render proof, and the claim is a different one from any shipment that built a form: that all five render AS THEY DID BEFORE. A visual-regression assertion, which is why folding it into 1.1h4a would have muddied that proof's claim \u2014 the refund form is right and I touched three other money screens are not the same green",
+      "And ManagerPinField's adoption list gets DELETED when this lands, as its header says: a list of who has adopted a component is worth keeping only while the answer is not everybody"
+     ],
+     "proof": "Each of the five screens before and after: the same markup, the same PIN behaviour, the same refusal from the database. Then break the shared component once and watch all five proofs go red together, which is the point of there being one.",
+     "note": "RAISED WHILE BUILDING 1.1h4a, which became ManagerPinField's first folio consumer and so the first place the duplication was visible from inside the folio module. The component was extracted during a stock shipment with the folio forms' own wording copied into its defaults, and its header claimed those forms used it \u2014 corrected in 1.1h4a. Five hand-rolled copies is not a bug; it is the thing that becomes one the day somebody changes the PIN wording in four places and misses the fifth."
     },
     {
      "id": "1.1h4b",

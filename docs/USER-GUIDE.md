@@ -315,13 +315,60 @@ open, and it nets off as room nights post.
 
 Notes:
 
-- **A refund is a negative amount.** Type `-20000` to give ₦20,000 back. There is
-  no separate refund button.
+- **This box only takes money IN.** A negative amount is refused. Giving money
+  back has its own button beside this one — see *Refunding money* below — because
+  it needs a reason, a manager and a check that the folio received the money in
+  the first place.
 - Pressing the button twice cannot record the payment twice.
 - If the payment fails, you are told why in the system's own words. Nothing is
   half-recorded.
 
 ![screenshot: the take payment panel](/help/take-payment.png)
+
+### Refunding money
+
+**Where:** the guest's bill → **Refund**, beside *Take payment / deposit*.
+
+Giving money back to a guest. A deposit on a stay cut short, an overpayment, a
+service paid for and not used.
+
+**Refund or reverse?** Two different actions, and the bill offers both:
+
+| | Use it when |
+| --- | --- |
+| **Refund** | The guest is owed money and you are handing it over. It can be **part** of what they paid, and it is a new line on the bill. |
+| **Reverse a payment** | One particular payment should not stand — a transfer recalled by the bank, a card chargeback, a receipt written against money that never arrived. It undoes that payment **in full**, from the payment's own menu. |
+
+**What you fill in**
+
+| Field | |
+| --- | --- |
+| **Amount to refund** | How much you are handing back. Starts empty — nothing is pre-filled. |
+| **How it is going back** | Cash, transfer, card, company account. **It need not match how the money came in**: a transfer in, refunded in cash at the desk, is an ordinary evening. |
+| **Reference** | Optional. Transfer ref, POS slip, a note for the cash-up. |
+| **Reason** | Required, and kept on the refund permanently. The bill and the statement both show it. |
+| **Manager PIN** | Required, every time, whatever the amount. |
+
+**A refund can never be more than the folio has received.** The screen tells you
+what that is before you type, and if you ask for more the system refuses and
+names both figures. That is not a limit we invented to be careful: paying out
+more than came in is not a refund at all, it is a petty cash payment, and it
+needs its own approval and its own account.
+
+**Every refund needs a manager, with no threshold.** This is cash leaving the
+building, so there is no amount small enough to wave through. The approval is
+recorded against the manager by name, permanently.
+
+**What it does to the bill.** The refund appears as its own line, and the
+Outstanding Balance moves by the amount you refunded. The form tells you the
+figure it will become before you commit — read it, because a refund on a folio
+that was in credit usually leaves it still in credit, and a refund on a folio
+that was square leaves the guest owing.
+
+**The button is greyed out when there is nothing to refund** — a folio that has
+received no money — and on a **closed** folio, which takes no further money in
+either direction. A settled folio still accepts one: a guest who checked out
+yesterday and is owed money back is the ordinary case.
 
 ### Adding a charge
 
@@ -465,7 +512,7 @@ shown on a confirmed stay).
 
 **A deposit already taken is left exactly where it is.** The system does not
 decide whether it is refunded or forfeited — that is your hotel's policy and a
-person's decision. To refund it, record a negative payment on the folio.
+person's decision. To refund it, use **Refund** on the folio.
 
 ### The statement
 

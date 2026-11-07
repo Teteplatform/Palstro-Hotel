@@ -9,7 +9,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "proof:types": "tsc -p tsconfig.proofs.json",
-    "proof:render": "npm run proof:types && npm run proof:ledger && npm run proof:stocktake && npm run proof:popover && npm run proof:movements && npm run proof:screens && npm run proof:picker && npm run proof:summary && npm run proof:item && npm run proof:receive && npm run proof:accounts && npm run proof:chart && npm run proof:purchasing && npm run proof:narrow && npm run proof:categories",
+    "proof:render": "npm run proof:types && npm run proof:ledger && npm run proof:stocktake && npm run proof:popover && npm run proof:movements && npm run proof:screens && npm run proof:picker && npm run proof:summary && npm run proof:item && npm run proof:receive && npm run proof:accounts && npm run proof:chart && npm run proof:purchasing && npm run proof:narrow && npm run proof:categories && npm run proof:refund",
     "proof:ledger": "vite build --ssr proofs/ledgerRender.tsx --outDir node_modules/.tmp/proofdist --logLevel error && node node_modules/.tmp/proofdist/ledgerRender.js",
     "proof:stocktake": "vite build --ssr proofs/stockTakeRender.tsx --outDir node_modules/.tmp/proofdist --logLevel error && node node_modules/.tmp/proofdist/stockTakeRender.js",
     "proof:screens": "vite build --ssr proofs/screenHeaderRender.tsx --outDir node_modules/.tmp/screensdist --logLevel error && node node_modules/.tmp/screensdist/screenHeaderRender.js",
@@ -24,6 +24,7 @@
     "proof:purchasing": "vite build --ssr proofs/purchasingRender.tsx --outDir node_modules/.tmp/purchasingdist --logLevel error && node node_modules/.tmp/purchasingdist/purchasingRender.js",
     "proof:narrow": "vite build --ssr proofs/narrowTableRender.tsx --outDir node_modules/.tmp/narrowdist --logLevel error && node node_modules/.tmp/narrowdist/narrowTableRender.js",
     "proof:categories": "vite build --ssr proofs/chargeCategoriesRender.tsx --outDir node_modules/.tmp/catsdist --logLevel error && node node_modules/.tmp/catsdist/chargeCategoriesRender.js",
+    "proof:refund": "vite build --ssr proofs/refundRender.tsx --outDir node_modules/.tmp/refunddist --logLevel error && node node_modules/.tmp/refunddist/refundRender.js",
     "health": "node scripts/health-check.mjs",
     "tracker": "node scripts/render-tracker.mjs --data docs/build-tracker.json --out docs/build-tracker.html"
   },

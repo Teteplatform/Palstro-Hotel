@@ -27,6 +27,7 @@ import {
   type ChargeReversalMode,
 } from './ReverseChargeForm';
 import { ReversePaymentForm } from './ReversePaymentForm';
+import { RefundForm } from './RefundForm';
 import { TakePaymentForm } from './TakePaymentForm';
 import { VoidForm } from './VoidForm';
 //
@@ -113,6 +114,11 @@ interface FolioBillProps {
 
 type ActionState =
   | { kind: 'payment' }
+  // 1.1h4a. A FOLIO-LEVEL ACTION, not a row action on a payment: record_refund
+  // takes a folio and has no payment as its target, which is the same property
+  // that made record_refund the right name. A payment's own menu already offers
+  // Reverse, which is the act that DOES target one.
+  | { kind: 'refund' }
   | { kind: 'charge' }
   | { kind: 'discount'; charge: FolioChargeWithCategory }
   | { kind: 'void-charge'; charge: FolioChargeWithCategory }
@@ -338,6 +344,28 @@ export function FolioBill({
             >
               Take payment / deposit
             </button>
+            {/* DISABLED EXACTLY WHERE record_refund REFUSES, and nowhere else —
+                a button enabled where the database refuses is 067's help text
+                again, and one disabled where it would have worked sends the desk
+                to WhatsApp. Measured against the live function on all three
+                statuses: OPEN and SETTLED are allowed (a guest who left
+                yesterday and is owed money is the ordinary case), CLOSED is
+                refused by record_payment with 23514. And nothing can be
+                refunded from a folio that has received nothing, which is the
+                ceiling refusing at zero.
+
+                NO EXPLANATORY LINE UNDER IT (rule 25), as "Add charge" carries
+                none: the bill directly above already prints what was received
+                and whether the folio is closed, so a sentence here would tell
+                the reader what the screen already says. */}
+            <button
+              type="button"
+              onClick={() => setAction({ kind: 'refund' })}
+              disabled={folioClosed || (totals?.payments_total ?? 0) <= 0}
+              className="rounded-full border border-sand-border bg-white/70 px-4 py-2 text-xs font-semibold text-charcoal transition-colors hover:bg-sand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-cream disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Refund
+            </button>
             <button
               type="button"
               onClick={() => setAction({ kind: 'charge' })}
@@ -357,6 +385,21 @@ export function FolioBill({
           folioId={folio.id}
           currency={currency}
           timezone={timezone}
+          onDone={afterMutation}
+          onCancel={() => setAction(null)}
+        />
+      ) : null}
+      {action?.kind === 'refund' ? (
+        <RefundForm
+          propertySlug={propertySlug}
+          folioId={folio.id}
+          currency={currency}
+          // BOTH FIGURES COME FROM THE SAME folio_totals THE BILL IS PRINTED
+          // FROM, so the ceiling the screen names and the ceiling the database
+          // enforces cannot disagree, and the effect line's arithmetic starts
+          // from the number the reader is looking at.
+          received={totals?.payments_total ?? 0}
+          balance={balance}
           onDone={afterMutation}
           onCancel={() => setAction(null)}
         />
