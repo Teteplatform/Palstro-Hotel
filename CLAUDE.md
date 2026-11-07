@@ -170,6 +170,49 @@ reconciles to Contacts; every summary reconciles to something upstream.
 // INVARIANT: sum(aged_debtors.balance) === sum(contacts.ar_balance) per tenant.
 ```
 
+### 9a. A credential is the last thing asked for
+Every precondition that **cannot be satisfied by fetching a manager** is tested
+**before** the manager's PIN is demanded.
+
+> **A PIN is the most expensive check in the product, because it is the only one
+> that moves a human being across a room. Cheap refusals first; the credential
+> last.**
+
+*Why: this was already true of twelve of the fourteen functions that call
+`verify_manager_pin` — a house pattern nobody had written down, which is how the
+other two happened. `reverse_purchase_receipt` demanded the PIN and then checked
+whether the delivery had already been reversed, and "already reversed" is the
+likeliest state in the building to change between a page load and a submit,
+because two people clearing the same mistake is the ordinary way it happens: the
+storekeeper opens the screen, a colleague reverses it first, the storekeeper
+walks to find a manager, the manager types their PIN — and only then does the
+system say it was done on the 5th. 069 reordered three.*
+
+**THREE THINGS LEGITIMATELY SIT AFTER THE PIN AND MUST NOT BE "FIXED".** They are
+named here because without them the next reader reorders
+`apply_charge_discount` and breaks it:
+
+- **The PIN DECISION itself.** `apply_charge_discount` demands a PIN only for a
+  comp or an above-threshold discount, so whether one is needed cannot be known
+  until the amount has been validated. `post_stock_receipt` and
+  `receive_purchase_order` are the same shape.
+- **A replay check inside a `unique_violation` handler.** It can only fire after
+  the insert is attempted.
+- **A courtesy refusal of a PIN that was NOT needed** — "No manager PIN is needed
+  to receive stock into %". It is about the PIN, so it belongs with the PIN.
+
+**And reorder a guard before it is reachable rather than after.** Two of 069's
+three preconditions cannot be met today, because nothing writes `folios.status`.
+They were moved anyway: a guard written correctly before it matters costs one
+migration, and the same guard remembered later costs a manager standing at a
+terminal for nothing — and it will be remembered by somebody debugging that, not
+by somebody reading the file. Say so in the migration, or the next reader deletes
+the reorder as dead work.
+
+**Testing a reordering needs the wrong PIN.** Send an invalid PIN with an
+already-impossible request: the refusal must name the ACT. With a valid PIN the
+precondition refuses either way and the order is invisible.
+
 ### 10. Every payment/settlement screen starts empty
 No auto-fill of balance due. The user types the amount.
 *Why: pre-filled amounts produce false-positive full payments the user never
@@ -611,6 +654,32 @@ could change — a tax rate, a threshold — **assert that the two answers still
 differ**, so the day it changes the proof says so instead of quietly disarming
 itself.
 
+**A SEVENTH SHAPE, AND IT IS THE ONLY ONE READING CANNOT REVEAL:** an assertion
+over a **selector that never matches**. The other six are satisfied by a WRONG
+answer; this one is satisfied by **no answer at all**, so the code under it can
+be arbitrarily broken and the assertion never has an opinion.
+
+> **A negative assertion needs a positive control proving that the thing it
+> looks for exists when it should.** "No prefill" is only testable beside "and
+> here is what a filled field looks like to this same selector."
+
+*Why: 1.1h4a's render proof asserted that the refund form's amount field carries
+no value — rule 10, and the proof's own headline defect. It looked for
+`name="amount"`, which this codebase never renders: the form primitives key
+controls by a `useId` id. The regex matched nothing, `undefined` satisfied the
+test, and PREFILLING THE FIELD WITH THE CEILING PRODUCED NO RED. Reading the
+assertion does not reveal it, because the assertion is correct about everything
+except the existence of its own subject. The breakage run is the only thing that
+found it.*
+
+**And it applies to the BREAKAGE HARNESS exactly as it applies to the proof.**
+069's mutations included one that replaced a line with "the check, then that same
+line" — a no-op dressed as a move — and one that searched for `''closed''` where
+the text holds `'closed'`. Both changed nothing, both reported the code as
+passing. **A mutation that matches nothing is a mutation that proved nothing**, so
+a harness asserts that its own pattern matched before trusting the green: 069's
+now raises if its replacement finds no occurrence.
+
 **A FOLD IS TESTED AS A PURE FUNCTION BESIDE THE COMPONENT, NEVER ONLY THROUGH
 IT.** A component that renders a wrong fold correctly passes every assertion
 about its own output — the assertions re-derive the component's answer instead of
@@ -786,6 +855,40 @@ permanence is the bug, and the sentence is how it stayed. The fix is always to
 capture the fact (rules 6, 24 and §6's "a fact captured when it was true"), never
 to reword the comment. **And when you find the third one, the pattern is no
 longer a coincidence: look for the fourth before closing the shipment.**
+
+### 28a. A behaviour change's copy has more than one home, and you are searching for the INSTRUCTION, not the string
+
+Rule 28's family, and the one that bites after the fix rather than before it.
+When a change makes a user-facing instruction false, **the first place you fix is
+never the only place it lives.**
+
+> **"The screen is fixed" is a claim about one of them. Count the homes and state
+> the count.**
+
+*Why: 067 refused a negative payment amount and replaced the help text under the
+field that said to type one. That was true, and it was one of FOUR. The same
+instruction also sat in `PAYMENT_ABOUT` — the ⓘ panel directly above that same
+field — and TWICE in the staff guide, including "There is no separate refund
+button." One behaviour change, four copies of the instruction, and nothing about
+fixing the first made the other three findable. They were found in 1.1h4a, two
+shipments later, by somebody looking on purpose.*
+
+**The places to check, every time:**
+
+- **field help text** and placeholders
+- **ⓘ / about panels** — the one directly above the field you just fixed is the
+  easiest to miss, because fixing the field feels like fixing the screen
+- **`docs/USER-GUIDE.md`**, which is user-facing documentation and gets stale
+  silently
+- **tooltips** and rule-16 per-figure notes
+- **empty states**, which often explain how to do the thing
+- **refusal hints**, since a hint names a remedy and the remedy may have moved
+
+**The strings differ; the instruction is the same.** `grep -i refund` finds the
+word, not the claim — the four homes above said it four different ways and only
+one of them contained the word "negative". So grep is step one and reading is the
+answer, exactly as rule 29 has it. **State the count of homes found in the
+shipment report**, so the next person inherits a number rather than a reassurance.
 
 ### 29. A grep that confirms a suspicion is not evidence until each match is read in place
 Rule 28's family, and it earns its own line because the failure is in **how the
