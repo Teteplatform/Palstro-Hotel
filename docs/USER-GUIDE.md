@@ -773,8 +773,10 @@ settings, two ways in.
 
 **Where:** sidebar → **Settings** → **Accounts**. Owners and managers only.
 
-Two tabs. **Chart of accounts** is your list. **Where money posts** is the wiring
-that connects the hotel to it.
+Four tabs. **Chart of accounts** is your list. **Where money posts** is the
+wiring that connects the hotel to it. **Charge categories** is what the desk
+may bill for, and which revenue account each kind of charge lands in. **Does it
+agree?** checks that the money actually went where the wiring says.
 
 #### Chart of accounts
 
@@ -872,6 +874,58 @@ Set the GL start date once, when you go live. **Once anything has posted it
 cannot be moved** — moving it later would abandon entries already on the books,
 and moving it earlier would imply entries that should exist and now cannot be
 created.
+
+#### Charge categories
+
+What the desk may bill for. Room, Food & Beverage, Laundry, Minibar — each one is
+a row here, and each one names the revenue account its charges land in.
+
+**Adding a category needs no developer.** "Spa", "Conference hall", "Airport
+transfer": add it here and it appears on the Add charge screen immediately.
+
+| Field | What it does |
+| --- | --- |
+| **Name** | What the desk sees. Change it whenever you like. |
+| **Code** | The machine name. **Set once and never changed** — every charge keeps the code it was billed under, so renaming it would repoint bills already printed. |
+| **Revenue account** | Where the money lands. Required, with no default. |
+| **VAT applies** | Whether VAT is added on top. |
+| **Service charge applies** | Whether the service charge is added on top. |
+| **Offered** | Switch off to take it off the desk's list. Past charges stay exactly where they are. |
+
+**Every category must say where it posts.** There is no default and nothing is
+pre-filled, because revenue landing in an account nobody chose is the one thing
+this screen exists to prevent. The picker offers only accounts that are actually
+wired up — if a revenue account is missing from it, map it on **Where money
+posts** first.
+
+**The account list shows the account, not just the label.** You pick "4000 ·
+Room revenue", not "Rooms", because the account number is what your statements
+and your auditor cite. The role key underneath — `revenue_room` — is the name
+that appears if the system ever refuses something, so it is shown too.
+
+**Miscellaneous is a real choice, not a fallback.** It is offered last and it
+resolves to Other revenue. It exists so a genuine one-off has an honest home: if
+the only categories were Room and Laundry, a late-night one-off would get billed
+to Laundry and your laundry figures would be wrong for the month. **If Other
+revenue ever carries a material amount, the charges inside it have earned
+categories of their own** — that is the signal to come back here and add them.
+
+**Only owners and managers can add or change a category.** A category decides
+where revenue posts, which makes it an accounting setting rather than a desk
+one. If somebody without permission tries, the system says so by name and says
+who to ask.
+
+#### What posts here
+
+On **Where money posts**, each revenue account shows the charge categories that
+land in it. That is the question the other direction cannot answer: a category
+quietly pointed at Other revenue is easy to miss when you are reading a list of
+categories, and obvious when you are reading the account and seeing it sit
+there.
+
+An account with **no categories at all** says so in words. It means nothing can
+be billed to it — usually a key that was mapped and then never used, which is
+worth knowing before you go looking for the revenue in it.
 
 ### Room types and rates
 

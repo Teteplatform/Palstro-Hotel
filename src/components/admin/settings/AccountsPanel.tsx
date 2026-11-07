@@ -16,6 +16,11 @@ import {
   type GroupedMappings,
   type MappingRow,
 } from '../../../lib/accounting';
+import {
+  categoriesByRoleKey,
+  fetchAllChargeCategories,
+  type CategoriesForKey,
+} from '../../../lib/chargeCategories';
 
 // THE ACCOUNTS TAB (044) — role key to account, readable and changeable without
 // a migration. Half the point of the ledger spine is this screen: a ledger
@@ -57,6 +62,10 @@ export function MappingsTab({
   const [groups, setGroups] = useState<GroupedMappings[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busyKey, setBusyKey] = useState<string | null>(null);
+  // null means NOT LOADED YET, and an empty entry means nothing posts to that
+  // key. The two must not render alike: "no categories" is a finding about the
+  // hotel's setup and "still loading" is a finding about nothing.
+  const [catsByKey, setCatsByKey] = useState<Map<string, CategoriesForKey> | null>(null);
   // Bumped after a successful write to re-read. A nonce rather than calling the
   // loader directly, so there is ONE load path with one cancellation guard —
   // the ItemDetailScreen pattern, and the reason is the guard below.
@@ -72,9 +81,19 @@ export function MappingsTab({
     let cancelled = false;
     (async () => {
       try {
-        const rows = await fetchMappingStatus(tenantId, propertyId);
+        // THE OTHER DIRECTION, fetched in the same breath (1.1h4 item 10). This
+        // tab answers "where does this kind of money go"; the categories answer
+        // "what arrives here", and the pair is what makes a category quietly
+        // pointed at Other revenue VISIBLE rather than absent. One fetch, one
+        // fold — never a second query over the same rows, so the two directions
+        // cannot disagree about the same category.
+        const [rows, cats] = await Promise.all([
+          fetchMappingStatus(tenantId, propertyId),
+          fetchAllChargeCategories(tenantId),
+        ]);
         if (cancelled) return;
         setGroups(groupMappings(rows));
+        setCatsByKey(categoriesByRoleKey(cats));
         setError(null);
       } catch (e) {
         // Rule 11: surfaced, never swallowed. Rule 21: the database's own words.
@@ -191,6 +210,13 @@ export function MappingsTab({
                         <th className="px-3 py-2 font-medium">Posts as</th>
                         <th className="px-3 py-2 font-medium">Account</th>
                         <th className="px-3 py-2 font-medium">Last posted</th>
+                        {/* ONLY WHERE IT MEANS SOMETHING. A cash or VAT key has
+                            no charge categories, and a column that is blank for
+                            four groups out of six is noise rather than
+                            information. */}
+                        {group.id === 'revenue' && (
+                          <th className="px-3 py-2 font-medium">What posts here</th>
+                        )}
                         <th className="px-3 py-2 font-medium">
                           <span className="sr-only">Actions</span>
                         </th>
@@ -204,6 +230,8 @@ export function MappingsTab({
                           tenantId={tenantId}
                           canEdit={canEdit}
                           busy={busyKey === row.roleKey}
+                          showCategories={group.id === 'revenue'}
+                          categories={catsByKey === null ? null : catsByKey.get(row.roleKey) ?? EMPTY_CATEGORIES}
                           onRepoint={(accountId) => void repoint(row, accountId)}
                           onAddOverride={(accountId) => void addOverride(row, accountId)}
                           onDropOverride={() => void dropOverride(row)}
@@ -225,14 +253,69 @@ export function MappingsTab({
 // One row
 // ---------------------------------------------------------------------------
 
+// A SHARED EMPTY, so "nothing posts here" is one object rather than a fresh one
+// per render — and so the null-vs-empty distinction below stays about loading
+// rather than about identity.
+const EMPTY_CATEGORIES: CategoriesForKey = { active: [], retired: [] };
+
 interface MappingTableRowProps {
   row: MappingRow;
   tenantId: string;
   canEdit: boolean;
   busy: boolean;
+  // Revenue keys only; see the thead.
+  showCategories?: boolean;
+  // null = not loaded. An empty CategoriesForKey = nothing posts here.
+  categories?: CategoriesForKey | null;
   onRepoint: (accountId: string) => void;
   onAddOverride: (accountId: string) => void;
   onDropOverride: () => void;
+}
+
+// WHAT ARRIVES AT THIS ACCOUNT, and the seam the render proof drives.
+//
+// THE FAILURE IT EXISTS TO CATCH IS NOT A CRASH. "No categories post here" and
+// "the categories have not arrived yet" are different facts about a hotel, and
+// rendering them alike turns the first into noise: a revenue account nothing
+// can be billed to is a configuration mistake somebody should see, and it must
+// not look like a table still waking up. Neither is reachable from SQL — the
+// query returns the same rows either way; only the browser decides what a
+// missing map looks like.
+export function CategoriesHereCell({
+  categories,
+}: {
+  categories: CategoriesForKey | null | undefined;
+}) {
+  if (categories === null || categories === undefined) {
+    // NOT a dash and not "none": the answer is not known yet, and saying
+    // anything else would be inventing one.
+    return <span className="text-charcoal-muted">…</span>;
+  }
+  const { active, retired } = categories;
+  if (active.length === 0 && retired.length === 0) {
+    return (
+      <span className="text-charcoal-muted">
+        Nothing — no charge category posts here
+      </span>
+    );
+  }
+  return (
+    <span className="text-charcoal">
+      {active.map((c) => c.name).join(', ')}
+      {retired.length > 0 && (
+        <>
+          {active.length > 0 && ' '}
+          {/* RETIRED ONES STILL COUNT AS POSTING HERE. Switching a category off
+              stops it being offered at the desk; it does not move the charges
+              that already used it, so an account with only retired categories
+              is still an account with history in it. */}
+          <span className="text-charcoal-muted">
+            ({retired.map((c) => c.name).join(', ')} — retired)
+          </span>
+        </>
+      )}
+    </span>
+  );
 }
 
 export function MappingTableRow({
@@ -240,6 +323,8 @@ export function MappingTableRow({
   tenantId,
   canEdit,
   busy,
+  showCategories = false,
+  categories,
   onRepoint,
   onAddOverride,
   onDropOverride,
@@ -256,7 +341,7 @@ export function MappingTableRow({
         <td className="px-3 py-2 font-medium text-charcoal">
           {roleKeyLabel(row.roleKey)}
         </td>
-        <td className="px-3 py-2 text-red-700" colSpan={3}>
+        <td className="px-3 py-2 text-red-700" colSpan={showCategories ? 4 : 3}>
           Not mapped — anything that posts here will be refused.
         </td>
       </tr>
@@ -324,6 +409,12 @@ export function MappingTableRow({
           <span className="text-charcoal-muted">Never</span>
         )}
       </td>
+
+      {showCategories && (
+        <td className="px-3 py-2">
+          <CategoriesHereCell categories={categories} />
+        </td>
+      )}
 
       <td className="px-3 py-2 text-right">
         {canEdit && row.override && (

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ScreenHeader } from '../../ui/ScreenHeader';
 import { ChartOfAccountsTab } from './ChartOfAccountsTab';
 import { MappingsTab } from './AccountsPanel';
+import { ChargeCategoriesTab } from './ChargeCategoriesTab';
 import { InventoryReconciliationPanel } from './InventoryReconciliationPanel';
 
 // THE ACCOUNTS SCREEN (1.1h1) — one page, two tabs, one ⓘ.
@@ -41,11 +42,22 @@ interface AccountsScreenProps {
   canEdit: boolean;
 }
 
-type TabId = 'chart' | 'mappings' | 'reconciliation';
+type TabId = 'chart' | 'mappings' | 'categories' | 'reconciliation';
 
 const TABS: { id: TabId; label: string }[] = [
   { id: 'chart', label: 'Chart of accounts' },
   { id: 'mappings', label: 'Where money posts' },
+  // 1.1h4 item 10. THE FOURTH TAB IS HERE BECAUSE THE DATABASE SAID SO. 044's
+  // trigger has refused a charge category with no revenue account since the day
+  // it shipped, and its hint reads "Open Settings, then Accounts, and choose the
+  // revenue account for this category" — naming a destination that did not
+  // exist. Rule 21 makes the hint the interface, so the tab goes where the hint
+  // already points rather than somewhere that would make the hint wrong.
+  //
+  // It sits AFTER "Where money posts" on purpose: a category chooses a role key,
+  // and the tab before it is where a key is pointed at an account. Reading left
+  // to right is the order you have to do them in on a fresh hotel.
+  { id: 'categories', label: 'Charge categories' },
   // 1.1h2. THE THIRD TAB IS THE ONE THAT SAYS WHETHER THE OTHER TWO ARE
   // WORKING. A chart is a list and a mapping is an intention; this is the only
   // place that reports whether the money actually went where the mapping says.
@@ -77,6 +89,9 @@ export function AccountsScreen({
             'Switching an account off stops it being offered for new postings and keeps it on the chart, so past reports still balance. You cannot switch one off while a role key still posts to it — repoint the key first, on the second tab.',
             'There are no sub-groups inside the five sections, and no group headers. Current versus non-current assets, direct versus overhead costs: a 30-room hotel does not need that, and it is left out on purpose rather than forgotten.',
             'One thing the second tab does NOT do: each role key names ONE account. Three bank accounts can sit on your chart today, and the "bank" key points at one of them. Choosing which bank a particular transfer landed in is a decision on the payment screen, and it arrives with cashiering.',
+            'The third tab is your charge categories: what the desk may bill for, and which revenue account each kind of charge lands in. A category names a role key, exactly as a posting does, so the tab before it is where that key is pointed at an account — on a new hotel you do those in that order. Every category must name where it posts; there is no default, because revenue landing somewhere nobody chose is the one thing this screen exists to prevent.',
+            'Miscellaneous is a real choice and not a fallback. It is offered last, it resolves to Other revenue, and it is there so a genuine one-off has an honest home instead of being billed to Laundry at eleven at night. If Other revenue ever carries a material amount in a month, the charges inside it have earned categories of their own.',
+            'A category’s code is set once and never changes: charges keep it, so renaming the code would repoint bills that have already been printed. The NAME is free to change whenever you like. Switching a category off takes it off the desk’s list and leaves every charge that used it exactly where it is.',
           ],
           guideAnchor: 'accounts',
           guideLabel: 'Accounts and postings',
@@ -118,6 +133,8 @@ export function AccountsScreen({
           propertyId={propertyId}
           canEdit={canEdit}
         />
+      ) : tab === 'categories' ? (
+        <ChargeCategoriesTab tenantId={tenantId} canEdit={canEdit} />
       ) : (
         <InventoryReconciliationPanel
           propertyId={propertyId}

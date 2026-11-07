@@ -611,6 +611,30 @@ could change — a tax rate, a threshold — **assert that the two answers still
 differ**, so the day it changes the proof says so instead of quietly disarming
 itself.
 
+**A FOLD IS TESTED AS A PURE FUNCTION BESIDE THE COMPONENT, NEVER ONLY THROUGH
+IT.** A component that renders a wrong fold correctly passes every assertion
+about its own output — the assertions re-derive the component's answer instead of
+checking the answer, which is the first shape one layer up.
+
+*Why: item 10's render proof asserted that a revenue account lists the categories
+posting to it, including retired ones. `categoriesByRoleKey` was then broken to
+put every category in `active`, and the CELL's assertions stayed GREEN: it was
+rendering a faithful picture of a wrong map. Only the three assertions against
+the pure function moved. So the proof tests the fold directly AND the component
+that consumes it, and the two are not substitutes.*
+
+**AN ORDERING ASSERTION NEEDS A FIXTURE WHERE THE ORDERINGS DISAGREE.** The
+fourth shape, in the form it keeps arriving in: if the rule under test and the
+rule you might have written by mistake sort the fixture identically, the
+assertion passes either way.
+
+*Why: the same proof asserts that the one-off revenue bucket is offered LAST — a
+ruling, not a preference. The seeded chart numbers Other revenue 4100 and every
+other revenue account below it, so ordering by account code alone puts it last
+BY ACCIDENT: delete the misc clause and the assertion still passes. The fixture
+now gives one account the code 4900, so "by code" and "misc last" give different
+answers and only the real rule produces the asserted one.*
+
 **A HARNESS PERMITTED TO DO WHAT PRODUCTION CANNOT IS MEASURING A DIFFERENT
 SYSTEM.** 066 needed a posted charge carrying an unposted discount, and the
 quick way there was to apply the discount through its RPC and then DELETE the
@@ -806,6 +830,48 @@ run precisely because a gap was suspected.
 *The corollary, which is the part that actually costs time: this applies hardest
 when the grep says what you expected. A result that contradicts you gets checked
 automatically. A result that confirms you gets written into a plan.*
+
+### A POLICY'S NAME AND ITS `roles` COLUMN SAY NOTHING ABOUT WHO IT ADMITS
+
+The same rule with a specific, expensive instance, because this one is not a
+grep — it is a LISTING that looks like an answer:
+
+> **Only the expression admits anybody. `pg_policies.policyname` and
+> `pg_policies.roles` are labels, and an admin test sits happily inside a policy
+> named `_member_`.**
+
+*Why: 1.1h4 item 10 was scoped as "admin-gate charge_categories", on a report
+that a cashier could create a charge category and route revenue anywhere. Both
+write policies already required `is_tenant_admin`. The report had read the NAME
+(`charge_categories_member_insert`) and the `roles={authenticated}` column — both
+of which are true and neither of which is the permission.*
+
+**`_member_` IS A TENANCY QUALIFIER IN THIS SCHEMA, NOT A PERMISSION ONE, and the
+census is what makes that a convention rather than an anomaly: THIRTY-NINE
+policies across EIGHTEEN tables carry `_member_` while requiring
+`is_tenant_admin`.** `account_mappings`'s two `_admin_` policies are the outlier.
+So do not "fix" a name to match the expression — that is how one table ends up
+inconsistent with thirty-seven. Read `qual` and `with_check`, and where it
+matters, **settle it by behaviour**: `SET ROLE authenticated`, set the jwt claims
+of the user under test, and try the write. RLS is not enforced for the connection
+owner a migration runs as, so a test that skips `SET ROLE` proves nothing and
+reads as proof.
+
+**AND THE TWO CLAUSES ARE NOT INTERCHANGEABLE.** `USING` decides which existing
+rows a statement may TARGET; `WITH CHECK` decides what the row may look like
+afterwards. An admin test in `USING` makes a non-admin's UPDATE match **zero
+rows and raise nothing** — it reports success and changes nothing, which is the
+quietly-lies failure this codebase treats as worse than a loud one. Put the
+tenancy test in `USING` and the permission in `WITH CHECK`, and the same refusal
+becomes an error.
+
+**`DELETE` HAS NO `WITH CHECK`, SO THAT FIX DOES NOT EXIST THERE**, and no
+trigger stands in: RLS filters the row before a `BEFORE DELETE` trigger would
+fire. Measured on a throwaway table with a trigger that always raises — the
+non-admin's DELETE touched 0 rows and the trigger never fired, while an admin's
+DELETE on the same table hit it. The only remedy for a DELETE is to stop
+exposing it: revoke it from the client roles and route deletes through an RPC
+that refuses by name.
 
 ---
 

@@ -587,7 +587,7 @@
     {
      "id": "1.1h4",
      "t": "The folio wired into the books",
-     "s": "next",
+     "s": "done",
      "m": "golive",
      "size": "M",
      "r": "048",
@@ -639,12 +639,35 @@
       "LANDED (064): A DOCUMENT THAT MODIFIES OR UNWINDS ANOTHER NEVER POSTS UNLESS THAT OTHER ONE HAS POSTED, which closed a defect 062 and 063 left live in THREE reachable forms. Reversing a not-yet-due night posted its counter alone (guest ledger -48,444.75, revenue 45,023.00 Dr); discounting a pre-wiring charge posted 5,380.00 of relief against revenue never booked; reversing one posted 130,000.00 of revenue out of accounts it was never in. Every entry balanced internally, so nothing errored",
       "LANDED (064): folio_posting_state — one function that says WHY a document is not in the books, as posted / ready / waiting_not_yet_due / waiting_for_dependency / never_pre_gl / never_pre_wiring / never_voided / never_dependency. THE PREFIX IS THE CONTRACT: waiting_* drains by itself, never_* does not. Every helper asks it, so the rule exists once; 1.1h4b's sweep posts what is ready and excludes never_*, and item 8's buckets absorb a document and its dependents together",
       "LANDED (064): what the BILL says decides. A void removes the line (folio_totals filters it) so the ledger records nothing; a reversal leaves both rows showing so the ledger records both. The asymmetry was already in the product. The alternative argument — consistency with the stock ledger — was checked and does not apply: post_stock_adjustment REFUSES a forward date, so the stock side has no declined documents and no half-posted pairs",
-      "Charge categories get a form for the first time, with the account picker on it. Until this ships, the only way to create one is to type SQL, so the guard 044 added is correct and inert",
-      "The mapping screen shows categories under their key, so a category quietly pointed at Other revenue is visible instead of absent",
-      "THE FOLIO'S FIRST RENDER PROOF (rule 22). There is none today, which is why 059 shipped its picker change without one \u2014 driving TakePaymentForm needs a folio and its whole data layer. It covers the payment picker refusing to offer a method with no account, and paymentMethodLabel still naming 'other' so a historical payment does not render as a raw string"
+      "LANDED (068 + item 10): CHARGE CATEGORIES HAVE A SCREEN, and the database chose where it went. 044's trigger has refused a category with no revenue account since the day it shipped, and its hint read 'Open Settings, then Accounts, and choose the revenue account for this category' \u2014 naming a destination that did not exist. Rule 21 makes the hint the interface, so the tab is the fourth on the Accounts screen rather than somewhere that would have made the hint wrong. Adding 'Spa' or 'Conference hall' no longer means typing SQL",
+      "LANDED (item 10): THE PICKER CHOOSES A ROLE KEY AND SHOWS THE ACCOUNT. A category stores a key; what the money DOES is decided by the account that key points at, so 'Miscellaneous' without '4100 Other revenue' beside it is the silent choice this shipment ends. It offers ONLY keys that resolve to a live revenue account \u2014 an unmapped one is refused by PT424 on save, and a picker offering what the server will reject is the hint-names-the-wrong-remedy defect pointing the other way. It finds revenue keys by the ACCOUNT'S TYPE rather than a hardcoded list, so a tenant's own revenue_spa appears with no code change",
+      "LANDED (item 10): NO PREFILL, AND MISC IS A NAMED BUCKET OFFERED LAST. The field starts empty and every category names where it posts. Miscellaneous survives deliberately: deleting it would not remove the one-off charge, it would remove the honest place to put one, and the desk would bill it to Laundry at 11pm instead \u2014 a control that blocks legitimate work gets routed around rather than obeyed. Its expiry condition is 044's model and is written on 5.1: if Other revenue ever runs material in a month, the charges inside it have earned their own categories",
+      "LANDED (item 10): AND THE EMPTY STATE NAMES A REMEDY. On a fresh tenant with no revenue key mapped, the form does not render an empty picker \u2014 it says so and points at the tab beside it by its actual label. An empty state that names no remedy is a dead end, and this one is reachable on day one of every hotel",
+      "LANDED (item 10): the mapping tab gained the REVERSE DIRECTION \u2014 under each revenue account, the charge categories that post to it, folded from the same fetch rather than queried again so the two directions cannot disagree. A retired category is still listed and marked, because switching it off never moved the charges that used it. And 'nothing posts here' is rendered in WORDS and distinctly from 'not loaded yet': a revenue account nothing can be billed to is a setup mistake somebody must see, and the render proof's assertion 3.3 exists because three assertions about those cells reading correctly could not see that they said the same thing",
+      "LANDED (item 10): THE FOLIO'S FIRST RENDER PROOF \u2014 proofs/chargeCategoriesRender, 35 assertions, EIGHT breakages and all eight caught. It covers the three things SQL cannot reach: a role key shown without the account it resolves to, 'nothing posts here' rendered the same as 'not loaded yet', and the payment picker refusing to offer a method with no account while paymentMethodLabel still names 'other' so a historical payment does not render raw. It also pins 067's help text, which must never again invite a negative amount",
+      "LANDED (item 10, a finding from the breakages): breaking the FOLD left the CELL's assertions green \u2014 the cell was rendering a correct fold of a wrong map. That is why the proof tests the pure function beside the component instead of trusting it through the component, and the ordering fixture gives one account the code 4900 so that 'order by code' and 'misc last' give DIFFERENT answers: with every revenue account numbered below 4100, ordering by code alone puts misc last by accident and the ruling would have looked enforced when it was not"
      ],
      "proof": "Check a guest in, charge a room and a meal, take a part payment, apply a discount, reverse one charge, check out. The guest ledger and the receivable account agree to the naira, and every entry names the folio row it came from.",
      "note": "TWO PIECES ALREADY LANDED, both ahead of the wiring and for the same reason: each decides what a posting WRITES, so finding it afterwards means a correction migration against entries already in the books. 058 captured the tax; 059 captured the revenue account, gave a tax its own account, and split gl_wired_at. 059 also recorded the arithmetic that fixes the entry's shape \u2014 gross and discount as separate legs \u2014 and the three findings that are this shipment's to honour. The folio has been charging and taking payments since 021 and posting nowhere. Before go-live that is a gap; after go-live it is history to reconstruct. This closes it while there is still nothing to reconstruct. Also carries two commitments made when the spine shipped: the charge category form, because 044's guard protects a path that does not exist on screen yet, and the deletion of the revenue_misc fallback, because a silent default is fine while only SQL can reach it and wrong the moment a person can create a category from a screen."
+    },
+    {
+     "id": "1.3a",
+     "t": "A refused write says so, on every table that admin-gates one",
+     "s": "later",
+     "m": "golive",
+     "size": "L",
+     "r": "\u2014",
+     "ships": [
+      "EIGHTEEN TABLES PUT is_tenant_admin IN UPDATE'S USING CLAUSE, and an UPDATE whose rows are filtered out by USING does not fail \u2014 it reports success and changes nothing. Measured on charge_categories before 068: a front_desk member's edit touched 0 rows and raised nothing. charge_categories, companies, company_rates, guests, inventory_categories, inventory_items, locations, media_assets, properties, property_finance_settings, property_settings, room_types, rooms, seasonal_rates, tax_charges, tenant_settings, tenants, units_of_measure",
+      "The fix is 068's, applied seventeen more times: the admin test moves to WITH CHECK so the statement raises instead of vanishing, with USING carrying the tenancy test the SELECT policy already uses. NOTHING NEW IS PERMITTED \u2014 the set of writes that succeed is identical, and only the set that failed silently moves to failing by name",
+      "And a bare RLS refusal names no remedy ('new row violates row-level security policy for table X'), so the tables whose screens matter get the 068 treatment: a named refusal from a BEFORE trigger saying who may do it and where",
+      "AND THE FIX DOES NOT WORK FOR DELETE, which is the limit of 068 as a worked example and is stated rather than inferred. FIVE admin-only DELETE policies — account_mappings, media_assets, properties, property_settings, tenant_settings — every one with the test in USING, because A DELETE HAS NO WITH CHECK for it to move to. All five are reachable by authenticated at the table level",
+      "AND NO TRIGGER CAN STAND IN FOR IT: RLS filters the row before a BEFORE DELETE trigger would fire. Measured on a throwaway table carrying a trigger that always raises — the non-admin's DELETE touched 0 rows and the trigger never fired, while an ADMIN's DELETE on the same table hit it with PT403, which is what proves the trigger could have fired and was simply never reached. So the only remedy for a DELETE is to stop exposing it: revoke it from the client roles and route deletes through an RPC that refuses by name",
+      "charge_categories has NO delete policy, so nothing deletes a category through PostgREST — not even an admin, by the same test. Retiring one (is_active) is the path and soft delete is the house rule (rule 5, §6). So 068 could not have demonstrated the DELETE case even had it tried, and that is exactly why this line carries the limit instead of leaving it to be read off the example",
+      "NOT a rename. The _member_ prefix on 39 of these policies is a TENANCY qualifier, not a permission one, and account_mappings's two _admin_ policies are the outlier. A census settled that before 068 renamed anything"
+     ],
+     "proof": "For each table: a non-admin UPDATE raises rather than touching zero rows, an admin UPDATE still lands, and the policy end state is read back from pg_policies rather than from the migration. For each of the five DELETE policies: the client roles can no longer reach DELETE at all, and the RPC that replaces it refuses by name. Every check with SET ROLE authenticated, because RLS is not enforced for the role a migration runs as and a test that skips it reads as proof.",
+     "note": "FOUND WHILE SCOPING 1.1h4 ITEM 10, which was scoped on a report that charge_categories was not admin-gated at all. It already was \u2014 the report had read the policy NAMES instead of the expressions. What the behavioural check actually turned up was this, on eighteen tables. 068 fixes the one it owns and leaves the rest here rather than sweeping seventeen tables' policies inside a shipment about charge categories, which is the one-screen fix rule 23 warns about with the sign reversed."
     },
     {
      "id": "1.1h2a",
@@ -662,6 +685,21 @@
      ],
      "proof": "Run both before and after: every column of the property totals identical, on live data. Then change the per-position query and watch the totals follow.",
      "note": "NAMED RATHER THAN LEFT AS SOMETHING EVERYBODY KNOWS. It is not urgent \u2014 no figure is wrong today \u2014 but it is a correctness risk on a module that is live and read, and the folio side now carries the better pattern, so the two halves of the product would otherwise drift apart in how they are built as well as in what they say. AND IT CARRIES THE ANSWER FOR BOTH PAIRS, because 066 left the folio side with the same hole in a milder form: where two implementations of one rule are kept for a MEASURED reason, the pin cannot be inline \u2014 comparing per document is precisely the cost the set-wise form exists to remove \u2014 so it is SCHEDULED. A deep check function per pair, comparing both implementations across a property and reporting any disagreement with the rows that differ, run on the SAME MONTHLY SLOT AS THE RESTORE TEST. Expensive proof on a schedule rather than inline is a pattern this repo already has and already trusts, and it is the only honest form of 'the pair is pinned' once the inline version has been measured and rejected. One shipment, two pairs: rebuild the stock headline as a rollup of its breakdown, and give both pairs their scheduled check."
+    },
+    {
+     "id": "1.1h4a",
+     "t": "The refund form",
+     "s": "next",
+     "m": "golive",
+     "size": "S",
+     "r": "\u2014",
+     "ships": [
+      "The payment screen gains a REFUND action calling record_refund (067): a positive amount to hand back, a mandatory reason, a manager PIN field, and the database's refusals rendered verbatim \u2014 the ceiling one included, which names both figures and says a bigger payout is a petty cash payment rather than a refund",
+      "PARTIAL REFUNDS ARE SQL-ONLY UNTIL THIS SHIPS, and that is stated rather than left to be discovered. 067 closed the hole where a refund was a minus sign in the payment box with no approval and no reason; it also removed the only UI route to giving part of a payment back. Reversing a WHOLE payment still works from the screen, with its own PIN, so a full give-back is reachable \u2014 a guest who paid 50,000 and leaves early owed 20,000 back is not",
+      "Its own render proof, because the split between this and item 10 is the SCREEN: item 10 is the Accounts screen and its proof, this is the payment screen and its proof"
+     ],
+     "proof": "Take a payment, refund part of it with a reason and a manager PIN, and watch the folio balance and the guest ledger agree. Then try to refund more than came in and read the refusal.",
+     "note": "SPLIT OUT OF 1.1h4 ITEM 10 DELIBERATELY. Item 10 already carried five pieces plus a migration, and two screens is two render proofs. It is next with nothing between, because the gap it closes was opened by 067 rather than inherited. FILED UNDER 1.1h4 AND NOT 1.1h5: a guest refund is not a supplier payment, and the gap exists because of 1.1h4, so the next reader finds the fix under the shipment that created the need for it without reconstructing why. It also sorts ahead of 1.1h4b, which is where 'next with nothing between' belongs."
     },
     {
      "id": "1.1h4b",
@@ -1127,6 +1165,7 @@
      "size": "M",
      "r": "—",
      "ships": [
+      "REVENUE BY ACCOUNT, and with it MISC'S EXPIRY CONDITION (068's ruling, 044's model). Miscellaneous is a deliberate named bucket and not a fallback \u2014 but a bucket nobody ever empties stops being honest. When this report exists: if Other revenue carries a material share of a month's revenue, the charges inside it have earned their own categories, and the report is where somebody sees that rather than a note nobody revisits. A deferral with no trigger is a thing nobody ever comes back to",
       "Occupancy, ADR, RevPAR, revenue by category",
       "Today, month to date, versus last month",
       "Every card foots, every margin labelled"
