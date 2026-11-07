@@ -251,6 +251,23 @@
    "why": "Nothing new starts while something half-built is still unproven. Small, fast, mostly clean-up.",
    "shipments": [
     {
+     "id": "1.1a1",
+     "t": "A departed guest's bill is final",
+     "s": "next",
+     "m": "golive",
+     "size": "M",
+     "r": "\u2014",
+     "ships": [
+      "NOTHING IN THIS BUILD WRITES folios.status, AND TWELVE FUNCTIONS GUARD ON IT. Measured, not inferred: the only function that updates folios at all is reverse_checkout, which sets the status back to 'open'; check_out_booking moves the BOOKING to checked_out and leaves the folio alone; every live folio is 'open'",
+      "TESTED BY BEHAVIOUR on a booking checked in and checked out, in a rolled-back transaction. ADD A CHARGE: ACCEPTED. TAKE A PAYMENT: ACCEPTED. APPLY A DISCOUNT: ACCEPTED. REVERSE A CHARGE: ACCEPTED. REFUND MONEY: ACCEPTED. A guest who departed last week can still have their bill changed five different ways, and twelve functions READ as though they prevent it",
+      "THE GUARDS MAKE IT WORSE THAN NO GUARDS, which is why this is not an unreachable edge. Machinery promising a state transition nothing performs is rule 28 at the level of a subsystem: the guards are what stops anybody asking the question, and every week it stays unwired another one gets written against a status nothing writes \u2014 multiplying the false comfort rather than the protection",
+      "So: check_out_booking settles the folio, with the rule for WHEN a folio may be settled (an outstanding balance? a credit balance?) decided rather than implied; a deliberate, audited re-open; and the twelve guards verified to fire by behaviour rather than by reading, each with its own assertion",
+      "AND IT IS STAGE 1, NOT STAGE 4. Stage 1 is close what is already open, and 0.8 already claims checkout completes the bill while the lifecycle sits half built. Cashiering is about who holds the money, not about whether a bill is final"
+     ],
+     "proof": "Check a guest out. Then try to add a charge, take a payment, apply a discount, reverse a charge and refund money on that folio: each one refused, by name, naming the remedy. Then re-open the folio deliberately and watch all five become possible again, with the re-opening on the record.",
+     "note": "FOUND WHILE CENSUSING PIN ORDERING FOR 069, as the answer to 'is this precondition reachable?' \u2014 and the answer was that it is not, because the state it tests is never created. 069 reordered the guards anyway so this shipment does not also have to remember to. The behaviour test above is the whole basis for this line: a ruling in the same conversation asserted a reachable scenario that was not there, so this one was run before being written down."
+    },
+    {
      "id": "1.1",
      "t": "Walk every inventory tab on the live DB",
      "s": "next",
@@ -738,27 +755,11 @@
       "LANDED (069): record_refund gained a closed-folio refusal AT THE REFUND DOOR, before the PIN, with a DISTINCT errcode (PT407). record_payment refuses it underneath and keeps refusing it \u2014 it owns the rule and is the floor. What it does not own is the sentence: its message is 'cannot take payments', which is right at its door and wrong at one where somebody is handing money BACK. A distinct code is what lets an assertion tell which layer spoke (rule 27's sixth shape)",
       "LANDED (069): and TWO OF THE THREE ARE UNREACHABLE TODAY, reordered anyway, with the reason in the header so the next reader does not delete it as dead work. Nothing in this build writes folios.status. A guard written correctly before it matters costs one migration; the same guard remembered later costs a manager standing at a terminal for nothing",
       "LANDED (069): receive_purchase_order LEFT ALONE, with a TRIGGER rather than a 'later' (044's model). Its one out-of-order check sits inside the per-line work loop, so hoisting it means a pre-pass over p_lines in a 535-line delivery function on a money path, to beat an admin retiring an expense category mid-receipt. THE DAY THAT FUNCTION NEEDS A PRE-PASS FOR ANY OTHER REASON, THIS CHECK JOINS IT. reverse_purchase_receipt's own per-line check stays for the same reason and to be consistent about it",
+      "LANDED (069): AND THE COMMENT THE DECISION RESTED ON WAS TESTED RATHER THAN BELIEVED, on 7 November. reverse_purchase_receipt's per-line check was left unhoisted because its own comment calls it belt-and-braces for old data and unreachable going forward — a sentence promising that a state cannot arise, which is rule 28's shape exactly. VERIFIED BY BEHAVIOUR, three ways, rolled back: a census established that only post_movement_reversal and its three callers can put a reversals row on a stock movement; reverse_stock_movement aimed at a delivery-sourced movement REFUSES BY NAME (PT409, 'this stock arrived on a delivery'); that movement's source_document_type is purchase_receipt, and ZERO delivery lines anywhere carry a stock-take movement; and ZERO existing delivery lines carry a movement reversal, so the belt-and-braces half has nothing to catch either. The comment is TRUE, and the decision not to hoist stands on a measurement instead of on a sentence",
       "LANDED (069): 11 assertions, 8 breakages, all 8 red \u2014 and the shape that makes a reordering testable at all is a WRONG PIN with an already-impossible request: the refusal must name the act. With a valid PIN the precondition refuses either way and the order is invisible. TWO OF THE EIGHT MUTATIONS WERE NO-OPS BEFORE THEY WERE FIXED, both reporting the code as passing, which is rule 27's seventh shape applied to the harness rather than the proof"
      ],
      "proof": "Reverse a delivery, then try again with a WRONG manager PIN: the refusal names the delivery as already reversed rather than asking for a PIN. Then put the old order back and watch it go red.",
      "note": "SCOPED FROM A CENSUS RATHER THAN FROM ONE FUNCTION, because one function is not a pattern. The ruling that opened it asserted that night audit closes folios between a page load and a submit; nothing in this build closes a folio, and checking that rather than inheriting it is what turned up the larger finding on 1.1a1. The PRINCIPLE needed no reachable instance; the instance that exists is better than the one that was assumed."
-    },
-    {
-     "id": "1.1a1",
-     "t": "A departed guest's bill is final",
-     "s": "next",
-     "m": "golive",
-     "size": "M",
-     "r": "\u2014",
-     "ships": [
-      "NOTHING IN THIS BUILD WRITES folios.status, AND TWELVE FUNCTIONS GUARD ON IT. Measured, not inferred: the only function that updates folios at all is reverse_checkout, which sets the status back to 'open'; check_out_booking moves the BOOKING to checked_out and leaves the folio alone; every live folio is 'open'",
-      "TESTED BY BEHAVIOUR on a booking checked in and checked out, in a rolled-back transaction. ADD A CHARGE: ACCEPTED. TAKE A PAYMENT: ACCEPTED. APPLY A DISCOUNT: ACCEPTED. REVERSE A CHARGE: ACCEPTED. REFUND MONEY: ACCEPTED. A guest who departed last week can still have their bill changed five different ways, and twelve functions READ as though they prevent it",
-      "THE GUARDS MAKE IT WORSE THAN NO GUARDS, which is why this is not an unreachable edge. Machinery promising a state transition nothing performs is rule 28 at the level of a subsystem: the guards are what stops anybody asking the question, and every week it stays unwired another one gets written against a status nothing writes \u2014 multiplying the false comfort rather than the protection",
-      "So: check_out_booking settles the folio, with the rule for WHEN a folio may be settled (an outstanding balance? a credit balance?) decided rather than implied; a deliberate, audited re-open; and the twelve guards verified to fire by behaviour rather than by reading, each with its own assertion",
-      "AND IT IS STAGE 1, NOT STAGE 4. Stage 1 is close what is already open, and 0.8 already claims checkout completes the bill while the lifecycle sits half built. Cashiering is about who holds the money, not about whether a bill is final"
-     ],
-     "proof": "Check a guest out. Then try to add a charge, take a payment, apply a discount, reverse a charge and refund money on that folio: each one refused, by name, naming the remedy. Then re-open the folio deliberately and watch all five become possible again, with the re-opening on the record.",
-     "note": "FOUND WHILE CENSUSING PIN ORDERING FOR 069, as the answer to 'is this precondition reachable?' \u2014 and the answer was that it is not, because the state it tests is never created. 069 reordered the guards anyway so this shipment does not also have to remember to. The behaviour test above is the whole basis for this line: a ruling in the same conversation asserted a reachable scenario that was not there, so this one was run before being written down."
     },
     {
      "id": "1.1h4b",

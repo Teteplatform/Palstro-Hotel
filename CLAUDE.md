@@ -672,13 +672,41 @@ assertion does not reveal it, because the assertion is correct about everything
 except the existence of its own subject. The breakage run is the only thing that
 found it.*
 
-**And it applies to the BREAKAGE HARNESS exactly as it applies to the proof.**
-069's mutations included one that replaced a line with "the check, then that same
-line" — a no-op dressed as a move — and one that searched for `''closed''` where
-the text holds `'closed'`. Both changed nothing, both reported the code as
-passing. **A mutation that matches nothing is a mutation that proved nothing**, so
-a harness asserts that its own pattern matched before trusting the green: 069's
-now raises if its replacement finds no occurrence.
+**AND IT APPLIES TO THE BREAKAGE HARNESS EXACTLY AS IT APPLIES TO THE PROOF —
+WHICH IS WHY THE HARNESS IS NOW CODE RATHER THAN A HABIT.** The same defect
+arrived SIX times in three shipments, every one of them silent and every one
+reported as the code passing: 067 breakage M moved a block to where it already
+was; 068 G wrote `select 1 where false union all select 1 from …`, which still
+returned the real row; 068 I and J were appended **after** the self-verify, so
+the assertions ran against the unmutated file; 069 F replaced a line with "the
+check, then that same line"; 069 H searched a function body for `''closed''`
+where the text holds `'closed'`. Each was caught by re-reading the mutation by
+hand, and rule 28's own counsel is that a third instance means hunting the
+fourth.
+
+> **A mutation that matches nothing proved nothing, and a mutation that lands
+> after the assertions proved nothing either. Neither is the code passing.**
+
+So the breakage runner is `scripts/breakage.mjs`, and it makes two **mechanical**
+checks before the verify is allowed to run at all:
+
+1. **The edit changed the bytes.** Identical input means the pattern matched
+   nothing, or the replacement equalled the original, or the quoting was wrong.
+2. **The edit lands before the verify.** Compare the offset of the first changed
+   byte against the self-verify marker. This is reported separately, because a
+   mutation after the assertions looks *exactly* like a pass.
+
+Either one is a **HARNESS FAILURE**, not a test result, and the run exits
+non-zero so it cannot be read as a clean sheet. **The checks are themselves
+proven by a positive control** — all five historical no-ops replayed through the
+runner, three caught by (1) and (2), beside a real mutation that still goes red
+naming its assertion. A checker that never fires is indistinguishable from one
+with nothing to find, which is this shape all over again one level up.
+
+*The general form, and it is the sentence to keep: **an assertion cannot be
+trusted by the thing it is testing, and neither can a sabotage.** The proof
+cannot vouch for itself, the mutation cannot vouch for itself, and the only way
+out is a check standing outside both.*
 
 **A FOLD IS TESTED AS A PURE FUNCTION BESIDE THE COMPONENT, NEVER ONLY THROUGH
 IT.** A component that renders a wrong fold correctly passes every assertion
@@ -1250,6 +1278,11 @@ first.
 13. **Touching a screen?** It ships a render proof, and you have made that proof
     fail before trusting it (rule 22). A passing SQL proof says nothing about
     what the browser does with the JSON.
+
+    **RUN THE BREAKAGES THROUGH `scripts/breakage.mjs`, NOT BY HAND.** It
+    refuses a mutation that changed no bytes and one that lands after the
+    self-verify — the two ways a sabotage reported sound code six times before
+    the check existed (rule 27's seventh shape).
 
     **JUDGE A CONSOLE ON A FRESH TAB, NEVER ON A RELOADED ONE.** On this setup
     the console buffer survives `location.reload()`, so errors Vite logged while
